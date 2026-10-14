@@ -9,7 +9,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      API_BASE_URL: ${{ vars.API_BASE_URL }}
+      API_BASE_URL: https://bangla-ai-voice-video-maker-api.onrender.com
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
