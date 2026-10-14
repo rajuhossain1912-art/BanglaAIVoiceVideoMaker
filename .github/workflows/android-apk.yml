@@ -1,16 +1,15 @@
 name: Build Android APK
-
 on:
   push:
     branches: [main]
   workflow_dispatch:
-
 permissions:
   contents: read
-
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      API_BASE_URL: ${{ vars.API_BASE_URL }}
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
@@ -24,7 +23,7 @@ jobs:
         with:
           gradle-version: "8.9"
       - name: Build debug APK
-        run: gradle --no-daemon assembleDebug
+        run: gradle --no-daemon assembleDebug -PAPI_BASE_URL="$API_BASE_URL"
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:

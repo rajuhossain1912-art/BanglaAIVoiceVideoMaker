@@ -3,6 +3,9 @@ plugins {
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
 }
+val configuredApiBaseUrl = providers.gradleProperty("API_BASE_URL")
+    .orElse(providers.environmentVariable("API_BASE_URL"))
+    .getOrElse("")
 android {
     namespace = "com.rajuhossain.banglaaivoicevideomaker"
     compileSdk = 35
@@ -10,9 +13,9 @@ android {
         applicationId = "com.rajuhossain.banglaaivoicevideomaker"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
-        buildConfigField("String", "API_BASE_URL", "\"\"")
+        versionCode = 2
+        versionName = "0.2.0"
+        buildConfigField("String", "API_BASE_URL", "\"$configuredApiBaseUrl\"")
     }
     buildFeatures { compose = true; buildConfig = true }
     compileOptions {
@@ -29,5 +32,6 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
