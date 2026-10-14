@@ -51,9 +51,8 @@ jobs:
             done
             if [ "$done_job" -ne 1 ]; then echo "Video generation timed out"; docker logs bangla-video-api; exit 1; fi
             curl --fail --silent --show-error "http://127.0.0.1:10000/api/jobs/$job_id/download" -o "$language.mp4"
+            docker run --rm -v "$PWD":/test -w /test bangla-video-api-test ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$language.mp4"
             test -s "$language.mp4"
-            docker cp "$language.mp4" bangla-video-api:/tmp/"$language".mp4
-            docker exec bangla-video-api ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 /tmp/"$language".mp4
           done
       - name: Show backend logs on failure
         if: failure()
