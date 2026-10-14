@@ -1,0 +1,8 @@
+services:
+  - type: web
+    name: bangla-ai-voice-video-maker-api
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    autoDeploy: true

@@ -1,24 +1,38 @@
 # বাংলা AI Voice Video Maker
 
-An online-only, TalkBack-friendly Android app intended to turn Bangla, English, or mixed-language text into a complete video automatically—or synchronize a supplied voice recording with the script.
+An online-only, TalkBack-friendly Android app for turning Bangla, English, or mixed-language text—or a script plus a supplied voice recording—into a video.
 
 ## চূড়ান্ত লক্ষ্য
 
-- শুধু বাংলা/ইংরেজি লেখা দিলে অনলাইন TTS দিয়ে ভয়েস তৈরি এবং ভিডিও বানানো
-- লেখা ও নিজের অডিও দিলে কথার সঙ্গে লেখা, সাবটাইটেল ও শব্দ হাইলাইট মেলানো
-- বিষয় বুঝে শিরোনাম ও উপযুক্ত ছবি/দৃশ্য তৈরি বা নির্বাচন
-- স্বয়ংক্রিয় জুম ইন/আউট, প্যান, ট্রানজিশন ও সাবটাইটেল
-- MP4 ভিডিও তৈরি, ফোনে সংরক্ষণ ও শেয়ার
-- TalkBack ব্যবহারকারীদের জন্য প্রবেশগম্য বাংলা ইন্টারফেস
-- অ্যাপটি অনলাইন-নির্ভর; অফলাইন মোড পরিকল্পনায় নেই
-- বিনামূল্যের ও ওপেন-সোর্স প্রযুক্তিকে অগ্রাধিকার; অনুমতি ছাড়া কোনো পেইড সেবা নয়
+- শুধু বাংলা/ইংরেজি লেখা দিলে স্বয়ংক্রিয় ভয়েস ও ভিডিও তৈরি
+- লেখা ও নিজের অডিও দিলে কথার সঙ্গে সাবটাইটেল মেলানো
+- বিষয় অনুযায়ী ছবি/দৃশ্য, শিরোনাম, জুম, ট্রানজিশন ও শব্দ হাইলাইট
+- MP4 তৈরি, ফোনে সংরক্ষণ ও শেয়ার
+- TalkBack-সহায়ক বাংলা ইন্টারফেস
+- অনলাইন-নির্ভর ব্যবহার; অফলাইন মোড নেই
+- বিনামূল্যের ও ওপেন-সোর্স প্রযুক্তি অগ্রাধিকার; অনুমতি ছাড়া পেইড সেবা নয়
 
-## Repository status
+## প্রাথমিক বাস্তবায়ন
 
-প্রাথমিক Android Jetpack Compose অ্যাপের কাঠামো ও GitHub Actions-এ debug APK তৈরির workflow যোগ করা হয়েছে। বর্তমান UI একটি প্রাথমিক ভিত্তি—এখনও বাস্তব AI/TTS সার্ভার, অডিও আপলোড, শব্দের সময় নির্ধারণ, ছবি তৈরি ও MP4 রেন্ডারিং সংযুক্ত হয়নি। সার্ভার যুক্ত হওয়ার আগে অ্যাপ সম্পূর্ণ ভিডিও তৈরি করতে পারবে না।
+- Android Jetpack Compose UI
+- FastAPI সার্ভার
+- FFmpeg দিয়ে MP4 রেন্ডারিং
+- espeak-ng দিয়ে প্রাথমিক ওপেন-সোর্স TTS
+- Pillow দিয়ে গ্রাফিক পটভূমি
+- অডিও থাকলে আপলোড; না থাকলে সার্ভারে TTS
+- বাক্যভিত্তিক আনুমানিক সাবটাইটেল
+- GitHub Actions-এ APK বিল্ড
+- Render-এর ফ্রি Docker Web Service-এর জন্য প্রাথমিক Blueprint
 
-## Build
+## গুরুত্বপূর্ণ সীমাবদ্ধতা
 
-GitHub Actions-এর Build Android APK workflow চালিয়ে debug APK artifact তৈরি করার ব্যবস্থা আছে। সফল বিল্ড হলে workflow-এর Artifacts বিভাগ থেকে APK পাওয়া যাবে।
+এই সংস্করণটি সম্পূর্ণ AI ভিডিও নির্মাতা নয়। এটি একটি প্রাথমিক ভিডিও-রেন্ডারিং প্রোটোটাইপ: AI-তৈরি বাস্তব দৃশ্য, নির্ভুল শব্দ-স্তরের অডিও-টেক্সট alignment, স্থায়ী job storage এবং উচ্চমানের বাংলা TTS এখনও পরবর্তী কাজ। espeak-ng কণ্ঠ রোবোটিক শোনাতে পারে। Render-এর ফ্রি সার্ভার ঘুমিয়ে যেতে পারে এবং অস্থায়ী কাজ/ফাইল পুনরায় চালু হলে হারাতে পারে।
 
-বিস্তারিত পরিকল্পনা: [docs/PRODUCT_PLAN.md](docs/PRODUCT_PLAN.md)
+## বিল্ড ও ডিপ্লয়
+
+- GitHub Actions workflow: .github/workflows/android-apk.yml
+- Render Blueprint: render.yaml
+- API health endpoint: /health
+- API documentation: /docs
+- বিস্তারিত পরিকল্পনা: docs/PRODUCT_PLAN.md
+
