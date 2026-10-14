@@ -147,10 +147,11 @@ def render(job_id: str, script: str, mode: str, audio_path: Optional[Path]):
         # Single-scene graphic background with gentle zoom and burned-in captions.
         font_dir = "/usr/share/fonts/truetype/noto"
         subtitle_filter = f"subtitles={subtitles.as_posix()}:fontsdir={font_dir}"
-        frames = max(1, int(duration * 25))
-        vf = f"scale=720:1280,zoompan=z='min(zoom+0.00035,1.08)':d={frames}:s=720x1280:fps=25,{subtitle_filter},format=yuv420p"
+        # Use one still-image frame per second, then expand each to 25 output frames.
+        # Escape the comma inside min() so FFmpeg does not parse it as a filter separator.
+        vf = f"scale=720:1280,zoompan=z='min(zoom+0.00035\\,1.08)':d=25:s=720x1280:fps=25,{subtitle_filter},format=yuv420p"
         run([
-            "ffmpeg", "-y", "-loop", "1", "-i", str(background), "-i", str(audio_path),
+            "ffmpeg", "-y", "-loop", "1", "-framerate", "1", "-i", str(background), "-i", str(audio_path),
             "-vf", vf, "-t", str(duration), "-r", "25", "-c:v", "libx264", "-preset", "ultrafast",
             "-crf", "27", "-c:a", "aac", "-b:a", "128k", "-shortest", "-movflags", "+faststart", str(output)
         ], 240)
