@@ -1,0 +1,59 @@
+name: Backend end-to-end smoke test
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - 'Dockerfile'
+      - '.github/workflows/backend-smoke.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  video-smoke-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+      - name: Build backend container
+        run: docker build -t bangla-video-api-test .
+      - name: Start backend
+        run: docker run -d --name bangla-video-api -p 10000:10000 bangla-video-api-test
+      - name: Wait for health endpoint
+        run: |
+          for i in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:10000/health > health.json; then break; fi
+            sleep 2
+          done
+          cat health.json
+          python -c 'import json; d=json.load(open("health.json")); assert d["status"] == "ok", d'
+      - name: Generate Bangla and English videos end to end
+        run: |
+          set -e
+          for language in bangla english; do
+            if [ "$language" = "bangla" ]; then
+              script='আসসালামু আলাইকুম। এটি বাংলা ভিডিও তৈরির পরীক্ষা।'
+            else
+              script='Hello. This is an English video generation test.'
+            fi
+            response=$(curl --fail --silent --show-error -X POST http://127.0.0.1:10000/api/jobs -F "script=$script" -F 'mode=auto')
+            echo "$response"
+            job_id=$(echo "$response" | python -c 'import json,sys; print(json.load(sys.stdin)["id"])')
+            done_job=0
+            for i in $(seq 1 90); do
+              status=$(curl --fail --silent --show-error "http://127.0.0.1:10000/api/jobs/$job_id")
+              echo "$status"
+              state=$(echo "$status" | python -c 'import json,sys; print(json.load(sys.stdin)["status"])')
+              if [ "$state" = "completed" ]; then done_job=1; break; fi
+              if [ "$state" = "failed" ]; then docker logs bangla-video-api; exit 1; fi
+              sleep 2
+            done
+            if [ "$done_job" -ne 1 ]; then echo "Video generation timed out"; docker logs bangla-video-api; exit 1; fi
+            curl --fail --silent --show-error "http://127.0.0.1:10000/api/jobs/$job_id/download" -o "$language.mp4"
+            ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$language.mp4"
+            test -s "$language.mp4"
+          done
+      - name: Show backend logs on failure
+        if: failure()
+        run: docker logs bangla-video-api || true
