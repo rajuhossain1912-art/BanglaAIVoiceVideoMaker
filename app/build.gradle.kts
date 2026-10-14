@@ -5,7 +5,7 @@ plugins {
 }
 val configuredApiBaseUrl = providers.gradleProperty("API_BASE_URL")
     .orElse(providers.environmentVariable("API_BASE_URL"))
-    .getOrElse("")
+    .getOrElse("https://bangla-ai-voice-video-maker-api.onrender.com")
 android {
     namespace = "com.rajuhossain.banglaaivoicevideomaker"
     compileSdk = 35
@@ -13,8 +13,8 @@ android {
         applicationId = "com.rajuhossain.banglaaivoicevideomaker"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
-        versionName = "0.2.0"
+        versionCode = 3
+        versionName = "0.3.0"
         buildConfigField("String", "API_BASE_URL", "\"$configuredApiBaseUrl\"")
     }
     buildFeatures { compose = true; buildConfig = true }
