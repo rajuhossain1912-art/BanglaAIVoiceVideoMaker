@@ -9,6 +9,9 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: backend-smoke-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   video-smoke-test:
     runs-on: ubuntu-latest
