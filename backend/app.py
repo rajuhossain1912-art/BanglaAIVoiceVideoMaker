@@ -6,6 +6,7 @@ import subprocess
 import threading
 import time
 import uuid
+import tempfile
 from pathlib import Path
 from typing import Optional
 
@@ -14,6 +15,8 @@ from fastapi.responses import FileResponse
 from PIL import Image, ImageDraw, ImageFont
 
 APP_DIR = Path(__file__).resolve().parent
+VOICE_CLONE_SPACE = os.getenv("VOICE_CLONE_SPACE", "kawshikbuet17/bengali-cosyvoice3-tts-demo")
+VOICE_CLONE_ENABLED = os.getenv("VOICE_CLONE_ENABLED", "true").lower() in ("1", "true", "yes")
 WORK_DIR = Path(os.getenv("WORK_DIR", "/tmp/bangla-video-jobs"))
 WORK_DIR.mkdir(parents=True, exist_ok=True)
 MAX_SCRIPT_CHARS = int(os.getenv("MAX_SCRIPT_CHARS", "12000"))
@@ -80,6 +83,37 @@ def synthesize_mixed_speech(script: str, folder: Path) -> Path:
     combined = folder / "voice.wav"
     run(["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(listing), "-c:a", "pcm_s16le", str(combined)], 120)
     return combined
+
+
+
+def synthesize_cloned_voice(script: str, reference_audio: Path, folder: Path) -> Path:
+    """Experimental remote clone. Caller must obtain explicit user consent first."""
+    if not VOICE_CLONE_ENABLED:
+        raise RuntimeError("নিজের কণ্ঠের পরীক্ষামূলক সুবিধা বর্তমানে বন্ধ আছে।")
+    if len(script) > 500:
+        raise RuntimeError("পরীক্ষামূলক নিজের কণ্ঠে একবারে সর্বোচ্চ ৫০০ অক্ষর ব্যবহার করুন।")
+    try:
+        from gradio_client import Client, handle_file
+        client = Client(VOICE_CLONE_SPACE, verbose=False)
+        result = client.predict(
+            script,
+            handle_file(str(reference_audio)),
+            0,
+            1.0,
+            api_name="/generate_cross_lingual_audio",
+        )
+        audio_result = result[0] if isinstance(result, (list, tuple)) else result
+        if isinstance(audio_result, dict):
+            audio_result = audio_result.get("path") or audio_result.get("url")
+        if isinstance(audio_result, str) and Path(audio_result).exists():
+            candidate = Path(audio_result)
+            output = folder / "cloned_voice.wav"
+            run(["ffmpeg", "-y", "-i", str(candidate), "-ac", "1", "-ar", "24000", str(output)], 120)
+            if output.exists() and output.stat().st_size > 100:
+                return output
+        raise RuntimeError("ভয়েস ক্লোনিং সেবাটি অডিও ফাইল ফেরত দেয়নি।")
+    except Exception as exc:
+        raise RuntimeError("নিজের কণ্ঠ তৈরি করা যায়নি। ফ্রি বাহ্যিক ডেমো ব্যস্ত বা পরিবর্তিত থাকতে পারে। সাধারণ স্বয়ংক্রিয় ভয়েস দিয়ে আবার চেষ্টা করুন।") from exc
 
 
 def load_font(size: int, bold=False):
@@ -174,7 +208,16 @@ def render(job_id: str, script: str, mode: str, audio_path: Optional[Path]):
             JOBS[job_id]["status"] = "processing"
             JOBS[job_id]["progress"] = 10
             JOBS[job_id]["message"] = "ভয়েস ও দৃশ্য প্রস্তুত করা হচ্ছে"
-        if audio_path is None:
+        if mode == "clone":
+            reference_audio = audio_path
+            if reference_audio is None:
+                raise RuntimeError("নিজের কণ্ঠের নমুনা অডিও নির্বাচন করুন।")
+            audio_path = synthesize_cloned_voice(script, reference_audio, folder)
+            try:
+                reference_audio.unlink(missing_ok=True)
+            except Exception:
+                pass
+        elif audio_path is None:
             audio_path = synthesize_mixed_speech(script[:MAX_SCRIPT_CHARS], folder)
         duration = duration_of(audio_path)
         with LOCK:
@@ -211,16 +254,23 @@ def health():
 
 
 @app.post("/api/jobs", status_code=202)
-async def create_job(script: str = Form(...), mode: str = Form("auto"), audio: Optional[UploadFile] = File(None)):
+async def create_job(script: str = Form(...), mode: str = Form("auto"), audio: Optional[UploadFile] = File(None), voice_clone_consent: bool = Form(False)):
     script = script.strip()
     if not script:
         raise HTTPException(400, "আগে বাংলা বা ইংরেজি লেখা যোগ করুন।")
     if len(script) > MAX_SCRIPT_CHARS:
         raise HTTPException(413, f"লেখা সর্বোচ্চ {MAX_SCRIPT_CHARS} অক্ষরের হতে পারবে।")
-    if mode not in ("auto", "audio"):
+    if mode not in ("auto", "audio", "clone"):
         raise HTTPException(400, "ভিডিও তৈরির পদ্ধতি সঠিক নয়।")
-    if mode == "audio" and audio is None:
-        raise HTTPException(400, "লেখার সঙ্গে অডিও ফাইলও দিতে হবে।")
+    if mode in ("audio", "clone") and audio is None:
+        raise HTTPException(400, "অডিও ফাইল নির্বাচন করুন।")
+    if mode == "clone":
+        if not VOICE_CLONE_ENABLED:
+            raise HTTPException(503, "নিজের কণ্ঠের পরীক্ষামূলক সুবিধা বর্তমানে বন্ধ আছে।")
+        if not voice_clone_consent:
+            raise HTTPException(400, "বাহ্যিক Hugging Face ডেমোতে কণ্ঠের নমুনা পাঠানোর অনুমতি প্রয়োজন।")
+        if len(script) > 500:
+            raise HTTPException(413, "পরীক্ষামূলক নিজের কণ্ঠে একবারে সর্বোচ্চ ৫০০ অক্ষর ব্যবহার করুন।")
     job_id = uuid.uuid4().hex
     folder = WORK_DIR / job_id
     folder.mkdir(parents=True, exist_ok=True)
