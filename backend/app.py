@@ -212,11 +212,13 @@ def render(job_id: str, script: str, mode: str, audio_path: Optional[Path]):
             reference_audio = audio_path
             if reference_audio is None:
                 raise RuntimeError("নিজের কণ্ঠের নমুনা অডিও নির্বাচন করুন।")
-            audio_path = synthesize_cloned_voice(script, reference_audio, folder)
             try:
-                reference_audio.unlink(missing_ok=True)
-            except Exception:
-                pass
+                audio_path = synthesize_cloned_voice(script, reference_audio, folder)
+            finally:
+                try:
+                    reference_audio.unlink(missing_ok=True)
+                except Exception:
+                    pass
         elif audio_path is None:
             audio_path = synthesize_mixed_speech(script[:MAX_SCRIPT_CHARS], folder)
         duration = duration_of(audio_path)
