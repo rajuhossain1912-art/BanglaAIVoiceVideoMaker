@@ -1,0 +1,62 @@
+name: Live Render video verification
+
+on:
+  push:
+    branches: [release]
+    paths:
+      - '.github/workflows/live-video-test.yml'
+  workflow_dispatch:
+
+jobs:
+  verify-live-video:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Wait for live API
+        run: |
+          set -e
+          for i in $(seq 1 12); do
+            if curl -fsS --max-time 20 https://bangla-ai-voice-video-maker-api.onrender.com/health -o health.json; then
+              cat health.json
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "Live API health check failed"
+          exit 1
+      - name: Create a short test video on live Render
+        run: |
+          set -euo pipefail
+          BASE="https://bangla-ai-voice-video-maker-api.onrender.com"
+          curl -fsS --max-time 40 -X POST "$BASE/api/jobs" \
+            -F 'script=বাংলা ভিডিও পরীক্ষা। এটি লাইভ সার্ভারের ছোট পরীক্ষা।' \
+            -F 'mode=auto' -o job.json
+          cat job.json
+          JOB_ID="$(python3 -c 'import json; print(json.load(open("job.json"))["id"])')"
+          echo "Job ID: $JOB_ID"
+          for i in $(seq 1 40); do
+            CODE="$(curl -sS --max-time 20 -o status.json -w '%{http_code}' "$BASE/api/jobs/$JOB_ID")"
+            if [ "$CODE" != "200" ]; then
+              echo "Status endpoint returned HTTP $CODE"
+              cat status.json
+              exit 1
+            fi
+            cat status.json
+            STATUS="$(python3 -c 'import json; print(json.load(open("status.json")).get("status", ""))')"
+            if [ "$STATUS" = "completed" ]; then
+              break
+            fi
+            if [ "$STATUS" = "failed" ]; then
+              echo "Video rendering failed"
+              exit 1
+            fi
+            sleep 3
+          done
+          if [ "${STATUS:-}" != "completed" ]; then
+            echo "Video did not finish within the test window"
+            exit 1
+          fi
+          curl -fsS --max-time 30 "$BASE/api/jobs/$JOB_ID/download" -o live-test.mp4
+          test "$(stat -c%s live-test.mp4)" -gt 1000
+          ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 live-test.mp4
+          echo "PASS: live Render generated and served an MP4 video."
