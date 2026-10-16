@@ -335,7 +335,7 @@ def make_ass(script: str, duration: float, path: Path, caption_offset: float = 0
         raw_end = duration if index == len(sentences) - 1 else cursor + duration * weight / total_weight
         start = min(duration, max(0.0, raw_start + caption_offset))
         end = min(duration, max(start + 0.05, raw_end + caption_offset))
-        words = re.findall(r"\\S+", sentence)
+        words = re.findall(r"\S+", sentence)
         if not words:
             cursor = raw_end
             continue
