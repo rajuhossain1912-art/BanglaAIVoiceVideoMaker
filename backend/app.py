@@ -340,6 +340,7 @@ def make_ass(script: str, duration: float, path: Path, caption_offset: float = 0
             cursor = raw_end
             continue
         lengths = [max(1, len(word)) for word in words]
+        available_cs = max(len(words), int(max(0.01, end - start) * 100))
         length_total = sum(lengths)
         karaoke = []
         allocated = 0
