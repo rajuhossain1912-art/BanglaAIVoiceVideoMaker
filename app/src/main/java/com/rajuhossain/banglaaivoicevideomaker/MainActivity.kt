@@ -55,6 +55,7 @@ private fun VideoMakerScreen() {
     var audioName by remember { mutableStateOf("") }
     var mode by remember { mutableStateOf("auto") }
     var cloneConsent by remember { mutableStateOf(false) }
+    var captionOffset by remember { mutableStateOf(0f) }
     var hasSavedVoiceProfile by remember { mutableStateOf(File(context.filesDir, "voice_profile_sample").exists()) }
     var status by remember { mutableStateOf("অনলাইন সার্ভার যুক্ত হলে এখানে ভিডিও তৈরির অবস্থা দেখা যাবে।") }
     var progress by remember { mutableStateOf(0) }
@@ -145,6 +146,21 @@ private fun VideoMakerScreen() {
             minLines = 5, enabled = !running,
             supportingText = { Text("সার্ভার লেখা গ্রহণ করে ভিডিও তৈরি করবে।") }
         )
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("সাবটাইটেলের সময় সামঞ্জস্য", fontWeight = FontWeight.SemiBold)
+                Text("পরিবর্তন: " + (if (captionOffset > 0f) "+" else "") + String.format("%.1f", captionOffset) + " সেকেন্ড")
+                Slider(
+                    value = captionOffset,
+                    onValueChange = { captionOffset = it },
+                    valueRange = -1.5f..1.5f,
+                    steps = 29,
+                    enabled = !running,
+                    modifier = Modifier.semantics { contentDescription = "সাবটাইটেলের সময় আগে বা পরে করার নিয়ন্ত্রণ" }
+                )
+                Text("কথার তুলনায় লেখা আগে দেখা গেলে ঋণাত্মক দিকে, দেরিতে এলে ধনাত্মক দিকে সরান। এটি পুরো সাবটাইটেল একসঙ্গে সরায়; শব্দে-শব্দে নিখুঁত alignment নয়।", style = MaterialTheme.typography.bodySmall)
+            }
+        }
         OutlinedButton(onClick = { audioPicker.launch("audio/*") }, modifier = Modifier.fillMaxWidth(), enabled = !running) {
             Text(if (mode == "clone" && hasSavedVoiceProfile) "নিজের কণ্ঠের নমুনা বদলান" else if (mode == "clone") "নিজের কণ্ঠের নমুনা নির্বাচন ও ফোনে সংরক্ষণ করুন" else if (audioName.isBlank()) "অডিও ফাইল নির্বাচন করুন" else "অডিও নির্বাচন করা হয়েছে: " + audioName)
         }
@@ -177,7 +193,7 @@ private fun VideoMakerScreen() {
                         status = "অনলাইন সার্ভারে কাজ পাঠানো হচ্ছে।"
                         scope.launch {
                             try {
-                                val job = withContext(Dispatchers.IO) { createJob(context, baseUrl, script.trim(), mode, audioUri, cloneConsent) }
+                                val job = withContext(Dispatchers.IO) { createJob(context, baseUrl, script.trim(), mode, audioUri, cloneConsent, captionOffset) }
                                 val jobId = job.getString("id")
                                 status = "অনুরোধ গ্রহণ করা হয়েছে। ভিডিও তৈরি চলছে।"
                                 var finished = false
@@ -248,7 +264,7 @@ private fun VideoMakerScreen() {
     }
 }
 
-private fun createJob(context: Context, baseUrl: String, script: String, mode: String, audioUri: Uri?, cloneConsent: Boolean): JSONObject {
+private fun createJob(context: Context, baseUrl: String, script: String, mode: String, audioUri: Uri?, cloneConsent: Boolean, captionOffset: Float): JSONObject {
     val boundary = "----BanglaAI" + UUID.randomUUID().toString()
     val connection = (URL(baseUrl + "/api/jobs").openConnection() as HttpURLConnection).apply {
         requestMethod = "POST"
@@ -268,6 +284,7 @@ private fun createJob(context: Context, baseUrl: String, script: String, mode: S
             field("script", script)
             field("mode", mode)
             field("voice_clone_consent", cloneConsent.toString())
+            field("caption_offset", captionOffset.toString())
             if (mode in listOf("audio", "clone") && audioUri != null) {
                 output.write(("--" + boundary + "\r\n").toByteArray())
                 output.write("Content-Disposition: form-data; name=\"audio\"; filename=\"voice-file\"\r\n".toByteArray())
