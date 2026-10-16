@@ -1,0 +1,102 @@
+name: Verified Android release
+on:
+  push:
+    branches: [release]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release tag (for example v0.1.0)
+        required: true
+        default: v0.1.0
+        type: string
+permissions:
+  contents: write
+jobs:
+  verify-backend-and-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      API_BASE_URL: https://bangla-ai-voice-video-maker-api.onrender.com
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.version || 'v0.1.0' }}
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+      - name: Build backend container
+        run: docker build -t bangla-video-api-release .
+      - name: Start backend
+        run: docker run -d --name bangla-video-api-release -p 10000:10000 bangla-video-api-release
+      - name: Wait for health endpoint
+        run: |
+          for i in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:10000/health > health.json; then break; fi
+            sleep 2
+          done
+          cat health.json
+          python -c 'import json; d=json.load(open("health.json")); assert d["status"] == "ok", d'
+      - name: Test Bangla, English and mixed-language video generation
+        run: |
+          set -e
+          for language in bangla english mixed; do
+            if [ "$language" = "bangla" ]; then
+              script='আসসালামু আলাইকুম। এটি বাংলা ভিডিও তৈরির পরীক্ষা।'
+            elif [ "$language" = "english" ]; then
+              script='Hello. This is an English video generation test.'
+            else
+              script='আসসালামু আলাইকুম everyone, আজকে আমরা AI voice video test করব.'
+            fi
+            response=$(curl --fail --silent --show-error -X POST http://127.0.0.1:10000/api/jobs -F "script=$script" -F 'mode=auto')
+            job_id=$(echo "$response" | python -c 'import json,sys; print(json.load(sys.stdin)["id"])')
+            done_job=0
+            for i in $(seq 1 90); do
+              status=$(curl --fail --silent --show-error "http://127.0.0.1:10000/api/jobs/$job_id")
+              state=$(echo "$status" | python -c 'import json,sys; print(json.load(sys.stdin)["status"])')
+              if [ "$state" = "completed" ]; then done_job=1; break; fi
+              if [ "$state" = "failed" ]; then echo "$status"; docker logs bangla-video-api-release; exit 1; fi
+              sleep 2
+            done
+            test "$done_job" -eq 1
+            curl --fail --silent --show-error "http://127.0.0.1:10000/api/jobs/$job_id/download" -o "$language.mp4"
+            test -s "$language.mp4"
+            docker run --rm -v "$PWD":/test -w /test bangla-video-api-release ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$language.mp4"
+          done
+      - name: Verify voice cloning against external demo using synthetic test audio
+        run: |
+          set -e
+          docker exec bangla-video-api-release espeak-ng -v bn -s 140 -w /tmp/synthetic-reference.wav 'এটি কৃত্রিম পরীক্ষামূলক কণ্ঠের নমুনা'
+          docker cp bangla-video-api-release:/tmp/synthetic-reference.wav synthetic-reference.wav
+          response=$(curl --fail --silent --show-error -X POST http://127.0.0.1:10000/api/jobs \
+            -F 'script=এটি নিজের কণ্ঠের পরীক্ষামূলক অডিও।' \
+            -F 'mode=clone' -F 'voice_clone_consent=true' \
+            -F 'audio=@synthetic-reference.wav')
+          echo "$response"
+          job_id=$(echo "$response" | python -c 'import json,sys; print(json.load(sys.stdin)["id"])')
+          done_job=0
+          for i in $(seq 1 180); do
+            status=$(curl --fail --silent --show-error "http://127.0.0.1:10000/api/jobs/$job_id")
+            echo "$status"
+            state=$(echo "$status" | python -c 'import json,sys; print(json.load(sys.stdin)["status"])')
+            if [ "$state" = "completed" ]; then done_job=1; break; fi
+            if [ "$state" = "failed" ]; then echo "$status"; docker logs bangla-video-api-release; exit 1; fi
+            sleep 2
+          done
+          if [ "$done_job" -ne 1 ]; then echo 'Voice-clone test timed out'; docker logs bangla-video-api-release; exit 1; fi
+          curl --fail --silent --show-error "http://127.0.0.1:10000/api/jobs/$job_id/download" -o clone-test.mp4
+          test -s clone-test.mp4
+      - name: Build Android debug APK
+        run: |
+          gradle --version >/dev/null 2>&1 || true
+          docker run --rm -v "$PWD":/workspace -w /workspace gradle:8.9-jdk17 gradle --no-daemon assembleDebug -PAPI_BASE_URL="$API_BASE_URL"
+      - name: Publish tested APK as GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: Bangla AI Voice Video Maker ${{ env.RELEASE_TAG }}
+          generate_release_notes: true
+          files: app/build/outputs/apk/debug/app-debug.apk
+          body: |
+            Android debug APK for real-device testing. This is not a Play Store production-signed build.
+            
+            The workflow only publishes after Bangla, English, mixed-language video generation and an external voice-cloning smoke test pass.
+            
+            Voice cloning depends on a third-party free demo; availability, quality, and retention policies are not guaranteed. Use only your own or explicitly permitted voice.
+            Topic images are fetched from Wikimedia Commons only when an allowed license is detected; otherwise a graphic background is used. Subtitle word timing remains approximate.
