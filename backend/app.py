@@ -20,7 +20,7 @@ MAX_SCRIPT_CHARS = int(os.getenv("MAX_SCRIPT_CHARS", "12000"))
 MAX_AUDIO_MB = int(os.getenv("MAX_AUDIO_MB", "40"))
 JOBS = {}
 LOCK = threading.Lock()
-app = FastAPI(title="Bangla AI Voice Video Maker API", version="0.1.0")
+app = FastAPI(title="Bangla AI Voice Video Maker API", version="0.2.0")
 
 
 def run(cmd, timeout=240):
@@ -36,6 +36,50 @@ def duration_of(path: Path) -> float:
         return max(1.0, float(data.decode().strip()))
     except Exception as exc:
         raise RuntimeError("অডিওর দৈর্ঘ্য নির্ণয় করা যায়নি") from exc
+
+
+def synthesize_mixed_speech(script: str, folder: Path) -> Path:
+    """Synthesize contiguous Bangla/English spans with matching eSpeak voices."""
+    tokens = re.findall(r"[\u0980-\u09FF]+|[A-Za-z]+(?:['’\-][A-Za-z]+)*|\d+|[^\w]+|.", script, flags=re.UNICODE)
+    chunks = []
+    current_language = None
+    current_text = ""
+    for token in tokens:
+        if re.search(r"[\u0980-\u09FF]", token):
+            language = "bn"
+        elif re.search(r"[A-Za-z0-9]", token):
+            language = "en"
+        else:
+            language = current_language or "bn"
+        if current_language is not None and language != current_language:
+            if current_text.strip():
+                chunks.append((current_language, current_text))
+            current_text = ""
+        current_language = language
+        current_text += token
+    if current_text.strip():
+        chunks.append((current_language or "bn", current_text))
+    if not chunks:
+        raise RuntimeError("পড়ার মতো লেখা পাওয়া যায়নি।")
+
+    audio_parts = []
+    for index, (language, text) in enumerate(chunks):
+        part = folder / f"speech-{index:04d}.wav"
+        try:
+            run(["espeak-ng", "-v", language, "-s", "145", "-w", str(part), text], 120)
+        except Exception as exc:
+            raise RuntimeError(f"{'বাংলা' if language == 'bn' else 'ইংরেজি'} কণ্ঠ তৈরি করা যায়নি।") from exc
+        if not part.exists() or part.stat().st_size < 100:
+            raise RuntimeError("কণ্ঠের অডিও তৈরি হয়নি।")
+        audio_parts.append(part)
+
+    if len(audio_parts) == 1:
+        return audio_parts[0]
+    listing = folder / "audio-parts.txt"
+    listing.write_text("".join(f"file '{part.as_posix()}'\n" for part in audio_parts), encoding="utf-8")
+    combined = folder / "voice.wav"
+    run(["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(listing), "-c:a", "pcm_s16le", str(combined)], 120)
+    return combined
 
 
 def load_font(size: int, bold=False):
@@ -83,7 +127,7 @@ def make_background(script: str, folder: Path):
     y = 150
     for line in title_lines:
         box = draw.textbbox((0, 0), line, font=title_font)
-        draw.text(((width - (box[2] - box[0])) / 2, y), line, font=title_font, fill=(255, 255, 255))
+        draw.text(((width - (box[2] - box[0]) / 2, y)), line, font=title_font, fill=(255, 255, 255))
         y += 65
     draw.rounded_rectangle((60, 300, 660, 306), radius=3, fill=(83, 177, 244))
     excerpt = re.sub(r"\s+", " ", script).strip()
@@ -106,12 +150,14 @@ def make_srt(script: str, duration: float, path: Path):
     weights = [max(1, len(re.findall(r"\S+", s))) for s in sentences]
     total = sum(weights)
     cursor = 0.0
+
     def stamp(seconds):
         ms = max(0, int(seconds * 1000))
         h, ms = divmod(ms, 3600000)
         m, ms = divmod(ms, 60000)
         s, ms = divmod(ms, 1000)
         return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
+
     lines = []
     for i, (sentence, weight) in enumerate(zip(sentences, weights), start=1):
         end = duration if i == len(sentences) else cursor + duration * weight / total
@@ -129,13 +175,7 @@ def render(job_id: str, script: str, mode: str, audio_path: Optional[Path]):
             JOBS[job_id]["progress"] = 10
             JOBS[job_id]["message"] = "ভয়েস ও দৃশ্য প্রস্তুত করা হচ্ছে"
         if audio_path is None:
-            voice = "bn" if re.search(r"[\u0980-\u09FF]", script) else "en"
-            audio_path = folder / "voice.wav"
-            try:
-                run(["espeak-ng", "-v", voice, "-s", "145", "-w", str(audio_path), script[:MAX_SCRIPT_CHARS]], 120)
-            except Exception:
-                # Do not silently switch language: return a clear error.
-                raise RuntimeError("এই সার্ভারে প্রয়োজনীয় বাংলা/ইংরেজি Text-to-Speech কণ্ঠ পাওয়া যায়নি।")
+            audio_path = synthesize_mixed_speech(script[:MAX_SCRIPT_CHARS], folder)
         duration = duration_of(audio_path)
         with LOCK:
             JOBS[job_id]["progress"] = 35
@@ -144,11 +184,8 @@ def render(job_id: str, script: str, mode: str, audio_path: Optional[Path]):
         subtitles = folder / "captions.srt"
         make_srt(script, duration, subtitles)
         output = folder / "video.mp4"
-        # Single-scene graphic background with gentle zoom and burned-in captions.
         font_dir = "/usr/share/fonts/truetype/noto"
         subtitle_filter = f"subtitles={subtitles.as_posix()}:fontsdir={font_dir}"
-        # Use one still-image frame per second, then expand each to 25 output frames.
-        # Escape the comma inside min() so FFmpeg does not parse it as a filter separator.
         vf = f"scale=720:1280,zoompan=z='min(zoom+0.00035\\,1.08)':d=25:s=720x1280:fps=25,{subtitle_filter},format=yuv420p"
         run([
             "ffmpeg", "-y", "-loop", "1", "-framerate", "1", "-i", str(background), "-i", str(audio_path),
@@ -170,7 +207,7 @@ def root():
 @app.get("/health")
 def health():
     tools = {name: shutil.which(name) is not None for name in ("ffmpeg", "ffprobe", "espeak-ng")}
-    return {"status": "ok" if all(tools.values()) else "degraded", "tools": tools, "version": "0.1.0"}
+    return {"status": "ok" if all(tools.values()) else "degraded", "tools": tools, "version": "0.2.0"}
 
 
 @app.post("/api/jobs", status_code=202)
