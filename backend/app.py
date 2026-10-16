@@ -204,6 +204,62 @@ def make_srt(script: str, duration: float, path: Path):
     path.write_text("\n".join(lines), encoding="utf-8")
 
 
+def make_ass(script: str, duration: float, path: Path):
+    """Create approximate word-by-word karaoke captions; timings are estimated."""
+    sentences = [x.strip() for x in re.split(r"(?<=[.!?।])\s+|\n+", script) if x.strip()]
+    if not sentences:
+        sentences = [script.strip()]
+    weights = [max(1, len(re.findall(r"\S+", sentence))) for sentence in sentences]
+    total_weight = sum(weights)
+    cursor = 0.0
+    lines = [
+        "[Script Info]",
+        "ScriptType: v4.00+",
+        "PlayResX: 720",
+        "PlayResY: 1280",
+        "WrapStyle: 2",
+        "ScaledBorderAndShadow: yes",
+        "",
+        "[V4+ Styles]",
+        "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
+        "Style: Default,Noto Sans Bengali,42,&H00FFFFFF,&H0000FFFF,&H00101010,&H80000000,0,0,0,0,100,100,0,0,1,3,1,2,48,48,92,1",
+        "",
+        "[Events]",
+        "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
+    ]
+
+    def stamp(seconds):
+        centiseconds = max(0, int(seconds * 100))
+        hours, centiseconds = divmod(centiseconds, 360000)
+        minutes, centiseconds = divmod(centiseconds, 6000)
+        whole_seconds, centiseconds = divmod(centiseconds, 100)
+        return f"{hours}:{minutes:02d}:{whole_seconds:02d}.{centiseconds:02d}"
+
+    for sentence, weight in zip(sentences, weights):
+        start = cursor
+        end = min(duration, start + duration * weight / total_weight)
+        words = re.findall(r"\S+", sentence)
+        if not words:
+            continue
+        lengths = [max(1, len(word)) for word in words]
+        available_cs = max(len(words), int(max(0.01, end - start) * 100))
+        length_total = sum(lengths)
+        karaoke = []
+        allocated = 0
+        for index, (word, length) in enumerate(zip(words, lengths)):
+            if index == len(words) - 1:
+                cs = max(1, available_cs - allocated)
+            else:
+                cs = max(1, int(available_cs * length / length_total))
+                allocated += cs
+            safe_word = word.replace("\\", "＼").replace("{", "｛").replace("}", "｝")
+            karaoke.append(f"{{\\k{cs}}}{safe_word}")
+        text = " ".join(karaoke)
+        lines.append(f"Dialogue: 0,{stamp(start)},{stamp(end)},Default,,0,0,0,,{text}")
+        cursor = end
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
 def render(job_id: str, script: str, mode: str, audio_path: Optional[Path]):
     folder = WORK_DIR / job_id
     folder.mkdir(parents=True, exist_ok=True)
@@ -230,11 +286,11 @@ def render(job_id: str, script: str, mode: str, audio_path: Optional[Path]):
             JOBS[job_id]["progress"] = 35
             JOBS[job_id]["message"] = "ভিডিওর পটভূমি ও সাবটাইটেল তৈরি হচ্ছে"
         background = make_background(script, folder)
-        subtitles = folder / "captions.srt"
-        make_srt(script, duration, subtitles)
+        subtitles = folder / "captions.ass"
+        make_ass(script, duration, subtitles)
         output = folder / "video.mp4"
         font_dir = "/usr/share/fonts/truetype/noto"
-        subtitle_filter = f"subtitles={subtitles.as_posix()}:fontsdir={font_dir}"
+        subtitle_filter = f"ass={subtitles.as_posix()}:fontsdir={font_dir}"
         vf = f"scale=720:1280,zoompan=z='min(zoom+0.00035\\,1.08)':d=25:s=720x1280:fps=25,{subtitle_filter},format=yuv420p"
         run([
             "ffmpeg", "-y", "-loop", "1", "-framerate", "1", "-i", str(background), "-i", str(audio_path),
