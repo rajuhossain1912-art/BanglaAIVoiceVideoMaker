@@ -34,7 +34,7 @@ jobs:
           code=$(curl --silent --output clone-consent.json --write-out "%{http_code}" -X POST http://127.0.0.1:10000/api/jobs -F 'script=পরীক্ষা' -F 'mode=clone' -F 'voice_clone_consent=false' -F 'audio=@README.md')
           cat clone-consent.json
           test "$code" = "400"
-          grep -q "সম্মতি" clone-consent.json
+          grep -q "অনুমতি" clone-consent.json
       - name: Generate Bangla and English videos end to end
         run: |
           set -e
