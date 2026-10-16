@@ -7,12 +7,14 @@ import threading
 import time
 import uuid
 import tempfile
+import urllib.parse
+import urllib.request
 from pathlib import Path
 from typing import Optional
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 APP_DIR = Path(__file__).resolve().parent
 VOICE_CLONE_SPACE = os.getenv("VOICE_CLONE_SPACE", "kawshikbuet17/bengali-cosyvoice3-tts-demo")
@@ -146,18 +148,98 @@ def wrap_text(draw, text, font, max_width):
     return lines
 
 
+def find_contextual_image(script: str, folder: Path):
+    """Fetch a freely reusable, topic-relevant image from Wikimedia Commons; fail closed."""
+    stopwords = set("""
+    the and for with this that from your you are was were have has had will would can could
+    about into over under then than when where what why how not but or as is am be
+    আমি তুমি তিনি তারা আমরা আপনার আমাদের তাদের এটা এটি এই সেই যে কী কেন কিভাবে এবং অথবা
+    থেকে জন্য নিয়ে করা হবে হয় আছে ছিল একটি একজন আজকে যেন কিন্তু
+    """.split())
+    tokens = re.findall(r"[\\u0980-\\u09FF]{3,}|[A-Za-z]{3,}", script[:900])
+    seen = set()
+    keywords = []
+    for token in tokens:
+        key = token.lower()
+        if key not in stopwords and key not in seen:
+            seen.add(key)
+            keywords.append(token)
+        if len(keywords) >= 4:
+            break
+    if not keywords:
+        return None, ""
+    params = urllib.parse.urlencode({
+        "action": "query", "generator": "search",
+        "gsrsearch": "filetype:bitmap " + " ".join(keywords),
+        "gsrnamespace": "6", "gsrlimit": "8",
+        "prop": "imageinfo", "iiprop": "url|extmetadata",
+        "iiurlwidth": "900", "format": "json"
+    })
+    request = urllib.request.Request(
+        "https://commons.wikimedia.org/w/api.php?" + params,
+        headers={"User-Agent": "BanglaAIVoiceVideoMaker/0.3 (free educational video maker)"}
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=8) as response:
+            data = json.loads(response.read(2_000_000).decode("utf-8"))
+        pages = list((data.get("query", {}).get("pages") or {}).values())
+        for page in pages:
+            info = (page.get("imageinfo") or [{}])[0]
+            metadata = info.get("extmetadata") or {}
+            license_name = str((metadata.get("LicenseShortName") or {}).get("value", "")).strip()
+            license_upper = license_name.upper().replace("-", " ")
+            is_reusable = (
+                "PUBLIC DOMAIN" in license_upper or "CC0" in license_upper
+                or (license_upper.startswith("CC BY") and "NC" not in license_upper and "ND" not in license_upper)
+            )
+            image_url = info.get("thumburl") or info.get("url")
+            if not is_reusable or not image_url or not image_url.startswith("https://"):
+                continue
+            with urllib.request.urlopen(urllib.request.Request(image_url, headers={"User-Agent": "BanglaAIVoiceVideoMaker/0.3"}), timeout=10) as response:
+                content = response.read(8 * 1024 * 1024 + 1)
+            if len(content) > 8 * 1024 * 1024:
+                continue
+            target = folder / "context-image"
+            target.write_bytes(content)
+            try:
+                with Image.open(target) as check:
+                    check.verify()
+            except Exception:
+                target.unlink(missing_ok=True)
+                continue
+            artist = str((metadata.get("Artist") or {}).get("value", "")).strip()
+            artist = re.sub(r"<[^>]+>", "", artist)
+            title = str(page.get("title", "Wikimedia Commons image")).replace("File:", "")
+            credit = f"{title[:55]} | {artist[:45]} | {license_name[:20]}".strip(" |")
+            return target, credit
+    except Exception:
+        pass
+    return None, ""
+
+
 def make_background(script: str, folder: Path):
     width, height = 720, 1280
-    image = Image.new("RGB", (width, height))
-    pixels = image.load()
-    for y in range(height):
-        ratio = y / height
-        color = (int(13 + 22 * ratio), int(29 + 18 * ratio), int(63 + 42 * ratio))
-        for x in range(width):
-            pixels[x, y] = color
+    source_image, credit = find_contextual_image(script, folder)
+    if source_image:
+        try:
+            with Image.open(source_image) as source:
+                image = ImageOps.fit(source.convert("RGB"), (width, height), method=Image.Resampling.LANCZOS)
+            overlay = Image.new("RGBA", (width, height), (3, 13, 28, 145))
+            image = Image.alpha_composite(image.convert("RGBA"), overlay).convert("RGB")
+        except Exception:
+            source_image = None
+    if not source_image:
+        image = Image.new("RGB", (width, height))
+        pixels = image.load()
+        for y in range(height):
+            ratio = y / height
+            color = (int(13 + 22 * ratio), int(29 + 18 * ratio), int(63 + 42 * ratio))
+            for x in range(width):
+                pixels[x, y] = color
+        draw = ImageDraw.Draw(image)
+        draw.ellipse((470, -130, 900, 300), fill=(30, 69, 113))
+        draw.ellipse((-200, 880, 330, 1410), fill=(23, 57, 91))
     draw = ImageDraw.Draw(image)
-    draw.ellipse((470, -130, 900, 300), fill=(30, 69, 113))
-    draw.ellipse((-200, 880, 330, 1410), fill=(23, 57, 91))
     title_font = load_font(48, True)
     body_font = load_font(34)
     title = "বাংলা AI ভিডিও"
@@ -165,20 +247,24 @@ def make_background(script: str, folder: Path):
     y = 150
     for line in title_lines:
         box = draw.textbbox((0, 0), line, font=title_font)
-        draw.text(((width - (box[2] - box[0])) / 2, y), line, font=title_font, fill=(255, 255, 255))
+        draw.text(((width - (box[2] - box[0])) / 2, y), line, font=title_font, fill=(255, 255, 255), stroke_width=2, stroke_fill=(0, 0, 0))
         y += 65
     draw.rounded_rectangle((60, 300, 660, 306), radius=3, fill=(83, 177, 244))
-    excerpt = re.sub(r"\s+", " ", script).strip()
+    excerpt = re.sub(r"\\s+", " ", script).strip()
     lines = wrap_text(draw, excerpt[:420], body_font, 590)
     y = 370
     for line in lines[:13]:
-        draw.text((65, y), line, font=body_font, fill=(231, 241, 250))
+        draw.text((65, y), line, font=body_font, fill=(255, 255, 255), stroke_width=1, stroke_fill=(0, 0, 0))
         y += 54
-    draw.text((65, 1160), "Bangla AI Voice Video Maker", font=load_font(22), fill=(169, 195, 221))
+    draw.text((65, 1160), "Bangla AI Voice Video Maker", font=load_font(22), fill=(240, 245, 255), stroke_width=1, stroke_fill=(0, 0, 0))
+    if credit:
+        credit_font = load_font(12)
+        credit_lines = wrap_text(draw, "Image credit: " + credit, credit_font, 680)
+        for index, line in enumerate(credit_lines[:2]):
+            draw.text((20, 1210 + index * 18), line, font=credit_font, fill=(255, 255, 255), stroke_width=1, stroke_fill=(0, 0, 0))
     target = folder / "background.png"
     image.save(target)
     return target
-
 
 def make_srt(script: str, duration: float, path: Path):
     # Estimated sentence timing is a fallback, not forced alignment.
