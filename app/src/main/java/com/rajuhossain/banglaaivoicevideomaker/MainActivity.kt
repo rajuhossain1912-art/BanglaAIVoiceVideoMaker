@@ -30,6 +30,7 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
+import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.UUID
@@ -54,18 +55,46 @@ private fun VideoMakerScreen() {
     var audioName by remember { mutableStateOf("") }
     var mode by remember { mutableStateOf("auto") }
     var cloneConsent by remember { mutableStateOf(false) }
+    var hasSavedVoiceProfile by remember { mutableStateOf(File(context.filesDir, "voice_profile_sample").exists()) }
     var status by remember { mutableStateOf("অনলাইন সার্ভার যুক্ত হলে এখানে ভিডিও তৈরির অবস্থা দেখা যাবে।") }
     var progress by remember { mutableStateOf(0) }
     var online by remember { mutableStateOf(isInternetAvailable(context)) }
     var running by remember { mutableStateOf(false) }
     var downloadPath by remember { mutableStateOf("") }
 
+    LaunchedEffect(mode, hasSavedVoiceProfile) {
+        val profile = File(context.filesDir, "voice_profile_sample")
+        if (mode == "clone" && hasSavedVoiceProfile && profile.exists()) {
+            audioUri = Uri.fromFile(profile)
+            audioName = "ফোনে সংরক্ষিত নিজের কণ্ঠের নমুনা"
+        } else if (mode != "clone" && audioUri?.scheme == "file" && audioUri?.path == profile.absolutePath) {
+            audioUri = null
+            audioName = ""
+        }
+    }
+
     val audioPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) {
-            audioUri = uri
-            audioName = uri.lastPathSegment ?: "অডিও ফাইল নির্বাচন করা হয়েছে"
-            mode = "audio"
-            status = "অডিও ফাইল নির্বাচন করা হয়েছে।"
+            if (mode == "clone") {
+                try {
+                    val profile = File(context.filesDir, "voice_profile_sample")
+                    context.contentResolver.openInputStream(uri).use { input ->
+                        requireNotNull(input) { "অডিও ফাইল খোলা যায়নি" }
+                        profile.outputStream().use { output -> input.copyTo(output) }
+                    }
+                    audioUri = Uri.fromFile(profile)
+                    audioName = "ফোনে সংরক্ষিত নিজের কণ্ঠের নমুনা"
+                    hasSavedVoiceProfile = true
+                    status = "কণ্ঠের নমুনা শুধু এই ফোনের অ্যাপের ব্যক্তিগত স্টোরেজে সংরক্ষিত হয়েছে। ক্লোনিং চালালে সম্মতি দেওয়ার পর বাহ্যিক সার্ভারে পাঠানো হবে।"
+                } catch (e: Exception) {
+                    status = "কণ্ঠের নমুনা ফোনে সংরক্ষণ করা যায়নি।"
+                }
+            } else {
+                audioUri = uri
+                audioName = uri.lastPathSegment ?: "অডিও ফাইল নির্বাচন করা হয়েছে"
+                mode = "audio"
+                status = "অডিও ফাইল নির্বাচন করা হয়েছে।"
+            }
         }
     }
 
@@ -117,7 +146,18 @@ private fun VideoMakerScreen() {
             supportingText = { Text("সার্ভার লেখা গ্রহণ করে ভিডিও তৈরি করবে।") }
         )
         OutlinedButton(onClick = { audioPicker.launch("audio/*") }, modifier = Modifier.fillMaxWidth(), enabled = !running) {
-            Text(if (audioName.isBlank()) "অডিও ফাইল নির্বাচন করুন" else "অডিও নির্বাচন করা হয়েছে: " + audioName)
+            Text(if (mode == "clone" && hasSavedVoiceProfile) "নিজের কণ্ঠের নমুনা বদলান" else if (mode == "clone") "নিজের কণ্ঠের নমুনা নির্বাচন ও ফোনে সংরক্ষণ করুন" else if (audioName.isBlank()) "অডিও ফাইল নির্বাচন করুন" else "অডিও নির্বাচন করা হয়েছে: " + audioName)
+        }
+        if (mode == "clone" && hasSavedVoiceProfile) {
+            OutlinedButton(onClick = {
+                File(context.filesDir, "voice_profile_sample").delete()
+                hasSavedVoiceProfile = false
+                audioUri = null
+                audioName = ""
+                status = "ফোনে সংরক্ষিত কণ্ঠের নমুনা মুছে ফেলা হয়েছে।"
+            }, modifier = Modifier.fillMaxWidth(), enabled = !running) {
+                Text("ফোন থেকে সংরক্ষিত কণ্ঠের নমুনা মুছুন")
+            }
         }
         Button(
             onClick = {
