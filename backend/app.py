@@ -390,11 +390,11 @@ def render(job_id: str, script: str, mode: str, audio_path: Optional[Path], capt
         output = folder / "video.mp4"
         font_dir = "/usr/share/fonts/truetype/noto"
         subtitle_filter = f"ass={subtitles.as_posix()}:fontsdir={font_dir}"
-        vf = f"scale=720:1280,zoompan=z='min(zoom+0.00035\\,1.08)':d=25:s=720x1280:fps=25,{subtitle_filter},format=yuv420p"
+        vf = f"scale=480:854,zoompan=z='min(zoom+0.0005\\,1.05)':d=15:s=480x854:fps=15,{subtitle_filter},format=yuv420p"
         run([
-            "ffmpeg", "-y", "-loop", "1", "-framerate", "1", "-i", str(background), "-i", str(audio_path),
-            "-vf", vf, "-t", str(duration), "-r", "25", "-c:v", "libx264", "-preset", "ultrafast",
-            "-crf", "27", "-c:a", "aac", "-b:a", "128k", "-shortest", "-movflags", "+faststart", str(output)
+            "ffmpeg", "-y", "-filter_threads", "1", "-filter_complex_threads", "1", "-loop", "1", "-framerate", "1", "-i", str(background), "-i", str(audio_path),
+            "-vf", vf, "-t", str(duration), "-r", "15", "-c:v", "libx264", "-threads", "1", "-preset", "ultrafast",
+            "-crf", "27", "-c:a", "aac", "-b:a", "96k", "-shortest", "-movflags", "+faststart", str(output)
         ], 240)
         with LOCK:
             JOBS[job_id].update(status="completed", progress=100, message="ভিডিও তৈরি হয়েছে", download_url=f"/api/jobs/{job_id}/download", duration=round(duration, 2), completed_at=time.time())
