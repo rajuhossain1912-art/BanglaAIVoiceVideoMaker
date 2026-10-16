@@ -31,11 +31,13 @@ jobs:
       - name: Generate Bangla and English videos end to end
         run: |
           set -e
-          for language in bangla english; do
+          for language in bangla english mixed; do
             if [ "$language" = "bangla" ]; then
               script='আসসালামু আলাইকুম। এটি বাংলা ভিডিও তৈরির পরীক্ষা।'
-            else
+            elif [ "$language" = "english" ]; then
               script='Hello. This is an English video generation test.'
+            else
+              script='আসসালামু আলাইকুম everyone, আজকে আমরা AI voice video test করব.'
             fi
             response=$(curl --fail --silent --show-error -X POST http://127.0.0.1:10000/api/jobs -F "script=$script" -F 'mode=auto')
             echo "$response"
