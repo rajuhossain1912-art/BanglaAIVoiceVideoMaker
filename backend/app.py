@@ -299,7 +299,7 @@ def make_srt(script: str, duration: float, path: Path):
     path.write_text("\n".join(lines), encoding="utf-8")
 
 
-def make_ass(script: str, duration: float, path: Path):
+def make_ass(script: str, duration: float, path: Path, caption_offset: float = 0.0):
     """Create approximate word-by-word karaoke captions; timings are estimated."""
     sentences = [x.strip() for x in re.split(r"(?<=[.!?।])\s+|\n+", script) if x.strip()]
     if not sentences:
@@ -330,14 +330,16 @@ def make_ass(script: str, duration: float, path: Path):
         whole_seconds, centiseconds = divmod(centiseconds, 100)
         return f"{hours}:{minutes:02d}:{whole_seconds:02d}.{centiseconds:02d}"
 
-    for sentence, weight in zip(sentences, weights):
-        start = cursor
-        end = min(duration, start + duration * weight / total_weight)
-        words = re.findall(r"\S+", sentence)
+    for index, (sentence, weight) in enumerate(zip(sentences, weights)):
+        raw_start = cursor
+        raw_end = duration if index == len(sentences) - 1 else cursor + duration * weight / total_weight
+        start = min(duration, max(0.0, raw_start + caption_offset))
+        end = min(duration, max(start + 0.05, raw_end + caption_offset))
+        words = re.findall(r"\\S+", sentence)
         if not words:
+            cursor = raw_end
             continue
         lengths = [max(1, len(word)) for word in words]
-        available_cs = max(len(words), int(max(0.01, end - start) * 100))
         length_total = sum(lengths)
         karaoke = []
         allocated = 0
@@ -351,11 +353,11 @@ def make_ass(script: str, duration: float, path: Path):
             karaoke.append(f"{{\\k{cs}}}{safe_word}")
         text = " ".join(karaoke)
         lines.append(f"Dialogue: 0,{stamp(start)},{stamp(end)},Default,,0,0,0,,{text}")
-        cursor = end
+        cursor = raw_end
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def render(job_id: str, script: str, mode: str, audio_path: Optional[Path]):
+def render(job_id: str, script: str, mode: str, audio_path: Optional[Path], caption_offset: float = 0.0):
     folder = WORK_DIR / job_id
     folder.mkdir(parents=True, exist_ok=True)
     uploaded_audio_path = audio_path
@@ -383,7 +385,7 @@ def render(job_id: str, script: str, mode: str, audio_path: Optional[Path]):
             JOBS[job_id]["message"] = "ভিডিওর পটভূমি ও সাবটাইটেল তৈরি হচ্ছে"
         background = make_background(script, folder)
         subtitles = folder / "captions.ass"
-        make_ass(script, duration, subtitles)
+        make_ass(script, duration, subtitles, caption_offset)
         output = folder / "video.mp4"
         font_dir = "/usr/share/fonts/truetype/noto"
         subtitle_filter = f"ass={subtitles.as_posix()}:fontsdir={font_dir}"
@@ -419,7 +421,7 @@ def health():
 
 
 @app.post("/api/jobs", status_code=202)
-async def create_job(script: str = Form(...), mode: str = Form("auto"), audio: Optional[UploadFile] = File(None), voice_clone_consent: bool = Form(False)):
+async def create_job(script: str = Form(...), mode: str = Form("auto"), audio: Optional[UploadFile] = File(None), voice_clone_consent: bool = Form(False), caption_offset: float = Form(0.0)):
     script = script.strip()
     if not script:
         raise HTTPException(400, "আগে বাংলা বা ইংরেজি লেখা যোগ করুন।")
@@ -427,6 +429,8 @@ async def create_job(script: str = Form(...), mode: str = Form("auto"), audio: O
         raise HTTPException(413, f"লেখা সর্বোচ্চ {MAX_SCRIPT_CHARS} অক্ষরের হতে পারবে।")
     if mode not in ("auto", "audio", "clone"):
         raise HTTPException(400, "ভিডিও তৈরির পদ্ধতি সঠিক নয়।")
+    if not -1.5 <= caption_offset <= 1.5:
+        raise HTTPException(400, "সাবটাইটেলের সময় -১.৫ থেকে +১.৫ সেকেন্ডের মধ্যে দিন।")
     if mode in ("audio", "clone") and audio is None:
         raise HTTPException(400, "অডিও ফাইল নির্বাচন করুন।")
     if mode == "clone":
@@ -455,7 +459,7 @@ async def create_job(script: str = Form(...), mode: str = Form("auto"), audio: O
                 target.write(chunk)
     with LOCK:
         JOBS[job_id] = {"id": job_id, "status": "queued", "progress": 0, "message": "অনুরোধ গ্রহণ করা হয়েছে", "created_at": time.time()}
-    threading.Thread(target=render, args=(job_id, script, mode, audio_path), daemon=True).start()
+    threading.Thread(target=render, args=(job_id, script, mode, audio_path, caption_offset), daemon=True).start()
     return {"id": job_id, "status": "queued", "status_url": f"/api/jobs/{job_id}", "download_url": f"/api/jobs/{job_id}/download"}
 
 
