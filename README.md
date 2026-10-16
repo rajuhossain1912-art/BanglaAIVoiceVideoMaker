@@ -28,6 +28,7 @@ An online-only, TalkBack-friendly Android app for turning Bangla, English, or mi
 
 - বাংলা, ইংরেজি এবং একই লেখার মধ্যে বাংলা-ইংরেজি মিশ্র অংশের জন্য আলাদা eSpeak NG কণ্ঠ ব্যবহার করে অডিও তৈরি
 - GitHub Actions-এ বাংলা, ইংরেজি ও মিশ্র-ভাষার MP4 তৈরি, ডাউনলোড এবং ffprobe যাচাই সফল
+- সাবটাইটেলে আনুমানিক শব্দ-অনুযায়ী হলুদ হাইলাইট যোগ করা হয়েছে; এটি প্রকৃত forced alignment নয়
 - Android debug APK তৈরি হয়েছে; সর্বশেষ বিল্ডের জন্য GitHub Actions-এর Build Android APK রান দেখুন
 
 ## গুরুত্বপূর্ণ সীমাবদ্ধতা
