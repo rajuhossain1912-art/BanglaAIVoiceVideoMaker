@@ -82,10 +82,17 @@ jobs:
           if [ "$done_job" -ne 1 ]; then echo 'Voice-clone test timed out'; docker logs bangla-video-api-release; exit 1; fi
           curl --fail --silent --show-error "http://127.0.0.1:10000/api/jobs/$job_id/download" -o clone-test.mp4
           test -s clone-test.mp4
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
       - name: Build Android debug APK
-        run: |
-          gradle --version >/dev/null 2>&1 || true
-          docker run --rm -v "$PWD":/workspace -w /workspace gradle:8.9-jdk17 gradle --no-daemon assembleDebug -PAPI_BASE_URL="$API_BASE_URL"
+        run: gradle --no-daemon assembleDebug -PAPI_BASE_URL="$API_BASE_URL"
       - name: Publish tested APK as GitHub Release
         uses: softprops/action-gh-release@v2
         with:
