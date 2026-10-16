@@ -93,17 +93,26 @@ jobs:
           gradle-version: "8.9"
       - name: Build Android debug APK
         run: gradle --no-daemon assembleDebug -PAPI_BASE_URL="$API_BASE_URL"
+      - name: Give APK a simple download filename
+        run: cp app/build/outputs/apk/debug/app-debug.apk app-release.apk
       - name: Publish tested APK as GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.RELEASE_TAG }}
           name: Bangla AI Voice Video Maker ${{ env.RELEASE_TAG }}
           generate_release_notes: true
-          files: app/build/outputs/apk/debug/app-debug.apk
+          files: app-release.apk
           body: |
-            Android debug APK for real-device testing. This is not a Play Store production-signed build.
+            ## অ্যাপ ডাউনলোড
             
-            The workflow only publishes after Bangla, English, mixed-language video generation and an external voice-cloning smoke test pass.
+            **সহজে ডাউনলোড করতে নিচের লিংকে চাপ দিন:**
             
-            Voice cloning depends on a third-party free demo; availability, quality, and retention policies are not guaranteed. Use only your own or explicitly permitted voice.
-            Topic images are fetched from Wikimedia Commons only when an allowed license is detected; otherwise a graphic background is used. Subtitle word timing remains approximate.
+            [**app-release.apk — Android অ্যাপ ডাউনলোড করুন**](https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/releases/download/v0.1.0/app-release.apk)
+            
+            অথবা নিচের Assets অংশে **app-release.apk** ফাইলটি নির্বাচন করুন।
+            
+            এটি ফোনে বাস্তব পরীক্ষার জন্য তৈরি Android APK; Play Store-এর production-signed সংস্করণ নয়। বাংলা, ইংরেজি, মিশ্র ভাষার ভিডিও এবং পরীক্ষামূলক voice-cloning smoke test সফল হওয়ার পরই রিলিজ তৈরি করা হয়।
+            
+            **কণ্ঠ নকলের সতর্কতা:** এটি বাইরের বিনামূল্যের Hugging Face ডেমোর ওপর নির্ভরশীল। এর প্রাপ্যতা, মান এবং অডিও/লেখা সংরক্ষণের নীতি নিশ্চিত নয়। শুধু নিজের অথবা স্পষ্ট অনুমতি থাকা কণ্ঠ ব্যবহার করুন।
+            
+            বিষয়ভিত্তিক উপযুক্ত লাইসেন্সের ছবি না পেলে অ্যাপ গ্রাফিক ব্যাকগ্রাউন্ড ব্যবহার করে। সাবটাইটেলের শব্দ-হাইলাইটের সময় আনুমানিক।
