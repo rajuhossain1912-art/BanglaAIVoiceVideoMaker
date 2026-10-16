@@ -227,52 +227,52 @@ def find_contextual_image(script: str, folder: Path):
 
 
 def make_background(script: str, folder: Path):
-    width, height = 720, 1280
+    # Small canvas is intentional: keep peak memory below Render Free's 512 MiB limit.
+    width, height = 360, 640
     source_image, credit = find_contextual_image(script, folder)
     if source_image:
         try:
             with Image.open(source_image) as source:
-                image = ImageOps.fit(source.convert("RGB"), (width, height), method=Image.Resampling.LANCZOS)
+                image = ImageOps.fit(source.convert("RGB"), (width, height), method=Image.Resampling.BILINEAR)
             overlay = Image.new("RGBA", (width, height), (3, 13, 28, 145))
             image = Image.alpha_composite(image.convert("RGBA"), overlay).convert("RGB")
         except Exception:
             source_image = None
     if not source_image:
         image = Image.new("RGB", (width, height))
-        pixels = image.load()
-        for y in range(height):
+        draw = ImageDraw.Draw(image)
+        # Draw horizontal bands instead of allocating a Python tuple for every pixel.
+        for y in range(0, height, 8):
             ratio = y / height
             color = (int(13 + 22 * ratio), int(29 + 18 * ratio), int(63 + 42 * ratio))
-            for x in range(width):
-                pixels[x, y] = color
-        draw = ImageDraw.Draw(image)
-        draw.ellipse((470, -130, 900, 300), fill=(30, 69, 113))
-        draw.ellipse((-200, 880, 330, 1410), fill=(23, 57, 91))
+            draw.rectangle((0, y, width, min(height, y + 7)), fill=color)
+        draw.ellipse((235, -65, 450, 150), fill=(30, 69, 113))
+        draw.ellipse((-100, 440, 165, 705), fill=(23, 57, 91))
     draw = ImageDraw.Draw(image)
-    title_font = load_font(48, True)
-    body_font = load_font(34)
+    title_font = load_font(24, True)
+    body_font = load_font(17)
     title = "বাংলা AI ভিডিও"
-    title_lines = wrap_text(draw, title, title_font, 600)
-    y = 150
+    title_lines = wrap_text(draw, title, title_font, 300)
+    y = 75
     for line in title_lines:
         box = draw.textbbox((0, 0), line, font=title_font)
-        draw.text(((width - (box[2] - box[0])) / 2, y), line, font=title_font, fill=(255, 255, 255), stroke_width=2, stroke_fill=(0, 0, 0))
-        y += 65
-    draw.rounded_rectangle((60, 300, 660, 306), radius=3, fill=(83, 177, 244))
+        draw.text(((width - (box[2] - box[0])) / 2, y), line, font=title_font, fill=(255, 255, 255), stroke_width=1, stroke_fill=(0, 0, 0))
+        y += 33
+    draw.rounded_rectangle((30, 150, 330, 153), radius=2, fill=(83, 177, 244))
     excerpt = re.sub(r"\\s+", " ", script).strip()
-    lines = wrap_text(draw, excerpt[:420], body_font, 590)
-    y = 370
+    lines = wrap_text(draw, excerpt[:420], body_font, 295)
+    y = 185
     for line in lines[:13]:
-        draw.text((65, y), line, font=body_font, fill=(255, 255, 255), stroke_width=1, stroke_fill=(0, 0, 0))
-        y += 54
-    draw.text((65, 1160), "Bangla AI Voice Video Maker", font=load_font(22), fill=(240, 245, 255), stroke_width=1, stroke_fill=(0, 0, 0))
+        draw.text((33, y), line, font=body_font, fill=(255, 255, 255), stroke_width=1, stroke_fill=(0, 0, 0))
+        y += 27
+    draw.text((33, 580), "Bangla AI Voice Video Maker", font=load_font(11), fill=(240, 245, 255), stroke_width=1, stroke_fill=(0, 0, 0))
     if credit:
-        credit_font = load_font(12)
-        credit_lines = wrap_text(draw, "Image credit: " + credit, credit_font, 680)
+        credit_font = load_font(6)
+        credit_lines = wrap_text(draw, "Image credit: " + credit, credit_font, 340)
         for index, line in enumerate(credit_lines[:2]):
-            draw.text((20, 1210 + index * 18), line, font=credit_font, fill=(255, 255, 255), stroke_width=1, stroke_fill=(0, 0, 0))
+            draw.text((10, 605 + index * 9), line, font=credit_font, fill=(255, 255, 255), stroke_width=1, stroke_fill=(0, 0, 0))
     target = folder / "background.png"
-    image.save(target)
+    image.save(target, optimize=True)
     return target
 
 def make_srt(script: str, duration: float, path: Path):
@@ -310,14 +310,14 @@ def make_ass(script: str, duration: float, path: Path, caption_offset: float = 0
     lines = [
         "[Script Info]",
         "ScriptType: v4.00+",
-        "PlayResX: 720",
-        "PlayResY: 1280",
+        "PlayResX: 360",
+        "PlayResY: 640",
         "WrapStyle: 2",
         "ScaledBorderAndShadow: yes",
         "",
         "[V4+ Styles]",
         "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
-        "Style: Default,Noto Sans Bengali,42,&H00FFFFFF,&H0000FFFF,&H00101010,&H80000000,0,0,0,0,100,100,0,0,1,3,1,2,48,48,92,1",
+        "Style: Default,Noto Sans Bengali,21,&H00FFFFFF,&H0000FFFF,&H00101010,&H80000000,0,0,0,0,100,100,0,0,1,2,1,2,24,24,46,1",
         "",
         "[Events]",
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
@@ -392,11 +392,11 @@ def render(job_id: str, script: str, mode: str, audio_path: Optional[Path], capt
         subtitle_filter = f"ass={subtitles.as_posix()}:fontsdir={font_dir}"
         # Conservative settings for Render Free: avoid zoompan frame buffering.
         # Render a small vertical video first; higher-quality export can come later.
-        vf = f"scale=360:640,{subtitle_filter},format=yuv420p"
+        vf = f"{subtitle_filter},format=yuv420p"
         run([
             "ffmpeg", "-y", "-filter_threads", "1", "-filter_complex_threads", "1",
             "-loop", "1", "-framerate", "1", "-i", str(background), "-i", str(audio_path),
-            "-vf", vf, "-t", str(duration), "-r", "12", "-c:v", "libx264", "-threads", "1", "-preset", "ultrafast",
+            "-vf", vf, "-t", str(duration), "-r", "8", "-c:v", "libx264", "-threads", "1", "-preset", "ultrafast",
             "-crf", "30", "-c:a", "aac", "-b:a", "64k", "-shortest", "-movflags", "+faststart", str(output)
         ], 240)
         with LOCK:
