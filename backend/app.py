@@ -127,7 +127,7 @@ def make_background(script: str, folder: Path):
     y = 150
     for line in title_lines:
         box = draw.textbbox((0, 0), line, font=title_font)
-        draw.text(((width - (box[2] - box[0]) / 2, y)), line, font=title_font, fill=(255, 255, 255))
+        draw.text(((width - (box[2] - box[0])) / 2, y), line, font=title_font, fill=(255, 255, 255))
         y += 65
     draw.rounded_rectangle((60, 300, 660, 306), radius=3, fill=(83, 177, 244))
     excerpt = re.sub(r"\s+", " ", script).strip()
