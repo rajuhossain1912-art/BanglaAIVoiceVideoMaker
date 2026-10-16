@@ -109,10 +109,19 @@ def synthesize_cloned_voice(script: str, reference_audio: Path, folder: Path) ->
         audio_result = result[0] if isinstance(result, (list, tuple)) else result
         if isinstance(audio_result, dict):
             audio_result = audio_result.get("path") or audio_result.get("url")
-        if isinstance(audio_result, str) and Path(audio_result).exists():
+        candidate = None
+        if isinstance(audio_result, str) and Path(audio_result).is_file():
             candidate = Path(audio_result)
+        elif isinstance(audio_result, str) and audio_result.startswith("https://"):
+            remote_audio = folder / "remote-clone-output"
+            with urllib.request.urlopen(urllib.request.Request(audio_result, headers={"User-Agent": "BanglaAIVoiceVideoMaker/0.3"}), timeout=30) as response:
+                data = response.read(50 * 1024 * 1024 + 1)
+            if len(data) <= 50 * 1024 * 1024:
+                remote_audio.write_bytes(data)
+                candidate = remote_audio
+        if candidate is not None:
             output = folder / "cloned_voice.wav"
-            run(["ffmpeg", "-y", "-i", str(candidate), "-ac", "1", "-ar", "24000", str(output)], 120)
+            run(["ffmpeg", "-y", "-i", str(candidate), "-ac", "1", "-ar", "24000", "-c:a", "pcm_s16le", str(output)], 120)
             if output.exists() and output.stat().st_size > 100:
                 return output
         raise RuntimeError("ভয়েস ক্লোনিং সেবাটি অডিও ফাইল ফেরত দেয়নি।")
@@ -349,6 +358,7 @@ def make_ass(script: str, duration: float, path: Path):
 def render(job_id: str, script: str, mode: str, audio_path: Optional[Path]):
     folder = WORK_DIR / job_id
     folder.mkdir(parents=True, exist_ok=True)
+    uploaded_audio_path = audio_path
     try:
         with LOCK:
             JOBS[job_id]["status"] = "processing"
@@ -388,6 +398,13 @@ def render(job_id: str, script: str, mode: str, audio_path: Optional[Path]):
     except Exception as exc:
         with LOCK:
             JOBS[job_id].update(status="failed", progress=100, message=str(exc)[:1000], completed_at=time.time())
+    finally:
+        # Remove uploaded reference/narration audio after rendering, including failed jobs.
+        if uploaded_audio_path is not None:
+            try:
+                uploaded_audio_path.unlink(missing_ok=True)
+            except Exception:
+                pass
 
 
 @app.get("/")
