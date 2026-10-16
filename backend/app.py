@@ -92,12 +92,14 @@ def synthesize_cloned_voice(script: str, reference_audio: Path, folder: Path) ->
         raise RuntimeError("নিজের কণ্ঠের পরীক্ষামূলক সুবিধা বর্তমানে বন্ধ আছে।")
     if len(script) > 500:
         raise RuntimeError("পরীক্ষামূলক নিজের কণ্ঠে একবারে সর্বোচ্চ ৫০০ অক্ষর ব্যবহার করুন।")
+    normalized = folder / "voice_reference.wav"
     try:
         from gradio_client import Client, handle_file
+        run(["ffmpeg", "-y", "-i", str(reference_audio), "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", str(normalized)], 120)
         client = Client(VOICE_CLONE_SPACE, verbose=False)
         result = client.predict(
             script,
-            handle_file(str(reference_audio)),
+            handle_file(str(normalized)),
             0,
             1.0,
             api_name="/generate_cross_lingual_audio",
@@ -114,6 +116,8 @@ def synthesize_cloned_voice(script: str, reference_audio: Path, folder: Path) ->
         raise RuntimeError("ভয়েস ক্লোনিং সেবাটি অডিও ফাইল ফেরত দেয়নি।")
     except Exception as exc:
         raise RuntimeError("নিজের কণ্ঠ তৈরি করা যায়নি। ফ্রি বাহ্যিক ডেমো ব্যস্ত বা পরিবর্তিত থাকতে পারে। সাধারণ স্বয়ংক্রিয় ভয়েস দিয়ে আবার চেষ্টা করুন।") from exc
+    finally:
+        normalized.unlink(missing_ok=True)
 
 
 def load_font(size: int, bold=False):
