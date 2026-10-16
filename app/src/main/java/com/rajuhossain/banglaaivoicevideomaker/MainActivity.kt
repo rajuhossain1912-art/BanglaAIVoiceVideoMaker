@@ -53,6 +53,7 @@ private fun VideoMakerScreen() {
     var audioUri by remember { mutableStateOf<Uri?>(null) }
     var audioName by remember { mutableStateOf("") }
     var mode by remember { mutableStateOf("auto") }
+    var cloneConsent by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf("অনলাইন সার্ভার যুক্ত হলে এখানে ভিডিও তৈরির অবস্থা দেখা যাবে।") }
     var progress by remember { mutableStateOf(0) }
     var online by remember { mutableStateOf(isInternetAvailable(context)) }
@@ -91,10 +92,26 @@ private fun VideoMakerScreen() {
             RadioButton(selected = mode == "audio", onClick = { mode = "audio" }, enabled = !running)
             Text("লেখা ও আমার অডিও")
         }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            RadioButton(selected = mode == "clone", onClick = { mode = "clone" }, enabled = !running)
+            Text("পরীক্ষামূলক: আমার কণ্ঠে লেখা পড়ুন")
+        }
+        if (mode == "clone") {
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("গুরুত্বপূর্ণ গোপনীয়তা সতর্কতা", fontWeight = FontWeight.Bold)
+                    Text("এই পরীক্ষায় আপনার কণ্ঠের নমুনা ও লেখা Hugging Face-এর বাইরের ডেমো সার্ভারে পাঠানো হবে। সেই সার্ভারের সংরক্ষণ বা লগিং সম্পর্কে আমরা নিশ্চয়তা দিতে পারি না। তাই গোপন বা ব্যক্তিগত কথা দেবেন না। এই সুবিধা পরীক্ষামূলক, একবারে সর্বোচ্চ ৫০০ অক্ষর এবং ফলাফল নিশ্চিত নয়।")
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = cloneConsent, onCheckedChange = { cloneConsent = it }, enabled = !running)
+                        Text("আমি বুঝেছি এবং আমার নিজের কণ্ঠের নমুনা বাহ্যিক সার্ভারে পাঠাতে সম্মতি দিচ্ছি।")
+                    }
+                }
+            }
+        }
         OutlinedTextField(
             value = script, onValueChange = { script = it },
             modifier = Modifier.fillMaxWidth().height(210.dp),
-            label = { Text("বাংলা বা ইংরেজি লেখা") },
+            label = { Text(if (mode == "clone") "নিজের কণ্ঠে পড়ার লেখা (সর্বোচ্চ ৫০০ অক্ষর)" else "বাংলা বা ইংরেজি লেখা") },
             placeholder = { Text("এখানে সম্পূর্ণ স্ক্রিপ্ট পেস্ট করুন") },
             minLines = 5, enabled = !running,
             supportingText = { Text("সার্ভার লেখা গ্রহণ করে ভিডিও তৈরি করবে।") }
@@ -108,9 +125,11 @@ private fun VideoMakerScreen() {
                 val baseUrl = BuildConfig.API_BASE_URL.trim().trimEnd('/')
                 when {
                     script.isBlank() -> status = "আগে বাংলা বা ইংরেজি লেখা যোগ করুন।"
+                    mode == "clone" && script.trim().length > 500 -> status = "নিজের কণ্ঠের পরীক্ষায় সর্বোচ্চ ৫০০ অক্ষর দিন।"
+                    mode == "clone" && !cloneConsent -> status = "আগে বাহ্যিক সার্ভারে কণ্ঠ পাঠানোর সতর্কতা পড়ে সম্মতি দিন।"
                     !online -> status = "ভিডিও তৈরি করতে ইন্টারনেট সংযোগ দিন।"
                     baseUrl.isBlank() -> status = "অনলাইন API ঠিকানা এখনো সেট করা হয়নি। সার্ভার স্থাপন ও API ঠিকানা যুক্ত করার পর ভিডিও তৈরি চালু হবে।"
-                    mode == "audio" && audioUri == null -> status = "লেখার সঙ্গে মিলানোর জন্য অডিও ফাইল নির্বাচন করুন।"
+                    mode in listOf("audio", "clone") && audioUri == null -> status = "অডিও ফাইল নির্বাচন করুন।"
                     else -> {
                         running = true
                         progress = 0
@@ -118,7 +137,7 @@ private fun VideoMakerScreen() {
                         status = "অনলাইন সার্ভারে কাজ পাঠানো হচ্ছে।"
                         scope.launch {
                             try {
-                                val job = withContext(Dispatchers.IO) { createJob(context, baseUrl, script.trim(), mode, audioUri) }
+                                val job = withContext(Dispatchers.IO) { createJob(context, baseUrl, script.trim(), mode, audioUri, cloneConsent) }
                                 val jobId = job.getString("id")
                                 status = "অনুরোধ গ্রহণ করা হয়েছে। ভিডিও তৈরি চলছে।"
                                 var finished = false
@@ -184,11 +203,11 @@ private fun VideoMakerScreen() {
                 Text(status, modifier = Modifier.semantics { contentDescription = "বর্তমান অবস্থা: " + status })
             }
         }
-        Text("প্রাথমিক সার্ভার সংস্করণে লেখা/অডিও থেকে MP4, গ্রাফিক পটভূমি ও আনুমানিক সাবটাইটেল তৈরি করা যায়। AI ছবি তৈরি ও শব্দ-স্তরের নির্ভুল মিল পরবর্তী ধাপের কাজ।", style = MaterialTheme.typography.bodySmall)
+        Text("প্রাথমিক সংস্করণে MP4, গ্রাফিক পটভূমি ও আনুমানিক সাবটাইটেল তৈরি হয়। নিজের কণ্ঠের ক্লোনিং বাহ্যিক ফ্রি ডেমোর ওপর নির্ভরশীল; সব সময় কাজ নাও করতে পারে।", style = MaterialTheme.typography.bodySmall)
     }
 }
 
-private fun createJob(context: Context, baseUrl: String, script: String, mode: String, audioUri: Uri?): JSONObject {
+private fun createJob(context: Context, baseUrl: String, script: String, mode: String, audioUri: Uri?, cloneConsent: Boolean): JSONObject {
     val boundary = "----BanglaAI" + UUID.randomUUID().toString()
     val connection = (URL(baseUrl + "/api/jobs").openConnection() as HttpURLConnection).apply {
         requestMethod = "POST"
@@ -207,7 +226,8 @@ private fun createJob(context: Context, baseUrl: String, script: String, mode: S
             }
             field("script", script)
             field("mode", mode)
-            if (mode == "audio" && audioUri != null) {
+            field("voice_clone_consent", cloneConsent.toString())
+            if (mode in listOf("audio", "clone") && audioUri != null) {
                 output.write(("--" + boundary + "\r\n").toByteArray())
                 output.write("Content-Disposition: form-data; name=\"audio\"; filename=\"voice-file\"\r\n".toByteArray())
                 output.write("Content-Type: application/octet-stream\r\n\r\n".toByteArray())
