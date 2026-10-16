@@ -103,7 +103,7 @@ private fun VideoMakerScreen() {
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         Text("Bangla AI Voice Video Maker", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-        Text("শুধু লেখা দিন, অথবা লেখা ও নিজের অডিও দিন। অ্যাপটি অনলাইন সার্ভারের মাধ্যমে ভিডিও তৈরি করবে।")
+        Text("বাংলা, ইংরেজি বা মিশ্র লেখা থেকে ভিডিও তৈরি করুন। বিষয়ভিত্তিক বিনামূল্যের ছবি পাওয়া গেলে ব্যাকগ্রাউন্ডে ব্যবহার হবে; না পেলে গ্রাফিক ব্যাকগ্রাউন্ড থাকবে। ভিডিওতে জুম ও আনুমানিক শব্দ-হাইলাইট সাবটাইটেল থাকবে।")
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(if (online) "ইন্টারনেট সংযোগ পাওয়া গেছে" else "ইন্টারনেট সংযোগ পাওয়া যায়নি", fontWeight = FontWeight.SemiBold)
@@ -204,6 +204,7 @@ private fun VideoMakerScreen() {
                             } catch (e: Exception) {
                                 status = "সংযোগ বা ভিডিও তৈরিতে সমস্যা হয়েছে: " + (e.message ?: "অজানা সমস্যা")
                             } finally {
+                                cloneConsent = false
                                 running = false
                             }
                         }
