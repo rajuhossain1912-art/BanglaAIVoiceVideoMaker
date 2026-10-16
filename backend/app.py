@@ -229,7 +229,8 @@ def find_contextual_image(script: str, folder: Path):
 def make_background(script: str, folder: Path):
     # Small canvas is intentional: keep peak memory below Render Free's 512 MiB limit.
     width, height = 360, 640
-    source_image, credit = find_contextual_image(script, folder)
+    # Keep live rendering stable on the 512 MiB free instance; image lookup can be re-enabled after resource profiling.
+    source_image, credit = None, ""
     if source_image:
         try:
             with Image.open(source_image) as source:
