@@ -24,7 +24,7 @@ jobs:
       - name: Build backend container
         run: docker build -t bangla-video-api-release .
       - name: Start backend
-        run: docker run -d --name bangla-video-api-release -p 10000:10000 bangla-video-api-release
+        run: docker run -d --name bangla-video-api-release -e AI_IMAGE_GENERATION_ENABLED=false -p 10000:10000 bangla-video-api-release
       - name: Wait for health endpoint
         run: |
           for i in $(seq 1 30); do
