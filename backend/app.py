@@ -20,6 +20,7 @@ APP_DIR = Path(__file__).resolve().parent
 VOICE_CLONE_SPACE = os.getenv("VOICE_CLONE_SPACE", "kawshikbuet17/bengali-cosyvoice3-tts-demo")
 VOICE_CLONE_EN_SPACE = os.getenv("VOICE_CLONE_EN_SPACE", "ResembleAI/Chatterbox")
 VOICE_CLONE_ENABLED = os.getenv("VOICE_CLONE_ENABLED", "true").lower() in ("1", "true", "yes")
+AI_IMAGE_GENERATION_ENABLED = os.getenv("AI_IMAGE_GENERATION_ENABLED", "true").lower() in ("1", "true", "yes")
 WORK_DIR = Path(os.getenv("WORK_DIR", "/tmp/bangla-video-jobs"))
 WORK_DIR.mkdir(parents=True, exist_ok=True)
 MAX_SCRIPT_CHARS = int(os.getenv("MAX_SCRIPT_CHARS", "12000"))
@@ -354,6 +355,8 @@ def find_contextual_image(script: str, folder: Path):
 
 def find_generated_image(script: str, folder: Path):
     """Best-effort free FLUX.1-schnell Space; never blocks video creation if unavailable."""
+    if not AI_IMAGE_GENERATION_ENABLED:
+        return None, ""
     try:
         from gradio_client import Client
         from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
