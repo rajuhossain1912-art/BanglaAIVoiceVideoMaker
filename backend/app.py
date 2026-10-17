@@ -46,13 +46,13 @@ def duration_of(path: Path) -> float:
 
 
 def synthesize_mixed_speech(script: str, folder: Path) -> Path:
-    """Synthesize full Bangla/English text while preserving spaces and punctuation."""
-    tokens = re.findall(r"[\u0980-\u09FF]+|[A-Za-z0-9]+|[^A-Za-z0-9\u0980-\u09FF]+", script[:MAX_SCRIPT_CHARS])
+    """Prefer clearer online Google Translate TTS for Bangla/English; fall back to local eSpeak."""
+    tokens = re.findall(r"[\\u0980-\\u09FF]+|[A-Za-z0-9]+|[^A-Za-z0-9\\u0980-\\u09FF]+", script[:MAX_SCRIPT_CHARS])
     chunks = []
     current_language = None
     current_text = ""
     for token in tokens:
-        if re.search(r"[\u0980-\u09FF]", token):
+        if re.search(r"[\\u0980-\\u09FF]", token):
             language = "bn"
         elif re.search(r"[A-Za-z0-9]", token):
             language = "en"
@@ -69,21 +69,38 @@ def synthesize_mixed_speech(script: str, folder: Path) -> Path:
     if not chunks:
         raise RuntimeError("পড়ার মতো লেখা পাওয়া যায়নি।")
 
+    # Use free online TTS first; the local fallback is more robotic but works without network.
     audio_parts = []
-    for index, (language, text) in enumerate(chunks):
-        part = folder / f"speech-{index:04d}.wav"
-        try:
-            run(["espeak-ng", "-v", language, "-s", "145", "-w", str(part), text], 120)
-        except Exception as exc:
-            raise RuntimeError(f"{'বাংলা' if language == 'bn' else 'ইংরেজি'} কণ্ঠ তৈরি করা যায়নি।") from exc
-        if not part.exists() or part.stat().st_size < 100:
-            raise RuntimeError("কণ্ঠের অডিও তৈরি হয়নি।")
-        audio_parts.append(part)
+    provider = "Google TTS"
+    try:
+        from gtts import gTTS
+        for index, (language, text) in enumerate(chunks):
+            mp3_part = folder / f"speech-{index:04d}.mp3"
+            wav_part = folder / f"speech-{index:04d}.wav"
+            gTTS(text=text, lang=language, slow=False, timeout=(5, 18)).save(str(mp3_part))
+            run(["ffmpeg", "-y", "-i", str(mp3_part), "-ac", "1", "-ar", "24000", "-c:a", "pcm_s16le", str(wav_part)], 45)
+            if not wav_part.exists() or wav_part.stat().st_size < 100:
+                raise RuntimeError("Online speech returned an empty audio file")
+            audio_parts.append(wav_part)
+        print("VOICE_PROVIDER selected=Google TTS", flush=True)
+    except Exception as exc:
+        print(f"VOICE_PROVIDER fallback=eSpeak-NG error={type(exc).__name__}: {str(exc)[:160]}", flush=True)
+        audio_parts = []
+        provider = "eSpeak NG"
+        for index, (language, text) in enumerate(chunks):
+            part = folder / f"speech-{index:04d}.wav"
+            try:
+                run(["espeak-ng", "-v", language, "-s", "140", "-w", str(part), text], 120)
+            except Exception as fallback_exc:
+                raise RuntimeError(f"{'বাংলা' if language == 'bn' else 'ইংরেজি'} কণ্ঠ তৈরি করা যায়নি।") from fallback_exc
+            if not part.exists() or part.stat().st_size < 100:
+                raise RuntimeError("কণ্ঠের অডিও তৈরি হয়নি।")
+            audio_parts.append(part)
 
     if len(audio_parts) == 1:
         return audio_parts[0]
     listing = folder / "audio-parts.txt"
-    listing.write_text("".join(f"file '{part.as_posix()}'\n" for part in audio_parts), encoding="utf-8")
+    listing.write_text("".join(f"file '{part.as_posix()}'\\n" for part in audio_parts), encoding="utf-8")
     combined = folder / "voice.wav"
     run(["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(listing), "-c:a", "pcm_s16le", str(combined)], 120)
     return combined
@@ -458,9 +475,10 @@ def make_background(script: str, folder: Path):
     # Small canvas is intentional: keep peak memory below Render Free's 512 MiB limit.
     width, height = 360, 640
     # Use small Wikimedia Commons thumbnails with a strict pixel limit; fall back to graphics if unavailable.
-    source_image, credit = find_contextual_image(script, folder)
+    # Prefer a scene-matched AI image; use licensed image search only if generation is unavailable.
+    source_image, credit = find_generated_image(script, folder)
     if not source_image:
-        source_image, credit = find_generated_image(script, folder)
+        source_image, credit = find_contextual_image(script, folder)
     if source_image:
         try:
             with Image.open(source_image) as source:
