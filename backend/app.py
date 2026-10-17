@@ -319,11 +319,12 @@ def make_background(script: str, folder: Path):
         y += 33
     draw.rounded_rectangle((30, 150, 330, 153), radius=2, fill=(83, 177, 244))
     excerpt = re.sub(r"\s+", " ", script).strip()
-    lines = wrap_text(draw, excerpt[:420], body_font, 295)
-    y = 185
-    for line in lines[:13]:
-        draw.text((33, y), line, font=body_font, fill=(255, 255, 255), stroke_width=1, stroke_fill=(0, 0, 0))
-        y += 27
+    if not source_image:
+        lines = wrap_text(draw, excerpt[:300], body_font, 295)
+        y = 185
+        for line in lines[:10]:
+            draw.text((33, y), line, font=body_font, fill=(255, 255, 255), stroke_width=1, stroke_fill=(0, 0, 0))
+            y += 27
     draw.text((33, 580), "Bangla AI Voice Video Maker", font=load_font(11), fill=(240, 245, 255), stroke_width=1, stroke_fill=(0, 0, 0))
     if credit:
         credit_font = load_font(6)
@@ -447,11 +448,16 @@ def make_caption_frames(script: str, duration: float, background: Path, folder: 
     sentence_words = [re.findall(r"\S+", sentence) for sentence in sentences]
     sentence_weights = [max(1, len(words)) for words in sentence_words]
     total_weight = sum(sentence_weights)
-    cursor = max(0.0, caption_offset)
-    usable_duration = max(0.1, duration - caption_offset) if caption_offset >= 0 else max(0.1, duration + caption_offset)
+    safe_offset = max(-max(0.0, duration - 0.1), min(max(0.0, duration - 0.1), caption_offset))
+    cursor = max(0.0, safe_offset)
+    usable_duration = max(0.1, duration - safe_offset) if safe_offset >= 0 else max(0.1, duration + safe_offset)
     font = load_font(13, True)
     entries = []
     image_index = 0
+    blank_path = frame_dir / "timing-gap.png"
+    bases[0].save(blank_path, optimize=True)
+    if safe_offset > 0:
+        entries.append((blank_path, safe_offset))
 
     for sentence_index, (sentence, words, weight) in enumerate(zip(sentences, sentence_words, sentence_weights)):
         if not words:
@@ -514,6 +520,8 @@ def make_caption_frames(script: str, duration: float, background: Path, folder: 
             image_index += 1
             cursor = end
 
+    if safe_offset < 0:
+        entries.append((blank_path, abs(safe_offset)))
     if not entries:
         path = frame_dir / "frame-000000.png"
         base.save(path, optimize=True)
