@@ -1,4 +1,4 @@
-name: Live Render video verification
+name: Live Render video verification # Re-run against the latest production backend
 
 on:
   push:
