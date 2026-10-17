@@ -45,7 +45,7 @@ def duration_of(path: Path) -> float:
 
 def synthesize_mixed_speech(script: str, folder: Path) -> Path:
     """Synthesize contiguous Bangla/English spans with matching eSpeak voices."""
-    tokens = re.findall(r"[\u0980-\u09FF]+|[A-Za-z]+(?:['’\-][A-Za-z]+)*|\d+|[^\w]+|.", script, flags=re.UNICODE)
+    tokens = re.findall(r"[\u0980-\u09FF]{3,}|[A-Za-z]{3,}", script[:900])
     chunks = []
     current_language = None
     current_text = ""
@@ -212,6 +212,8 @@ def find_contextual_image(script: str, folder: Path):
             target.write_bytes(content)
             try:
                 with Image.open(target) as check:
+                    if check.width * check.height > 4_000_000:
+                        raise ValueError("Image dimensions exceed the safe limit")
                     check.verify()
             except Exception:
                 target.unlink(missing_ok=True)
@@ -229,8 +231,8 @@ def find_contextual_image(script: str, folder: Path):
 def make_background(script: str, folder: Path):
     # Small canvas is intentional: keep peak memory below Render Free's 512 MiB limit.
     width, height = 360, 640
-    # Keep live rendering stable on the 512 MiB free instance; image lookup can be re-enabled after resource profiling.
-    source_image, credit = None, ""
+    # Use small Wikimedia Commons thumbnails with a strict pixel limit; fall back to graphics if unavailable.
+    source_image, credit = find_contextual_image(script, folder)
     if source_image:
         try:
             with Image.open(source_image) as source:
@@ -260,7 +262,7 @@ def make_background(script: str, folder: Path):
         draw.text(((width - (box[2] - box[0])) / 2, y), line, font=title_font, fill=(255, 255, 255), stroke_width=1, stroke_fill=(0, 0, 0))
         y += 33
     draw.rounded_rectangle((30, 150, 330, 153), radius=2, fill=(83, 177, 244))
-    excerpt = re.sub(r"\\s+", " ", script).strip()
+    excerpt = re.sub(r"\s+", " ", script).strip()
     lines = wrap_text(draw, excerpt[:420], body_font, 295)
     y = 185
     for line in lines[:13]:
