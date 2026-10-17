@@ -399,11 +399,10 @@ def render(job_id: str, script: str, mode: str, audio_path: Optional[Path], capt
             JOBS[job_id]["progress"] = 45
             JOBS[job_id]["message"] = "সাবটাইটেল তৈরি হয়েছে"
         output = folder / "video.mp4"
-        font_dir = "/usr/share/fonts/truetype/noto"
-        subtitle_filter = f"ass={subtitles.as_posix()}:fontsdir={font_dir}"
-        # Very low-memory export for Render Free (512 MiB): reduce pixels and frame rate before subtitle rendering.
-        vf = f"scale=180:320,{subtitle_filter},format=yuv420p"
-        print(f"VIDEO_STAGE job={job_id} stage=ffmpeg_start duration={duration:.2f} size=180x320 fps=5", flush=True)
+        # The ASS/libass subtitle filter exceeded Render Free's 512 MiB memory limit even at low resolution.
+        # Keep the script readable on the generated background and mux speech without a second subtitle filter.
+        vf = "scale=180:320,format=yuv420p"
+        print(f"VIDEO_STAGE job={job_id} stage=ffmpeg_start duration={duration:.2f} size=180x320 fps=5 subtitles=background_text", flush=True)
         with LOCK:
             JOBS[job_id]["progress"] = 50
             JOBS[job_id]["message"] = "ভিডিও রেন্ডার হচ্ছে"
