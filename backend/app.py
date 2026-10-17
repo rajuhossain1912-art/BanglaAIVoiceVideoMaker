@@ -367,10 +367,10 @@ def make_caption_frames(script: str, duration: float, background: Path, folder: 
     with Image.open(background) as source:
         base = source.convert("RGB").resize((180, 320), Image.Resampling.BILINEAR)
 
-    sentences = [x.strip() for x in re.split(r"(?<=[.!?।])\\s+|\\n+", script) if x.strip()]
+    sentences = [x.strip() for x in re.split(r"(?<=[.!?।])\s+|\n+", script) if x.strip()]
     if not sentences:
         sentences = [script.strip()] if script.strip() else ["ভিডিও"]
-    sentence_words = [re.findall(r"\\S+", sentence) for sentence in sentences]
+    sentence_words = [re.findall(r"\S+", sentence) for sentence in sentences]
     sentence_weights = [max(1, len(words)) for words in sentence_words]
     total_weight = sum(sentence_weights)
     cursor = max(0.0, caption_offset)
@@ -438,10 +438,10 @@ def make_caption_frames(script: str, duration: float, background: Path, folder: 
     listing = folder / "caption-frames.txt"
     lines = []
     for path, seconds in entries:
-        lines.append(f"file '{path.as_posix()}'\\n")
-        lines.append(f"duration {seconds:.4f}\\n")
+        lines.append(f"file '{path.as_posix()}'\n")
+        lines.append(f"duration {seconds:.4f}\n")
     # concat demuxer needs the last image repeated so its final duration is honored.
-    lines.append(f"file '{entries[-1][0].as_posix()}'\\n")
+    lines.append(f"file '{entries[-1][0].as_posix()}'\n")
     listing.write_text("".join(lines), encoding="utf-8")
     return listing, image_index
 
