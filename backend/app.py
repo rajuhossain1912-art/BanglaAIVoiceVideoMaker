@@ -45,7 +45,7 @@ def duration_of(path: Path) -> float:
 
 def synthesize_mixed_speech(script: str, folder: Path) -> Path:
     """Synthesize contiguous Bangla/English spans with matching eSpeak voices."""
-    tokens = re.findall(r"[\u0980-\u09FF]+|[A-Za-z]+(?:['’\-][A-Za-z]+)*|\d+|[^\w]+|.", script, flags=re.UNICODE)
+    tokens = re.findall(r"[\u0980-\u09FF]{3,}|[A-Za-z]{3,}", script[:900])
     chunks = []
     current_language = None
     current_text = ""
@@ -212,6 +212,8 @@ def find_contextual_image(script: str, folder: Path):
             target.write_bytes(content)
             try:
                 with Image.open(target) as check:
+                    if check.width * check.height > 4_000_000:
+                        raise ValueError("Image dimensions exceed the safe limit")
                     check.verify()
             except Exception:
                 target.unlink(missing_ok=True)
@@ -227,52 +229,53 @@ def find_contextual_image(script: str, folder: Path):
 
 
 def make_background(script: str, folder: Path):
-    width, height = 720, 1280
+    # Small canvas is intentional: keep peak memory below Render Free's 512 MiB limit.
+    width, height = 360, 640
+    # Use small Wikimedia Commons thumbnails with a strict pixel limit; fall back to graphics if unavailable.
     source_image, credit = find_contextual_image(script, folder)
     if source_image:
         try:
             with Image.open(source_image) as source:
-                image = ImageOps.fit(source.convert("RGB"), (width, height), method=Image.Resampling.LANCZOS)
+                image = ImageOps.fit(source.convert("RGB"), (width, height), method=Image.Resampling.BILINEAR)
             overlay = Image.new("RGBA", (width, height), (3, 13, 28, 145))
             image = Image.alpha_composite(image.convert("RGBA"), overlay).convert("RGB")
         except Exception:
             source_image = None
     if not source_image:
         image = Image.new("RGB", (width, height))
-        pixels = image.load()
-        for y in range(height):
+        draw = ImageDraw.Draw(image)
+        # Draw horizontal bands instead of allocating a Python tuple for every pixel.
+        for y in range(0, height, 8):
             ratio = y / height
             color = (int(13 + 22 * ratio), int(29 + 18 * ratio), int(63 + 42 * ratio))
-            for x in range(width):
-                pixels[x, y] = color
-        draw = ImageDraw.Draw(image)
-        draw.ellipse((470, -130, 900, 300), fill=(30, 69, 113))
-        draw.ellipse((-200, 880, 330, 1410), fill=(23, 57, 91))
+            draw.rectangle((0, y, width, min(height, y + 7)), fill=color)
+        draw.ellipse((235, -65, 450, 150), fill=(30, 69, 113))
+        draw.ellipse((-100, 440, 165, 705), fill=(23, 57, 91))
     draw = ImageDraw.Draw(image)
-    title_font = load_font(48, True)
-    body_font = load_font(34)
+    title_font = load_font(24, True)
+    body_font = load_font(17)
     title = "বাংলা AI ভিডিও"
-    title_lines = wrap_text(draw, title, title_font, 600)
-    y = 150
+    title_lines = wrap_text(draw, title, title_font, 300)
+    y = 75
     for line in title_lines:
         box = draw.textbbox((0, 0), line, font=title_font)
-        draw.text(((width - (box[2] - box[0])) / 2, y), line, font=title_font, fill=(255, 255, 255), stroke_width=2, stroke_fill=(0, 0, 0))
-        y += 65
-    draw.rounded_rectangle((60, 300, 660, 306), radius=3, fill=(83, 177, 244))
-    excerpt = re.sub(r"\\s+", " ", script).strip()
-    lines = wrap_text(draw, excerpt[:420], body_font, 590)
-    y = 370
+        draw.text(((width - (box[2] - box[0])) / 2, y), line, font=title_font, fill=(255, 255, 255), stroke_width=1, stroke_fill=(0, 0, 0))
+        y += 33
+    draw.rounded_rectangle((30, 150, 330, 153), radius=2, fill=(83, 177, 244))
+    excerpt = re.sub(r"\s+", " ", script).strip()
+    lines = wrap_text(draw, excerpt[:420], body_font, 295)
+    y = 185
     for line in lines[:13]:
-        draw.text((65, y), line, font=body_font, fill=(255, 255, 255), stroke_width=1, stroke_fill=(0, 0, 0))
-        y += 54
-    draw.text((65, 1160), "Bangla AI Voice Video Maker", font=load_font(22), fill=(240, 245, 255), stroke_width=1, stroke_fill=(0, 0, 0))
+        draw.text((33, y), line, font=body_font, fill=(255, 255, 255), stroke_width=1, stroke_fill=(0, 0, 0))
+        y += 27
+    draw.text((33, 580), "Bangla AI Voice Video Maker", font=load_font(11), fill=(240, 245, 255), stroke_width=1, stroke_fill=(0, 0, 0))
     if credit:
-        credit_font = load_font(12)
-        credit_lines = wrap_text(draw, "Image credit: " + credit, credit_font, 680)
+        credit_font = load_font(6)
+        credit_lines = wrap_text(draw, "Image credit: " + credit, credit_font, 340)
         for index, line in enumerate(credit_lines[:2]):
-            draw.text((20, 1210 + index * 18), line, font=credit_font, fill=(255, 255, 255), stroke_width=1, stroke_fill=(0, 0, 0))
+            draw.text((10, 605 + index * 9), line, font=credit_font, fill=(255, 255, 255), stroke_width=1, stroke_fill=(0, 0, 0))
     target = folder / "background.png"
-    image.save(target)
+    image.save(target, optimize=True)
     return target
 
 def make_srt(script: str, duration: float, path: Path):
@@ -310,14 +313,14 @@ def make_ass(script: str, duration: float, path: Path, caption_offset: float = 0
     lines = [
         "[Script Info]",
         "ScriptType: v4.00+",
-        "PlayResX: 720",
-        "PlayResY: 1280",
+        "PlayResX: 360",
+        "PlayResY: 640",
         "WrapStyle: 2",
         "ScaledBorderAndShadow: yes",
         "",
         "[V4+ Styles]",
         "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
-        "Style: Default,Noto Sans Bengali,42,&H00FFFFFF,&H0000FFFF,&H00101010,&H80000000,0,0,0,0,100,100,0,0,1,3,1,2,48,48,92,1",
+        "Style: Default,Noto Sans Bengali,21,&H00FFFFFF,&H0000FFFF,&H00101010,&H80000000,0,0,0,0,100,100,0,0,1,2,1,2,24,24,46,1",
         "",
         "[Events]",
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
@@ -358,6 +361,93 @@ def make_ass(script: str, duration: float, path: Path, caption_offset: float = 0
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+
+def make_caption_frames(script: str, duration: float, background: Path, folder: Path, caption_offset: float = 0.0):
+    """Render small Pillow caption cards with per-word highlighting, avoiding FFmpeg's memory-heavy libass filter."""
+    frame_dir = folder / "caption-frames"
+    frame_dir.mkdir(parents=True, exist_ok=True)
+    with Image.open(background) as source:
+        base = source.convert("RGB").resize((180, 320), Image.Resampling.BILINEAR)
+
+    sentences = [x.strip() for x in re.split(r"(?<=[.!?।])\s+|\n+", script) if x.strip()]
+    if not sentences:
+        sentences = [script.strip()] if script.strip() else ["ভিডিও"]
+    sentence_words = [re.findall(r"\S+", sentence) for sentence in sentences]
+    sentence_weights = [max(1, len(words)) for words in sentence_words]
+    total_weight = sum(sentence_weights)
+    cursor = min(max(0.0, caption_offset), max(0.0, duration - 0.1))
+    usable_duration = max(0.1, duration - cursor)
+    font = load_font(13, True)
+    entries = []
+    image_index = 0
+
+    for sentence, words, weight in zip(sentences, sentence_words, sentence_weights):
+        if not words:
+            continue
+        sentence_duration = max(0.05, usable_duration * weight / total_weight)
+        word_weights = [max(1, len(word)) for word in words]
+        word_total = sum(word_weights)
+        for word_index, (word, word_weight) in enumerate(zip(words, word_weights)):
+            start = cursor
+            word_duration = sentence_duration * word_weight / word_total
+            end = cursor + word_duration
+            frame = base.copy()
+            overlay = Image.new("RGBA", frame.size, (0, 0, 0, 0))
+            panel = ImageDraw.Draw(overlay)
+            panel.rounded_rectangle((7, 220, 173, 311), radius=9, fill=(0, 0, 0, 205), outline=(95, 170, 230, 220), width=1)
+            frame = Image.alpha_composite(frame.convert("RGBA"), overlay)
+            draw = ImageDraw.Draw(frame)
+            # Keep the current word and nearby context visible, even for long sentences.
+            left = max(0, word_index - 7)
+            right = min(len(words), left + 14)
+            left = max(0, right - 14)
+            shown = words[left:right]
+            active_local = word_index - left
+            lines = []
+            current_line = []
+            current_width = 0
+            max_width = 150
+            for wi, token in enumerate(shown):
+                token_width = draw.textbbox((0, 0), token, font=font)[2]
+                needed = token_width + (draw.textbbox((0, 0), " ", font=font)[2] if current_line else 0)
+                if current_line and current_width + needed > max_width:
+                    lines.append(current_line)
+                    current_line = []
+                    current_width = 0
+                    needed = token_width
+                current_line.append((token, wi == active_local))
+                current_width += needed
+            if current_line:
+                lines.append(current_line)
+            visible_lines = lines[-4:]
+            y = 232 + max(0, (4 - len(visible_lines)) * 17)
+            for line in visible_lines:
+                x = 14
+                for token, active in line:
+                    color = (255, 224, 65) if active else (255, 255, 255)
+                    draw.text((x, y), token, font=font, fill=color, stroke_width=1, stroke_fill=(0, 0, 0))
+                    x += draw.textbbox((0, 0), token, font=font)[2] + draw.textbbox((0, 0), " ", font=font)[2]
+                y += 17
+            path = frame_dir / f"frame-{image_index:06d}.png"
+            frame.convert("RGB").save(path, optimize=True)
+            entries.append((path, max(0.05, end - start)))
+            image_index += 1
+            cursor = end
+
+    if not entries:
+        path = frame_dir / "frame-000000.png"
+        base.save(path, optimize=True)
+        entries.append((path, max(0.1, duration)))
+    listing = folder / "caption-frames.txt"
+    lines = []
+    for path, seconds in entries:
+        lines.append(f"file '{path.as_posix()}'\n")
+        lines.append(f"duration {seconds:.4f}\n")
+    # concat demuxer needs the last image repeated so its final duration is honored.
+    lines.append(f"file '{entries[-1][0].as_posix()}'\n")
+    listing.write_text("".join(lines), encoding="utf-8")
+    return listing, image_index
+
 def render(job_id: str, script: str, mode: str, audio_path: Optional[Path], caption_offset: float = 0.0):
     folder = WORK_DIR / job_id
     folder.mkdir(parents=True, exist_ok=True)
@@ -384,21 +474,37 @@ def render(job_id: str, script: str, mode: str, audio_path: Optional[Path], capt
         with LOCK:
             JOBS[job_id]["progress"] = 35
             JOBS[job_id]["message"] = "ভিডিওর পটভূমি ও সাবটাইটেল তৈরি হচ্ছে"
+        print(f"VIDEO_STAGE job={job_id} stage=background_start", flush=True)
         background = make_background(script, folder)
-        subtitles = folder / "captions.ass"
-        make_ass(script, duration, subtitles, caption_offset)
+        print(f"VIDEO_STAGE job={job_id} stage=background_done", flush=True)
+        with LOCK:
+            JOBS[job_id]["progress"] = 40
+            JOBS[job_id]["message"] = "পটভূমি তৈরি হয়েছে"
+        print(f"VIDEO_STAGE job={job_id} stage=subtitles_start", flush=True)
+        frame_list, frame_count = make_caption_frames(script, duration, background, folder, caption_offset)
+        print(f"VIDEO_STAGE job={job_id} stage=subtitles_done frames={frame_count} method=pillow_word_highlight", flush=True)
+        with LOCK:
+            JOBS[job_id]["progress"] = 45
+            JOBS[job_id]["message"] = "শব্দের সঙ্গে মিলিয়ে সাবটাইটেল তৈরি হয়েছে"
         output = folder / "video.mp4"
-        font_dir = "/usr/share/fonts/truetype/noto"
-        subtitle_filter = f"ass={subtitles.as_posix()}:fontsdir={font_dir}"
-        vf = f"scale=480:854,zoompan=z='min(zoom+0.0005\\,1.05)':d=15:s=480x854:fps=15,{subtitle_filter},format=yuv420p"
+        # Pre-rendered caption images avoid FFmpeg/libass memory spikes on Render Free.
+        vf = "scale=180:320,format=yuv420p"
+        print(f"VIDEO_STAGE job={job_id} stage=ffmpeg_start duration={duration:.2f} size=180x320 fps=5 subtitles=pillow_word_highlight frames={frame_count}", flush=True)
+        with LOCK:
+            JOBS[job_id]["progress"] = 50
+            JOBS[job_id]["message"] = "সাবটাইটেলসহ ভিডিও রেন্ডার হচ্ছে"
         run([
-            "ffmpeg", "-y", "-filter_threads", "1", "-filter_complex_threads", "1", "-loop", "1", "-framerate", "1", "-i", str(background), "-i", str(audio_path),
-            "-vf", vf, "-t", str(duration), "-r", "15", "-c:v", "libx264", "-threads", "1", "-preset", "ultrafast",
-            "-crf", "27", "-c:a", "aac", "-b:a", "96k", "-shortest", "-movflags", "+faststart", str(output)
+            "ffmpeg", "-y", "-filter_threads", "1", "-filter_complex_threads", "1",
+            "-f", "concat", "-safe", "0", "-i", str(frame_list), "-i", str(audio_path),
+            "-map", "0:v:0", "-map", "1:a:0", "-vf", vf, "-t", str(duration), "-r", "5",
+            "-c:v", "libx264", "-threads", "1", "-preset", "ultrafast", "-crf", "32",
+            "-c:a", "aac", "-b:a", "48k", "-threads", "1", "-shortest", "-movflags", "+faststart", str(output)
         ], 240)
+        print(f"VIDEO_STAGE job={job_id} stage=ffmpeg_done", flush=True)
         with LOCK:
             JOBS[job_id].update(status="completed", progress=100, message="ভিডিও তৈরি হয়েছে", download_url=f"/api/jobs/{job_id}/download", duration=round(duration, 2), completed_at=time.time())
     except Exception as exc:
+        print(f"VIDEO_STAGE job={job_id} stage=failed error={type(exc).__name__}: {str(exc)[:500]}", flush=True)
         with LOCK:
             JOBS[job_id].update(status="failed", progress=100, message=str(exc)[:1000], completed_at=time.time())
     finally:
