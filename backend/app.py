@@ -20,6 +20,7 @@ APP_DIR = Path(__file__).resolve().parent
 VOICE_CLONE_SPACE = os.getenv("VOICE_CLONE_SPACE", "kawshikbuet17/bengali-cosyvoice3-tts-demo")
 VOICE_CLONE_EN_SPACE = os.getenv("VOICE_CLONE_EN_SPACE", "ResembleAI/Chatterbox")
 VOICE_CLONE_ENABLED = os.getenv("VOICE_CLONE_ENABLED", "true").lower() in ("1", "true", "yes")
+AI_IMAGE_GENERATION_ENABLED = os.getenv("AI_IMAGE_GENERATION_ENABLED", "true").lower() in ("1", "true", "yes")
 WORK_DIR = Path(os.getenv("WORK_DIR", "/tmp/bangla-video-jobs"))
 WORK_DIR.mkdir(parents=True, exist_ok=True)
 MAX_SCRIPT_CHARS = int(os.getenv("MAX_SCRIPT_CHARS", "12000"))
@@ -45,8 +46,8 @@ def duration_of(path: Path) -> float:
 
 
 def synthesize_mixed_speech(script: str, folder: Path) -> Path:
-    """Synthesize contiguous Bangla/English spans with matching eSpeak voices."""
-    tokens = re.findall(r"[\u0980-\u09FF]{3,}|[A-Za-z]{3,}", script[:900])
+    """Synthesize full Bangla/English text while preserving spaces and punctuation."""
+    tokens = re.findall(r"[\u0980-\u09FF]+|[A-Za-z0-9]+|[^A-Za-z0-9\u0980-\u09FF]+", script[:MAX_SCRIPT_CHARS])
     chunks = []
     current_language = None
     current_text = ""
@@ -59,12 +60,12 @@ def synthesize_mixed_speech(script: str, folder: Path) -> Path:
             language = current_language or "bn"
         if current_language is not None and language != current_language:
             if current_text.strip():
-                chunks.append((current_language, current_text))
+                chunks.append((current_language, current_text.strip()))
             current_text = ""
         current_language = language
         current_text += token
     if current_text.strip():
-        chunks.append((current_language or "bn", current_text))
+        chunks.append((current_language or "bn", current_text.strip()))
     if not chunks:
         raise RuntimeError("পড়ার মতো লেখা পাওয়া যায়নি।")
 
@@ -86,7 +87,6 @@ def synthesize_mixed_speech(script: str, folder: Path) -> Path:
     combined = folder / "voice.wav"
     run(["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(listing), "-c:a", "pcm_s16le", str(combined)], 120)
     return combined
-
 
 
 def _write_gradio_audio_result(audio_result, folder: Path, stem: str):
@@ -352,11 +352,60 @@ def find_contextual_image(script: str, folder: Path):
         pass
     return None, ""
 
+
+def find_generated_image(script: str, folder: Path):
+    """Best-effort free FLUX.1-schnell Space; never blocks video creation if unavailable."""
+    if not AI_IMAGE_GENERATION_ENABLED:
+        return None, ""
+    try:
+        from gradio_client import Client
+        from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
+        prompt = (
+            "Vertical documentary-style scene illustration for a short educational video. "
+            "Show the real-world subject described here. No text, no captions, no letters, no watermark. "
+            + re.sub(r"\s+", " ", script).strip()[:350]
+        )
+        executor = ThreadPoolExecutor(max_workers=1)
+        future = executor.submit(
+            lambda: Client("black-forest-labs/FLUX.1-schnell", verbose=False).predict(
+                prompt, 42, True, 512, 768, 4, api_name="/infer"
+            )
+        )
+        try:
+            result = future.result(timeout=28)
+        except FutureTimeout:
+            future.cancel()
+            return None, ""
+        finally:
+            executor.shutdown(wait=False, cancel_futures=True)
+        if isinstance(result, (list, tuple)) and result:
+            result = result[0]
+        if isinstance(result, dict):
+            result = result.get("path") or result.get("url") or result.get("image")
+        if isinstance(result, str) and Path(result).is_file():
+            target = folder / "flux-generated-scene.png"
+            shutil.copyfile(result, target)
+            with Image.open(target) as check:
+                if check.width < 80 or check.height < 80 or check.width * check.height > 4_000_000:
+                    raise ValueError("Generated image dimensions outside safe limits")
+                check.verify()
+            return target, "AI-generated with FLUX.1-schnell | https://huggingface.co/spaces/black-forest-labs/FLUX.1-schnell"
+        if isinstance(result, str) and result.startswith("https://"):
+            return _download_checked_image(
+                result, folder, "flux-generated-scene.png",
+                "AI-generated with FLUX.1-schnell | https://huggingface.co/spaces/black-forest-labs/FLUX.1-schnell"
+            )
+    except Exception as exc:
+        print(f"IMAGE_PROVIDER failed provider=FLUX.1-schnell error={type(exc).__name__}: {str(exc)[:180]}", flush=True)
+    return None, ""
+
 def make_background(script: str, folder: Path):
     # Small canvas is intentional: keep peak memory below Render Free's 512 MiB limit.
     width, height = 360, 640
     # Use small Wikimedia Commons thumbnails with a strict pixel limit; fall back to graphics if unavailable.
     source_image, credit = find_contextual_image(script, folder)
+    if not source_image:
+        source_image, credit = find_generated_image(script, folder)
     if source_image:
         try:
             with Image.open(source_image) as source:
@@ -500,7 +549,55 @@ def make_ass(script: str, duration: float, path: Path, caption_offset: float = 0
 
 
 
-def make_caption_frames(script: str, duration: float, background: Path, folder: Path, caption_offset: float = 0.0):
+def sentence_timing_spans(audio_path: Optional[Path], sentences, duration: float):
+    """Use real audio silence boundaries to improve automatic sentence timing; fall back safely."""
+    weights = [max(1, len(re.findall(r"\S+", sentence))) for sentence in sentences]
+    total = sum(weights) or 1
+    expected = [0.0]
+    running = 0
+    for weight in weights[:-1]:
+        running += weight
+        expected.append(duration * running / total)
+    expected.append(duration)
+    if audio_path is None or len(sentences) < 2:
+        return list(zip(expected[:-1], expected[1:]))
+    try:
+        result = subprocess.run(
+            ["ffmpeg", "-hide_banner", "-nostats", "-i", str(audio_path),
+             "-af", "silencedetect=noise=-32dB:d=0.18", "-f", "null", "-"],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=20, check=False
+        )
+        log = result.stderr.decode("utf-8", "replace")
+        silence_starts = [float(x) for x in re.findall(r"silence_start: ([0-9.]+)", log)]
+        silence_ends = [float(x) for x in re.findall(r"silence_end: ([0-9.]+)", log)]
+        candidates = []
+        for i, start in enumerate(silence_starts):
+            end = silence_ends[i] if i < len(silence_ends) else start
+            if end - start >= 0.16:
+                middle = (start + end) / 2.0
+                if 0.08 < middle < duration - 0.08:
+                    candidates.append(middle)
+        chosen = [0.0]
+        for target in expected[1:-1]:
+            available = [x for x in candidates if x > chosen[-1] + 0.08 and x < duration - 0.08]
+            if available:
+                nearest = min(available, key=lambda x: abs(x - target))
+                if abs(nearest - target) <= max(1.5, duration * 0.22):
+                    chosen.append(nearest)
+                    candidates.remove(nearest)
+                    continue
+            chosen.append(target)
+        chosen.append(duration)
+        chosen = [max(0.0, min(duration, x)) for x in chosen]
+        if all(chosen[i + 1] > chosen[i] + 0.05 for i in range(len(chosen) - 1)):
+            print(f"CAPTION_ALIGNMENT method=audio_silence sentences={len(sentences)}", flush=True)
+            return list(zip(chosen[:-1], chosen[1:]))
+    except Exception as exc:
+        print(f"CAPTION_ALIGNMENT fallback=estimated error={type(exc).__name__}", flush=True)
+    return list(zip(expected[:-1], expected[1:]))
+
+
+def make_caption_frames(script: str, duration: float, background: Path, folder: Path, caption_offset: float = 0.0, audio_path: Optional[Path] = None):
     """Render small Pillow caption cards with per-word highlighting, avoiding FFmpeg's memory-heavy libass filter."""
     frame_dir = folder / "caption-frames"
     frame_dir.mkdir(parents=True, exist_ok=True)
@@ -514,11 +611,8 @@ def make_caption_frames(script: str, duration: float, background: Path, folder: 
     if not sentences:
         sentences = [script.strip()] if script.strip() else ["ভিডিও"]
     sentence_words = [re.findall(r"\S+", sentence) for sentence in sentences]
-    sentence_weights = [max(1, len(words)) for words in sentence_words]
-    total_weight = sum(sentence_weights)
+    sentence_spans = sentence_timing_spans(audio_path, sentences, duration)
     safe_offset = max(-max(0.0, duration - 0.1), min(max(0.0, duration - 0.1), caption_offset))
-    cursor = max(0.0, safe_offset)
-    usable_duration = max(0.1, duration - safe_offset) if safe_offset >= 0 else max(0.1, duration + safe_offset)
     font = load_font(13, True)
     entries = []
     image_index = 0
@@ -527,17 +621,22 @@ def make_caption_frames(script: str, duration: float, background: Path, folder: 
     if safe_offset > 0:
         entries.append((blank_path, safe_offset))
 
-    for sentence_index, (sentence, words, weight) in enumerate(zip(sentences, sentence_words, sentence_weights)):
+    cursor = 0.0
+    for sentence_index, (sentence, words, span) in enumerate(zip(sentences, sentence_words, sentence_spans)):
         if not words:
             continue
         base = bases[min(sentence_index, len(bases) - 1)]
-        sentence_duration = max(0.05, usable_duration * weight / total_weight)
-        word_weights = [max(1, len(word)) for word in words]
-        word_total = sum(word_weights)
+        raw_start, raw_end = span
+        sentence_start = max(0.0, raw_start + safe_offset)
+        sentence_end = max(sentence_start + 0.05, min(duration, raw_end + safe_offset))
+        sentence_duration = max(0.05, sentence_end - sentence_start)
+        word_weights = [max(1, len(re.sub(r"[^\w\u0980-\u09FF]", "", word))) for word in words]
+        word_total = sum(word_weights) or 1
+        cursor = sentence_start
         for word_index, (word, word_weight) in enumerate(zip(words, word_weights)):
             start = cursor
             word_duration = sentence_duration * word_weight / word_total
-            end = cursor + word_duration
+            end = sentence_end if word_index == len(words) - 1 else min(sentence_end, cursor + word_duration)
             # Gentle zoom in/out across caption cards; Pillow keeps this low-memory on Render Free.
             phase = (image_index % 16) / 15.0
             zoom = 1.0 + 0.04 * (1.0 - abs(phase * 2.0 - 1.0))
@@ -588,8 +687,9 @@ def make_caption_frames(script: str, duration: float, background: Path, folder: 
             image_index += 1
             cursor = end
 
-    if safe_offset < 0:
-        entries.append((blank_path, abs(safe_offset)))
+    last_end = sum(seconds for _, seconds in entries)
+    if last_end < duration:
+        entries.append((blank_path, max(0.05, duration - last_end)))
     if not entries:
         path = frame_dir / "frame-000000.png"
         base.save(path, optimize=True)
@@ -637,7 +737,7 @@ def render(job_id: str, script: str, mode: str, audio_path: Optional[Path], capt
             JOBS[job_id]["progress"] = 40
             JOBS[job_id]["message"] = "বাক্যভিত্তিক দৃশ্য ও পটভূমি তৈরি হয়েছে"
         print(f"VIDEO_STAGE job={job_id} stage=subtitles_start", flush=True)
-        frame_list, frame_count = make_caption_frames(script, duration, backgrounds, folder, caption_offset)
+        frame_list, frame_count = make_caption_frames(script, duration, backgrounds, folder, caption_offset, audio_path)
         print(f"VIDEO_STAGE job={job_id} stage=subtitles_done frames={frame_count} method=pillow_word_highlight", flush=True)
         with LOCK:
             JOBS[job_id]["progress"] = 45

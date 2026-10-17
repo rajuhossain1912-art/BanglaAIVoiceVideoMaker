@@ -166,7 +166,7 @@ private fun VideoMakerScreen() {
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         Text("Bangla AI Voice Video Maker", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-        Text("বাংলা, ইংরেজি বা মিশ্র লেখা থেকে ভিডিও তৈরি করুন। বিষয়ভিত্তিক বিনামূল্যের ছবি পাওয়া গেলে ব্যাকগ্রাউন্ডে ব্যবহার হবে; না পেলে গ্রাফিক ব্যাকগ্রাউন্ড থাকবে। ভিডিওতে জুম ও আনুমানিক শব্দ-হাইলাইট সাবটাইটেল থাকবে।")
+        Text("বাংলা, ইংরেজি বা মিশ্র লেখা থেকে স্বয়ংক্রিয় ভিডিও তৈরি করুন। বিষয়ভিত্তিক বিনামূল্যের ছবি, সম্ভব হলে AI-তৈরি দৃশ্য, জুম এবং স্বয়ংক্রিয় শব্দ-হাইলাইট সাবটাইটেল ব্যবহার হবে। কথার বিরতি শনাক্ত করে সাবটাইটেলের সময় ঠিক করার চেষ্টা করা হবে; শব্দের সময়ে সামান্য পার্থক্য থাকতে পারে।")
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(if (online) "ইন্টারনেট সংযোগ পাওয়া গেছে" else "ইন্টারনেট সংযোগ পাওয়া যায়নি", fontWeight = FontWeight.SemiBold)
@@ -208,21 +208,6 @@ private fun VideoMakerScreen() {
             minLines = 5, enabled = !running,
             supportingText = { Text("সার্ভার লেখা গ্রহণ করে ভিডিও তৈরি করবে।") }
         )
-        Card(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("সাবটাইটেলের সময় সামঞ্জস্য", fontWeight = FontWeight.SemiBold)
-                Text("পরিবর্তন: " + (if (captionOffset > 0f) "+" else "") + String.format("%.1f", captionOffset) + " সেকেন্ড")
-                Slider(
-                    value = captionOffset,
-                    onValueChange = { captionOffset = it },
-                    valueRange = -1.5f..1.5f,
-                    steps = 29,
-                    enabled = !running,
-                    modifier = Modifier.semantics { contentDescription = "সাবটাইটেলের সময় আগে বা পরে করার নিয়ন্ত্রণ" }
-                )
-                Text("কথার তুলনায় লেখা আগে দেখা গেলে ঋণাত্মক দিকে, দেরিতে এলে ধনাত্মক দিকে সরান। এটি পুরো সাবটাইটেল একসঙ্গে সরায়; শব্দে-শব্দে নিখুঁত alignment নয়।", style = MaterialTheme.typography.bodySmall)
-            }
-        }
         if (mode == "clone") {
             OutlinedButton(
                 onClick = {
