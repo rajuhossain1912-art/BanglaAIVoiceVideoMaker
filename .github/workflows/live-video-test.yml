@@ -1,4 +1,4 @@
-name: Live Render video verification # Re-run against the low-memory FFmpeg production build
+name: Live Render video verification # Verify current production build after removing ASS subtitle filter
 
 on:
   push:
