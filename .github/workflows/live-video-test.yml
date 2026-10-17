@@ -5,6 +5,9 @@ on:
     branches: [release]
     paths:
       - '.github/workflows/live-video-test.yml'
+      - 'backend/app.py'
+      - 'backend/requirements.txt'
+      - 'Dockerfile'
   workflow_dispatch:
 
 jobs:
@@ -29,7 +32,7 @@ jobs:
           set -euo pipefail
           BASE="https://bangla-ai-voice-video-maker-api.onrender.com"
           curl -fsS --max-time 40 -X POST "$BASE/api/jobs" \
-            -F 'script=বাংলা ভিডিও পরীক্ষা। এটি লাইভ সার্ভারের ছোট পরীক্ষা।' \
+            -F 'script=বাংলাদেশের নদী ও প্রকৃতি নিয়ে একটি ছোট ভিডিও পরীক্ষা।' \
             -F 'mode=auto' -o job.json
           cat job.json
           JOB_ID="$(python3 -c 'import json; print(json.load(open("job.json"))["id"])')"
