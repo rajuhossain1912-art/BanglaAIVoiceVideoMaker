@@ -18,6 +18,7 @@ from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 APP_DIR = Path(__file__).resolve().parent
 VOICE_CLONE_SPACE = os.getenv("VOICE_CLONE_SPACE", "kawshikbuet17/bengali-cosyvoice3-tts-demo")
+VOICE_CLONE_EN_SPACE = os.getenv("VOICE_CLONE_EN_SPACE", "ResembleAI/Chatterbox")
 VOICE_CLONE_ENABLED = os.getenv("VOICE_CLONE_ENABLED", "true").lower() in ("1", "true", "yes")
 WORK_DIR = Path(os.getenv("WORK_DIR", "/tmp/bangla-video-jobs"))
 WORK_DIR.mkdir(parents=True, exist_ok=True)
@@ -88,48 +89,115 @@ def synthesize_mixed_speech(script: str, folder: Path) -> Path:
 
 
 
+def _write_gradio_audio_result(audio_result, folder: Path, stem: str):
+    """Convert Gradio filepath/URL or (sample_rate, numpy audio) results into a local WAV."""
+    if isinstance(audio_result, dict):
+        audio_result = audio_result.get("path") or audio_result.get("url") or audio_result.get("audio")
+    if isinstance(audio_result, (tuple, list)) and len(audio_result) == 2 and isinstance(audio_result[0], (int, float)):
+        try:
+            import numpy as np
+            import wave
+            sample_rate = int(audio_result[0])
+            samples = np.asarray(audio_result[1])
+            if samples.size == 0 or sample_rate < 8000 or sample_rate > 192000:
+                raise ValueError("Invalid remote audio result")
+            samples = samples.reshape(-1)
+            if np.issubdtype(samples.dtype, np.floating):
+                samples = (np.clip(samples, -1.0, 1.0) * 32767.0).astype(np.int16)
+            else:
+                samples = samples.astype(np.int16)
+            wav_path = folder / f"{stem}-raw.wav"
+            with wave.open(str(wav_path), "wb") as wav:
+                wav.setnchannels(1)
+                wav.setsampwidth(2)
+                wav.setframerate(sample_rate)
+                wav.writeframes(samples.tobytes())
+            return wav_path
+        except Exception:
+            return None
+    if isinstance(audio_result, str) and Path(audio_result).is_file():
+        return Path(audio_result)
+    if isinstance(audio_result, str) and audio_result.startswith("https://"):
+        remote_audio = folder / f"{stem}-remote"
+        try:
+            with urllib.request.urlopen(urllib.request.Request(audio_result, headers={"User-Agent": "BanglaAIVoiceVideoMaker/0.4"}), timeout=30) as response:
+                data = response.read(50 * 1024 * 1024 + 1)
+            if 100 < len(data) <= 50 * 1024 * 1024:
+                remote_audio.write_bytes(data)
+                return remote_audio
+        except Exception:
+            return None
+    return None
+
+
+def _clone_with_cosyvoice(script: str, normalized: Path):
+    from gradio_client import Client, handle_file
+    client = Client(VOICE_CLONE_SPACE, verbose=False)
+    result = client.predict(
+        script,
+        handle_file(str(normalized)),
+        0,
+        1.0,
+        api_name="/generate_cross_lingual_audio",
+    )
+    return result[0] if isinstance(result, (list, tuple)) else result
+
+
+def _clone_with_chatterbox(script: str, normalized: Path):
+    from gradio_client import Client, handle_file
+    client = Client(VOICE_CLONE_EN_SPACE, verbose=False)
+    # Chatterbox's public demo is English-oriented; do not route Bangla/mixed scripts here.
+    result = client.predict(
+        script,
+        handle_file(str(normalized)),
+        0.5,
+        0.8,
+        0,
+        0.5,
+        api_name="/generate_tts_audio",
+    )
+    return result
+
+
 def synthesize_cloned_voice(script: str, reference_audio: Path, folder: Path) -> Path:
-    """Experimental remote clone. Caller must obtain explicit user consent first."""
+    """Route pure English to Chatterbox and Bangla/mixed scripts to Bengali CosyVoice3."""
     if not VOICE_CLONE_ENABLED:
         raise RuntimeError("নিজের কণ্ঠের পরীক্ষামূলক সুবিধা বর্তমানে বন্ধ আছে।")
     if len(script) > 500:
         raise RuntimeError("পরীক্ষামূলক নিজের কণ্ঠে একবারে সর্বোচ্চ ৫০০ অক্ষর ব্যবহার করুন।")
     normalized = folder / "voice_reference.wav"
+    pure_english = bool(re.search(r"[A-Za-z]", script)) and not bool(re.search(r"[\u0980-\u09FF]", script))
     try:
-        from gradio_client import Client, handle_file
+        from gradio_client import handle_file
         run(["ffmpeg", "-y", "-i", str(reference_audio), "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", str(normalized)], 120)
-        client = Client(VOICE_CLONE_SPACE, verbose=False)
-        result = client.predict(
-            script,
-            handle_file(str(normalized)),
-            0,
-            1.0,
-            api_name="/generate_cross_lingual_audio",
-        )
-        audio_result = result[0] if isinstance(result, (list, tuple)) else result
-        if isinstance(audio_result, dict):
-            audio_result = audio_result.get("path") or audio_result.get("url")
-        candidate = None
-        if isinstance(audio_result, str) and Path(audio_result).is_file():
-            candidate = Path(audio_result)
-        elif isinstance(audio_result, str) and audio_result.startswith("https://"):
-            remote_audio = folder / "remote-clone-output"
-            with urllib.request.urlopen(urllib.request.Request(audio_result, headers={"User-Agent": "BanglaAIVoiceVideoMaker/0.3"}), timeout=30) as response:
-                data = response.read(50 * 1024 * 1024 + 1)
-            if len(data) <= 50 * 1024 * 1024:
-                remote_audio.write_bytes(data)
-                candidate = remote_audio
-        if candidate is not None:
-            output = folder / "cloned_voice.wav"
-            run(["ffmpeg", "-y", "-i", str(candidate), "-ac", "1", "-ar", "24000", "-c:a", "pcm_s16le", str(output)], 120)
-            if output.exists() and output.stat().st_size > 100:
-                return output
-        raise RuntimeError("ভয়েস ক্লোনিং সেবাটি অডিও ফাইল ফেরত দেয়নি।")
+        if pure_english:
+            provider = "Chatterbox"
+            try:
+                audio_result = _clone_with_chatterbox(script, normalized)
+            except Exception as primary_error:
+                # One alternate free demo is tried if the English-specific demo is unavailable.
+                provider = "CosyVoice3 fallback"
+                try:
+                    audio_result = _clone_with_cosyvoice(script, normalized)
+                except Exception:
+                    raise primary_error
+        else:
+            provider = "Bengali CosyVoice3"
+            audio_result = _clone_with_cosyvoice(script, normalized)
+        candidate = _write_gradio_audio_result(audio_result, folder, "clone-output")
+        if candidate is None:
+            raise RuntimeError("The voice service returned no usable audio file")
+        output = folder / "cloned_voice.wav"
+        run(["ffmpeg", "-y", "-i", str(candidate), "-ac", "1", "-ar", "24000", "-c:a", "pcm_s16le", str(output)], 120)
+        if output.exists() and output.stat().st_size > 100:
+            print(f"VOICE_PROVIDER selected={provider} language={'en' if pure_english else 'bn_or_mixed'}", flush=True)
+            return output
+        raise RuntimeError("The voice service returned an empty audio file")
     except Exception as exc:
-        raise RuntimeError("নিজের কণ্ঠ তৈরি করা যায়নি। ফ্রি বাহ্যিক ডেমো ব্যস্ত বা পরিবর্তিত থাকতে পারে। সাধারণ স্বয়ংক্রিয় ভয়েস দিয়ে আবার চেষ্টা করুন।") from exc
+        print(f"VOICE_PROVIDER failed language={'en' if pure_english else 'bn_or_mixed'} error={type(exc).__name__}: {str(exc)[:250]}", flush=True)
+        raise RuntimeError("নিজের কণ্ঠে অডিও তৈরি করা যায়নি। ফ্রি কণ্ঠ-সেবা ব্যস্ত বা পরিবর্তিত হতে পারে। কিছুক্ষণ পর চেষ্টা করুন, অথবা সাধারণ স্বয়ংক্রিয় ভয়েস বেছে নিন।") from exc
     finally:
         normalized.unlink(missing_ok=True)
-
 
 def load_font(size: int, bold=False):
     candidates = [
