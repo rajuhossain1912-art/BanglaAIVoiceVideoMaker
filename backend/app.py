@@ -373,7 +373,8 @@ def make_caption_frames(script: str, duration: float, background: Path, folder: 
     sentence_words = [re.findall(r"\S+", sentence) for sentence in sentences]
     sentence_weights = [max(1, len(words)) for words in sentence_words]
     total_weight = sum(sentence_weights)
-    cursor = max(0.0, caption_offset)
+    cursor = min(max(0.0, caption_offset), max(0.0, duration - 0.1))
+    usable_duration = max(0.1, duration - cursor)
     font = load_font(13, True)
     entries = []
     image_index = 0
@@ -381,7 +382,7 @@ def make_caption_frames(script: str, duration: float, background: Path, folder: 
     for sentence, words, weight in zip(sentences, sentence_words, sentence_weights):
         if not words:
             continue
-        sentence_duration = max(0.05, duration * weight / total_weight)
+        sentence_duration = max(0.05, usable_duration * weight / total_weight)
         word_weights = [max(1, len(word)) for word in words]
         word_total = sum(word_weights)
         for word_index, (word, word_weight) in enumerate(zip(words, word_weights)):
