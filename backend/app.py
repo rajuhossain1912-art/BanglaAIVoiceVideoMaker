@@ -401,18 +401,17 @@ def render(job_id: str, script: str, mode: str, audio_path: Optional[Path], capt
         output = folder / "video.mp4"
         font_dir = "/usr/share/fonts/truetype/noto"
         subtitle_filter = f"ass={subtitles.as_posix()}:fontsdir={font_dir}"
-        # Conservative settings for Render Free: avoid zoompan frame buffering.
-        # Render a small vertical video first; higher-quality export can come later.
-        vf = f"{subtitle_filter},format=yuv420p"
-        print(f"VIDEO_STAGE job={job_id} stage=ffmpeg_start duration={duration:.2f}", flush=True)
+        # Very low-memory export for Render Free (512 MiB): reduce pixels and frame rate before subtitle rendering.
+        vf = f"scale=180:320,{subtitle_filter},format=yuv420p"
+        print(f"VIDEO_STAGE job={job_id} stage=ffmpeg_start duration={duration:.2f} size=180x320 fps=5", flush=True)
         with LOCK:
             JOBS[job_id]["progress"] = 50
             JOBS[job_id]["message"] = "ভিডিও রেন্ডার হচ্ছে"
         run([
             "ffmpeg", "-y", "-filter_threads", "1", "-filter_complex_threads", "1",
             "-loop", "1", "-framerate", "1", "-i", str(background), "-i", str(audio_path),
-            "-vf", vf, "-t", str(duration), "-r", "8", "-c:v", "libx264", "-threads", "1", "-preset", "ultrafast",
-            "-crf", "30", "-c:a", "aac", "-b:a", "64k", "-shortest", "-movflags", "+faststart", str(output)
+            "-vf", vf, "-t", str(duration), "-r", "5", "-c:v", "libx264", "-threads", "1", "-preset", "ultrafast",
+            "-crf", "32", "-c:a", "aac", "-b:a", "48k", "-threads", "1", "-shortest", "-movflags", "+faststart", str(output)
         ], 240)
         print(f"VIDEO_STAGE job={job_id} stage=ffmpeg_done", flush=True)
         with LOCK:
