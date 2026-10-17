@@ -1,4 +1,4 @@
-name: Live Render video verification # Verify production build with low-memory Pillow word-highlight captions
+name: Live Render video verification # Verify production build with low-memory Pillow word-highlight captions and corrected timing
 
 on:
   push:
