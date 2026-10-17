@@ -45,8 +45,8 @@ def duration_of(path: Path) -> float:
 
 
 def synthesize_mixed_speech(script: str, folder: Path) -> Path:
-    """Synthesize contiguous Bangla/English spans with matching eSpeak voices."""
-    tokens = re.findall(r"[\u0980-\u09FF]{3,}|[A-Za-z]{3,}", script[:900])
+    """Synthesize full Bangla/English text while preserving spaces and punctuation."""
+    tokens = re.findall(r"[\u0980-\u09FF]+|[A-Za-z0-9]+|[^A-Za-z0-9\u0980-\u09FF]+", script[:MAX_SCRIPT_CHARS])
     chunks = []
     current_language = None
     current_text = ""
@@ -59,12 +59,12 @@ def synthesize_mixed_speech(script: str, folder: Path) -> Path:
             language = current_language or "bn"
         if current_language is not None and language != current_language:
             if current_text.strip():
-                chunks.append((current_language, current_text))
+                chunks.append((current_language, current_text.strip()))
             current_text = ""
         current_language = language
         current_text += token
     if current_text.strip():
-        chunks.append((current_language or "bn", current_text))
+        chunks.append((current_language or "bn", current_text.strip()))
     if not chunks:
         raise RuntimeError("পড়ার মতো লেখা পাওয়া যায়নি।")
 
@@ -86,7 +86,6 @@ def synthesize_mixed_speech(script: str, folder: Path) -> Path:
     combined = folder / "voice.wav"
     run(["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(listing), "-c:a", "pcm_s16le", str(combined)], 120)
     return combined
-
 
 
 def _write_gradio_audio_result(audio_result, folder: Path, stem: str):
