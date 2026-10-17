@@ -1,7 +1,10 @@
 package com.rajuhossain.banglaaivoicevideomaker
 
+import android.Manifest
 import android.app.DownloadManager
 import android.content.Context
+import android.content.pm.PackageManager
+import android.media.MediaRecorder
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.Uri
@@ -11,6 +14,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -57,6 +61,9 @@ private fun VideoMakerScreen() {
     var cloneConsent by remember { mutableStateOf(false) }
     var captionOffset by remember { mutableStateOf(0f) }
     var hasSavedVoiceProfile by remember { mutableStateOf(File(context.filesDir, "voice_profile_sample").exists()) }
+    var isRecording by remember { mutableStateOf(false) }
+    var recorder by remember { mutableStateOf<MediaRecorder?>(null) }
+    var recordingFile by remember { mutableStateOf<File?>(null) }
     var status by remember { mutableStateOf("অনলাইন সার্ভার যুক্ত হলে এখানে ভিডিও তৈরির অবস্থা দেখা যাবে।") }
     var progress by remember { mutableStateOf(0) }
     var online by remember { mutableStateOf(isInternetAvailable(context)) }
@@ -71,6 +78,61 @@ private fun VideoMakerScreen() {
         } else if (mode != "clone" && audioUri?.scheme == "file" && audioUri?.path == profile.absolutePath) {
             audioUri = null
             audioName = ""
+        }
+    }
+
+    val startVoiceRecording: () -> Unit = {
+        try {
+            val target = File(context.filesDir, "voice_profile_sample")
+            val newRecorder = MediaRecorder()
+            newRecorder.setAudioSource(MediaRecorder.AudioSource.MIC)
+            newRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+            newRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+            newRecorder.setAudioSamplingRate(16000)
+            newRecorder.setAudioEncodingBitRate(64000)
+            newRecorder.setOutputFile(target.absolutePath)
+            newRecorder.prepare()
+            newRecorder.start()
+            recorder = newRecorder
+            recordingFile = target
+            isRecording = true
+            status = "নিজের কণ্ঠ রেকর্ড হচ্ছে। স্বাভাবিকভাবে ১০ থেকে ৩০ সেকেন্ড কথা বলুন, তারপর রেকর্ড বন্ধ করুন।"
+        } catch (e: Exception) {
+            runCatching { recorder?.release() }
+            recorder = null
+            isRecording = false
+            status = "রেকর্ডিং শুরু করা যায়নি। মাইক্রোফোনের অনুমতি ও ফোনের স্টোরেজ পরীক্ষা করুন।"
+        }
+    }
+    val recordPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) startVoiceRecording()
+        else status = "নিজের কণ্ঠ রেকর্ড করতে মাইক্রোফোনের অনুমতি দিতে হবে।"
+    }
+    fun stopVoiceRecording() {
+        val currentRecorder = recorder
+        val target = recordingFile
+        var saved = false
+        try {
+            currentRecorder?.stop()
+            saved = target != null && target.exists() && target.length() > 1000
+        } catch (_: Exception) {
+            status = "রেকর্ডিং খুব ছোট হয়েছে বা সংরক্ষণ করা যায়নি। আবার ১০ থেকে ৩০ সেকেন্ড রেকর্ড করুন।"
+        } finally {
+            runCatching { currentRecorder?.reset() }
+            runCatching { currentRecorder?.release() }
+            recorder = null
+            recordingFile = null
+            isRecording = false
+        }
+        if (saved && target != null) {
+            audioUri = Uri.fromFile(target)
+            audioName = "ফোনে রেকর্ড ও সংরক্ষিত নিজের কণ্ঠ"
+            hasSavedVoiceProfile = true
+            mode = "clone"
+            status = "নিজের কণ্ঠ ফোনে সংরক্ষিত হয়েছে। ভিডিও তৈরির সময় সম্মতি দিলে নমুনাটি স্বয়ংক্রিয়ভাবে ক্লোনিং সেবায় পাঠানো হবে; প্রতিবার ফাইল বেছে নিতে হবে না।"
+        } else {
+            target?.delete()
+            hasSavedVoiceProfile = false
         }
     }
 
@@ -130,7 +192,7 @@ private fun VideoMakerScreen() {
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("গুরুত্বপূর্ণ গোপনীয়তা সতর্কতা", fontWeight = FontWeight.Bold)
-                    Text("এই পরীক্ষায় আপনার কণ্ঠের নমুনা ও লেখা Hugging Face-এর বাইরের ডেমো সার্ভারে পাঠানো হবে। সেই সার্ভারের সংরক্ষণ বা লগিং সম্পর্কে আমরা নিশ্চয়তা দিতে পারি না। তাই গোপন বা ব্যক্তিগত কথা দেবেন না। এই সুবিধা পরীক্ষামূলক, একবারে সর্বোচ্চ ৫০০ অক্ষর এবং ফলাফল নিশ্চিত নয়।")
+                    Text("আপনার কণ্ঠের নমুনা ফোনের ব্যক্তিগত অ্যাপ স্টোরেজে রাখা হয়। এই ফ্রি ডেমোতে আলাদা ক্লোন মডেল স্থায়ীভাবে সংরক্ষণের ব্যবস্থা নেই, তাই প্রতিটি ভিডিও তৈরির সময় অ্যাপ নমুনাটি স্বয়ংক্রিয়ভাবে Hugging Face-এর বাইরের ডেমো সার্ভারে পাঠাবে। সেই সার্ভারের সংরক্ষণ বা লগিং সম্পর্কে আমরা নিশ্চয়তা দিতে পারি না। ব্যক্তিগত বা গোপন কথা রেকর্ড করবেন না। এই সুবিধা পরীক্ষামূলক, একবারে সর্বোচ্চ ৫০০ অক্ষর এবং ফলাফল নিশ্চিত নয়।")
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(checked = cloneConsent, onCheckedChange = { cloneConsent = it }, enabled = !running)
                         Text("আমি বুঝেছি এবং আমার নিজের কণ্ঠের নমুনা বাহ্যিক সার্ভারে পাঠাতে সম্মতি দিচ্ছি।")
@@ -161,8 +223,21 @@ private fun VideoMakerScreen() {
                 Text("কথার তুলনায় লেখা আগে দেখা গেলে ঋণাত্মক দিকে, দেরিতে এলে ধনাত্মক দিকে সরান। এটি পুরো সাবটাইটেল একসঙ্গে সরায়; শব্দে-শব্দে নিখুঁত alignment নয়।", style = MaterialTheme.typography.bodySmall)
             }
         }
-        OutlinedButton(onClick = { audioPicker.launch("audio/*") }, modifier = Modifier.fillMaxWidth(), enabled = !running) {
-            Text(if (mode == "clone" && hasSavedVoiceProfile) "নিজের কণ্ঠের নমুনা বদলান" else if (mode == "clone") "নিজের কণ্ঠের নমুনা নির্বাচন ও ফোনে সংরক্ষণ করুন" else if (audioName.isBlank()) "অডিও ফাইল নির্বাচন করুন" else "অডিও নির্বাচন করা হয়েছে: " + audioName)
+        if (mode == "clone") {
+            OutlinedButton(
+                onClick = {
+                    if (isRecording) stopVoiceRecording()
+                    else if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) startVoiceRecording()
+                    else recordPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !running
+            ) {
+                Text(if (isRecording) "রেকর্ড বন্ধ করে কণ্ঠ ফোনে সেভ করুন" else "নিজের কণ্ঠ রেকর্ড করে ফোনে সেভ করুন")
+            }
+        }
+        OutlinedButton(onClick = { audioPicker.launch("audio/*") }, modifier = Modifier.fillMaxWidth(), enabled = !running && !isRecording) {
+            Text(if (mode == "clone" && hasSavedVoiceProfile) "রেকর্ড করা কণ্ঠ বদলান বা অডিও বেছে নিন" else if (mode == "clone") "নিজের কণ্ঠের নমুনা নির্বাচন ও ফোনে সংরক্ষণ করুন" else if (audioName.isBlank()) "অডিও ফাইল নির্বাচন করুন" else "অডিও নির্বাচন করা হয়েছে: " + audioName)
         }
         if (mode == "clone" && hasSavedVoiceProfile) {
             OutlinedButton(onClick = {
