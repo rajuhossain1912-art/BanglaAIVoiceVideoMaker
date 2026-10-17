@@ -353,6 +353,31 @@ def find_contextual_image(script: str, folder: Path):
     return None, ""
 
 
+def _compatible_gradio_client():
+    """Work around public Spaces exposing valid boolean JSON-schema nodes."""
+    from gradio_client import Client, utils
+    if not getattr(utils, "_bangla_bool_schema_compat", False):
+        original_get_type = utils.get_type
+        original_json_schema = utils._json_schema_to_python_type
+
+        def safe_get_type(schema):
+            if isinstance(schema, bool) or not isinstance(schema, dict):
+                return "Any"
+            return original_get_type(schema)
+
+        def safe_json_schema_to_python_type(schema, defs=None):
+            if isinstance(schema, bool):
+                return "Any" if schema else "None"
+            if not isinstance(schema, dict):
+                return "Any"
+            return original_json_schema(schema, defs)
+
+        utils.get_type = safe_get_type
+        utils._json_schema_to_python_type = safe_json_schema_to_python_type
+        utils._bangla_bool_schema_compat = True
+    return Client
+
+
 def _extract_generated_image(result):
     if isinstance(result, (list, tuple)) and result:
         result = result[0]
@@ -400,7 +425,7 @@ def find_generated_image(script: str, folder: Path):
     for provider_name, space_id, call in providers:
         executor = ThreadPoolExecutor(max_workers=1)
         try:
-            future = executor.submit(lambda sid=space_id, fn=call: fn(__import__("gradio_client").Client(sid, verbose=False)))
+            future = executor.submit(lambda sid=space_id, fn=call: fn(_compatible_gradio_client()(sid, verbose=False)))
             result = future.result(timeout=16)
             image_result = _extract_generated_image(result)
             if isinstance(image_result, str) and Path(image_result).is_file():
