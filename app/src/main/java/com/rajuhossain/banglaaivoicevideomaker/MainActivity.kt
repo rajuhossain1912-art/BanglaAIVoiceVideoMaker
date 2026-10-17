@@ -300,8 +300,13 @@ private fun createJob(context: Context, baseUrl: String, script: String, mode: S
         val code = connection.responseCode
         val stream = if (code in 200..299) connection.inputStream else connection.errorStream
         val body = stream?.use { it.readBytes().toString(Charsets.UTF_8) } ?: ""
-        if (body.isBlank()) throw IllegalStateException("সার্ভার থেকে খালি উত্তর এসেছে (HTTP $code)। কিছুক্ষণ পর আবার চেষ্টা করুন।")
-        if (code !in 200..299) throw IllegalStateException(runCatching { JSONObject(body).optString("detail") }.getOrNull().orEmpty().ifBlank { "সার্ভার অনুরোধ গ্রহণ করেনি (HTTP $code)।" })
+        if (body.isBlank()) {
+            throw IllegalStateException("সার্ভার খালি উত্তর দিয়েছে (HTTP $code)। ফ্রি সার্ভার সাময়িকভাবে বন্ধ বা পুনরায় চালু হলে কিছুক্ষণ পর আবার চেষ্টা করুন।")
+        }
+        if (code !in 200..299) {
+            val detail = runCatching { JSONObject(body).optString("detail") }.getOrNull().orEmpty()
+            throw IllegalStateException(detail.ifBlank { "সার্ভার অনুরোধ গ্রহণ করেনি (HTTP $code)।" })
+        }
         return JSONObject(body)
     } finally {
         connection.disconnect()
@@ -318,8 +323,13 @@ private fun getJobStatus(baseUrl: String, jobId: String): JSONObject {
         val code = connection.responseCode
         val stream = if (code in 200..299) connection.inputStream else connection.errorStream
         val body = stream?.use { it.readBytes().toString(Charsets.UTF_8) } ?: ""
-        if (body.isBlank()) throw IllegalStateException("সার্ভারের অবস্থা খালি এসেছে (HTTP $code)। পরে আবার চেষ্টা করুন।")
-        if (code !in 200..299) throw IllegalStateException(runCatching { JSONObject(body).optString("detail") }.getOrNull().orEmpty().ifBlank { "সার্ভারের অবস্থা পাওয়া যায়নি (HTTP $code)।" })
+        if (body.isBlank()) {
+            throw IllegalStateException("সার্ভারের অবস্থা খালি এসেছে (HTTP $code)। সার্ভার পুনরায় চালু হলে পরে আবার চেষ্টা করুন।")
+        }
+        if (code !in 200..299) {
+            val detail = runCatching { JSONObject(body).optString("detail") }.getOrNull().orEmpty()
+            throw IllegalStateException(detail.ifBlank { "সার্ভারের অবস্থা পাওয়া যায়নি (HTTP $code)।" })
+        }
         return JSONObject(body)
     } finally {
         connection.disconnect()
