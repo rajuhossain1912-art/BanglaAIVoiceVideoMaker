@@ -157,24 +157,94 @@ def wrap_text(draw, text, font, max_width):
     return lines
 
 
-def find_contextual_image(script: str, folder: Path):
-    """Fetch a freely reusable, topic-relevant image from Wikimedia Commons; fail closed."""
+def _image_keywords(script: str):
     stopwords = set("""
     the and for with this that from your you are was were have has had will would can could
     about into over under then than when where what why how not but or as is am be
     আমি তুমি তিনি তারা আমরা আপনার আমাদের তাদের এটা এটি এই সেই যে কী কেন কিভাবে এবং অথবা
     থেকে জন্য নিয়ে করা হবে হয় আছে ছিল একটি একজন আজকে যেন কিন্তু
     """.split())
-    tokens = re.findall(r"[\\u0980-\\u09FF]{3,}|[A-Za-z]{3,}", script[:900])
-    seen = set()
-    keywords = []
+    tokens = re.findall(r"[\u0980-\u09FF]{3,}|[A-Za-z]{3,}", script[:900])
+    keywords, seen = [], set()
     for token in tokens:
         key = token.lower()
         if key not in stopwords and key not in seen:
             seen.add(key)
             keywords.append(token)
-        if len(keywords) >= 4:
+        if len(keywords) >= 5:
             break
+    return keywords
+
+
+def _download_checked_image(image_url: str, folder: Path, filename: str, credit: str):
+    if not image_url or not image_url.startswith("https://"):
+        return None, ""
+    try:
+        request = urllib.request.Request(
+            image_url,
+            headers={"User-Agent": "BanglaAIVoiceVideoMaker/0.4 (free educational video maker)"}
+        )
+        with urllib.request.urlopen(request, timeout=10) as response:
+            content = response.read(8 * 1024 * 1024 + 1)
+        if len(content) > 8 * 1024 * 1024:
+            return None, ""
+        target = folder / filename
+        target.write_bytes(content)
+        with Image.open(target) as check:
+            if check.width < 80 or check.height < 80 or check.width * check.height > 4_000_000:
+                raise ValueError("Image dimensions outside safe limits")
+            check.verify()
+        return target, credit[:180]
+    except Exception:
+        try:
+            (folder / filename).unlink(missing_ok=True)
+        except Exception:
+            pass
+        return None, ""
+
+
+def find_openverse_image(script: str, folder: Path):
+    """Try Openverse's anonymous endpoint; only use CC0, public-domain, CC BY or CC BY-SA results."""
+    keywords = _image_keywords(script)
+    if not keywords:
+        return None, ""
+    params = urllib.parse.urlencode({
+        "q": " ".join(keywords),
+        "license": "cc0,pdm,by,by-sa",
+        "page_size": "8",
+        "mature": "false",
+    })
+    try:
+        request = urllib.request.Request(
+            "https://api.openverse.org/v1/images/?" + params,
+            headers={"User-Agent": "BanglaAIVoiceVideoMaker/0.4 (free educational video maker)"}
+        )
+        with urllib.request.urlopen(request, timeout=6) as response:
+            data = json.loads(response.read(1_500_000).decode("utf-8"))
+        for item in data.get("results", []):
+            license_code = str(item.get("license", "")).lower()
+            if license_code not in {"cc0", "pdm", "by", "by-sa"}:
+                continue
+            image_url = item.get("thumbnail") or item.get("url")
+            title = re.sub(r"\s+", " ", str(item.get("title") or "Openverse image")).strip()
+            creator = re.sub(r"\s+", " ", str(item.get("creator") or "Unknown creator")).strip()
+            landing = str(item.get("foreign_landing_url") or "")
+            license_url = str(item.get("license_url") or "")
+            credit = f"{title[:55]} | {creator[:45]} | {license_code.upper()} {landing[:65]} {license_url[:55]}"
+            image, attribution = _download_checked_image(image_url, folder, "openverse-context-image", credit)
+            if image:
+                return image, attribution
+    except Exception:
+        pass
+    return None, ""
+
+
+def find_contextual_image(script: str, folder: Path):
+    """Try Openverse then Wikimedia Commons; use licensed reusable thumbnails only."""
+    image, credit = find_openverse_image(script, folder)
+    if image:
+        return image, credit
+    keywords = _image_keywords(script)
     if not keywords:
         return None, ""
     params = urllib.parse.urlencode({
@@ -186,7 +256,7 @@ def find_contextual_image(script: str, folder: Path):
     })
     request = urllib.request.Request(
         "https://commons.wikimedia.org/w/api.php?" + params,
-        headers={"User-Agent": "BanglaAIVoiceVideoMaker/0.3 (free educational video maker)"}
+        headers={"User-Agent": "BanglaAIVoiceVideoMaker/0.4 (free educational video maker)"}
     )
     try:
         with urllib.request.urlopen(request, timeout=8) as response:
@@ -202,31 +272,17 @@ def find_contextual_image(script: str, folder: Path):
                 or (license_upper.startswith("CC BY") and "NC" not in license_upper and "ND" not in license_upper)
             )
             image_url = info.get("thumburl") or info.get("url")
-            if not is_reusable or not image_url or not image_url.startswith("https://"):
-                continue
-            with urllib.request.urlopen(urllib.request.Request(image_url, headers={"User-Agent": "BanglaAIVoiceVideoMaker/0.3"}), timeout=10) as response:
-                content = response.read(8 * 1024 * 1024 + 1)
-            if len(content) > 8 * 1024 * 1024:
-                continue
-            target = folder / "context-image"
-            target.write_bytes(content)
-            try:
-                with Image.open(target) as check:
-                    if check.width * check.height > 4_000_000:
-                        raise ValueError("Image dimensions exceed the safe limit")
-                    check.verify()
-            except Exception:
-                target.unlink(missing_ok=True)
-                continue
-            artist = str((metadata.get("Artist") or {}).get("value", "")).strip()
-            artist = re.sub(r"<[^>]+>", "", artist)
             title = str(page.get("title", "Wikimedia Commons image")).replace("File:", "")
-            credit = f"{title[:55]} | {artist[:45]} | {license_name[:20]}".strip(" |")
-            return target, credit
+            artist = re.sub(r"<[^>]+>", "", str((metadata.get("Artist") or {}).get("value", "")).strip())
+            credit = f"{title[:55]} | {artist[:45]} | {license_name[:20]} https://commons.wikimedia.org/wiki/{urllib.parse.quote(str(page.get('title', '')))}"
+            if not is_reusable:
+                continue
+            image, attribution = _download_checked_image(image_url, folder, "commons-context-image", credit)
+            if image:
+                return image, attribution
     except Exception:
         pass
     return None, ""
-
 
 def make_background(script: str, folder: Path):
     # Small canvas is intentional: keep peak memory below Render Free's 512 MiB limit.
@@ -277,6 +333,19 @@ def make_background(script: str, folder: Path):
     target = folder / "background.png"
     image.save(target, optimize=True)
     return target
+
+def make_scene_backgrounds(script: str, folder: Path):
+    """Create up to six scene backgrounds from separate sentences; later sentences reuse the last scene."""
+    sentences = [x.strip() for x in re.split(r"(?<=[.!?।])\s+|\n+", script) if x.strip()]
+    if not sentences:
+        sentences = [script.strip() or "বাংলা ভিডিও"]
+    selected = sentences[:6]
+    backgrounds = []
+    for index, sentence in enumerate(selected):
+        scene_dir = folder / f"scene-{index:02d}"
+        scene_dir.mkdir(parents=True, exist_ok=True)
+        backgrounds.append(make_background(sentence, scene_dir))
+    return backgrounds
 
 def make_srt(script: str, duration: float, path: Path):
     # Estimated sentence timing is a fallback, not forced alignment.
@@ -366,8 +435,11 @@ def make_caption_frames(script: str, duration: float, background: Path, folder: 
     """Render small Pillow caption cards with per-word highlighting, avoiding FFmpeg's memory-heavy libass filter."""
     frame_dir = folder / "caption-frames"
     frame_dir.mkdir(parents=True, exist_ok=True)
-    with Image.open(background) as source:
-        base = source.convert("RGB").resize((180, 320), Image.Resampling.BILINEAR)
+    background_paths = background if isinstance(background, (list, tuple)) else [background]
+    bases = []
+    for background_path in background_paths:
+        with Image.open(background_path) as source:
+            bases.append(source.convert("RGB").resize((180, 320), Image.Resampling.BILINEAR))
 
     sentences = [x.strip() for x in re.split(r"(?<=[.!?।])\s+|\n+", script) if x.strip()]
     if not sentences:
@@ -375,15 +447,16 @@ def make_caption_frames(script: str, duration: float, background: Path, folder: 
     sentence_words = [re.findall(r"\S+", sentence) for sentence in sentences]
     sentence_weights = [max(1, len(words)) for words in sentence_words]
     total_weight = sum(sentence_weights)
-    cursor = min(max(0.0, caption_offset), max(0.0, duration - 0.1))
-    usable_duration = max(0.1, duration - cursor)
+    cursor = max(0.0, caption_offset)
+    usable_duration = max(0.1, duration - caption_offset) if caption_offset >= 0 else max(0.1, duration + caption_offset)
     font = load_font(13, True)
     entries = []
     image_index = 0
 
-    for sentence, words, weight in zip(sentences, sentence_words, sentence_weights):
+    for sentence_index, (sentence, words, weight) in enumerate(zip(sentences, sentence_words, sentence_weights)):
         if not words:
             continue
+        base = bases[min(sentence_index, len(bases) - 1)]
         sentence_duration = max(0.05, usable_duration * weight / total_weight)
         word_weights = [max(1, len(word)) for word in words]
         word_total = sum(word_weights)
@@ -482,13 +555,13 @@ def render(job_id: str, script: str, mode: str, audio_path: Optional[Path], capt
             JOBS[job_id]["progress"] = 35
             JOBS[job_id]["message"] = "ভিডিওর পটভূমি ও সাবটাইটেল তৈরি হচ্ছে"
         print(f"VIDEO_STAGE job={job_id} stage=background_start", flush=True)
-        background = make_background(script, folder)
-        print(f"VIDEO_STAGE job={job_id} stage=background_done", flush=True)
+        backgrounds = make_scene_backgrounds(script, folder)
+        print(f"VIDEO_STAGE job={job_id} stage=background_done scenes={len(backgrounds)} providers=openverse,wikimedia,graphic_fallback", flush=True)
         with LOCK:
             JOBS[job_id]["progress"] = 40
-            JOBS[job_id]["message"] = "পটভূমি তৈরি হয়েছে"
+            JOBS[job_id]["message"] = "বাক্যভিত্তিক দৃশ্য ও পটভূমি তৈরি হয়েছে"
         print(f"VIDEO_STAGE job={job_id} stage=subtitles_start", flush=True)
-        frame_list, frame_count = make_caption_frames(script, duration, background, folder, caption_offset)
+        frame_list, frame_count = make_caption_frames(script, duration, backgrounds, folder, caption_offset)
         print(f"VIDEO_STAGE job={job_id} stage=subtitles_done frames={frame_count} method=pillow_word_highlight", flush=True)
         with LOCK:
             JOBS[job_id]["progress"] = 45
