@@ -353,50 +353,80 @@ def find_contextual_image(script: str, folder: Path):
     return None, ""
 
 
+def _extract_generated_image(result):
+    if isinstance(result, (list, tuple)) and result:
+        result = result[0]
+    if isinstance(result, (list, tuple)) and result:
+        result = result[0]
+    if isinstance(result, dict):
+        result = result.get("path") or result.get("url") or result.get("image")
+        if isinstance(result, dict):
+            result = result.get("path") or result.get("url")
+    if isinstance(result, (list, tuple)) and result:
+        result = result[0]
+    if isinstance(result, dict):
+        result = result.get("path") or result.get("url")
+    return result
+
+
 def find_generated_image(script: str, folder: Path):
-    """Best-effort free FLUX.1-schnell Space; never blocks video creation if unavailable."""
+    """Try two free public image-generation Spaces; image search and graphics remain fallbacks."""
     if not AI_IMAGE_GENERATION_ENABLED:
         return None, ""
-    try:
-        from gradio_client import Client
-        from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
-        prompt = (
-            "Vertical documentary-style scene illustration for a short educational video. "
-            "Show the real-world subject described here. No text, no captions, no letters, no watermark. "
-            + re.sub(r"\s+", " ", script).strip()[:350]
-        )
+    from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
+    prompt = (
+        "Vertical documentary-style scene illustration for a short educational video. "
+        "Show the real-world subject described here. No text, no captions, no letters, no watermark. "
+        + re.sub(r"\s+", " ", script).strip()[:350]
+    )
+    providers = [
+        (
+            "FLUX.1-schnell",
+            "black-forest-labs/FLUX.1-schnell",
+            lambda client: client.predict(
+                prompt=prompt, seed=42, randomize_seed=False,
+                width=512, height=768, num_inference_steps=4, api_name="/infer"
+            ),
+        ),
+        (
+            "Z-Image-Turbo",
+            "Tongyi-MAI/Z-Image-Turbo",
+            lambda client: client.predict(
+                prompt, "720x1280 ( 9:16 )", 42, 7, 3.0, False, None,
+                api_name="/generate"
+            ),
+        ),
+    ]
+    for provider_name, space_id, call in providers:
         executor = ThreadPoolExecutor(max_workers=1)
-        future = executor.submit(
-            lambda: Client("black-forest-labs/FLUX.1-schnell", verbose=False).predict(
-                prompt, 42, True, 512, 768, 4, api_name="/infer"
-            )
-        )
         try:
-            result = future.result(timeout=28)
+            future = executor.submit(lambda sid=space_id, fn=call: fn(__import__("gradio_client").Client(sid, verbose=False)))
+            result = future.result(timeout=16)
+            image_result = _extract_generated_image(result)
+            if isinstance(image_result, str) and Path(image_result).is_file():
+                target = folder / f"generated-{provider_name.lower().replace('.', '').replace('-', '-')}.png"
+                shutil.copyfile(image_result, target)
+                with Image.open(target) as check:
+                    if check.width < 80 or check.height < 80 or check.width * check.height > 4_000_000:
+                        raise ValueError("Generated image dimensions outside safe limits")
+                    check.verify()
+                print(f"IMAGE_PROVIDER selected={provider_name}", flush=True)
+                return target, f"AI-generated with {provider_name} | https://huggingface.co/spaces/{space_id}"
+            if isinstance(image_result, str) and image_result.startswith("https://"):
+                target, credit = _download_checked_image(
+                    image_result, folder, f"generated-{provider_name.lower().replace('.', '')}.png",
+                    f"AI-generated with {provider_name} | https://huggingface.co/spaces/{space_id}"
+                )
+                if target:
+                    print(f"IMAGE_PROVIDER selected={provider_name}", flush=True)
+                    return target, credit
+            print(f"IMAGE_PROVIDER no_image provider={provider_name}", flush=True)
         except FutureTimeout:
-            future.cancel()
-            return None, ""
+            print(f"IMAGE_PROVIDER timeout provider={provider_name}", flush=True)
+        except Exception as exc:
+            print(f"IMAGE_PROVIDER failed provider={provider_name} error={type(exc).__name__}: {str(exc)[:180]}", flush=True)
         finally:
             executor.shutdown(wait=False, cancel_futures=True)
-        if isinstance(result, (list, tuple)) and result:
-            result = result[0]
-        if isinstance(result, dict):
-            result = result.get("path") or result.get("url") or result.get("image")
-        if isinstance(result, str) and Path(result).is_file():
-            target = folder / "flux-generated-scene.png"
-            shutil.copyfile(result, target)
-            with Image.open(target) as check:
-                if check.width < 80 or check.height < 80 or check.width * check.height > 4_000_000:
-                    raise ValueError("Generated image dimensions outside safe limits")
-                check.verify()
-            return target, "AI-generated with FLUX.1-schnell | https://huggingface.co/spaces/black-forest-labs/FLUX.1-schnell"
-        if isinstance(result, str) and result.startswith("https://"):
-            return _download_checked_image(
-                result, folder, "flux-generated-scene.png",
-                "AI-generated with FLUX.1-schnell | https://huggingface.co/spaces/black-forest-labs/FLUX.1-schnell"
-            )
-    except Exception as exc:
-        print(f"IMAGE_PROVIDER failed provider=FLUX.1-schnell error={type(exc).__name__}: {str(exc)[:180]}", flush=True)
     return None, ""
 
 def make_background(script: str, folder: Path):
