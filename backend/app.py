@@ -483,7 +483,8 @@ def make_background(script: str, folder: Path):
         try:
             with Image.open(source_image) as source:
                 image = ImageOps.fit(source.convert("RGB"), (width, height), method=Image.Resampling.BILINEAR)
-            overlay = Image.new("RGBA", (width, height), (3, 13, 28, 145))
+            # Keep real photos bright enough to recognize behind captions.
+            overlay = Image.new("RGBA", (width, height), (3, 13, 28, 72))
             image = Image.alpha_composite(image.convert("RGBA"), overlay).convert("RGB")
         except Exception:
             source_image = None
@@ -710,13 +711,18 @@ def make_caption_frames(script: str, duration: float, background: Path, folder: 
             start = cursor
             word_duration = sentence_duration * word_weight / word_total
             end = sentence_end if word_index == len(words) - 1 else min(sentence_end, cursor + word_duration)
-            # Gentle zoom in/out across caption cards; Pillow keeps this low-memory on Render Free.
-            phase = (image_index % 16) / 15.0
-            zoom = 1.0 + 0.04 * (1.0 - abs(phase * 2.0 - 1.0))
+            # Smooth Ken Burns motion: zoom in toward the sentence midpoint, then ease out.
+            # Progress is sentence-local so movement remains visible even for short captions.
+            phase = word_index / max(1, len(words) - 1)
+            zoom = 1.0 + 0.09 * (1.0 - abs(phase * 2.0 - 1.0))
             crop_width = max(1, int(base.width / zoom))
             crop_height = max(1, int(base.height / zoom))
-            left_crop = (base.width - crop_width) // 2
-            top_crop = (base.height - crop_height) // 2
+            travel_x = max(0, base.width - crop_width)
+            travel_y = max(0, base.height - crop_height)
+            left_crop = int(travel_x * phase)
+            top_crop = int(travel_y * (1.0 - phase))
+            left_crop = min(travel_x, max(0, left_crop))
+            top_crop = min(travel_y, max(0, top_crop))
             frame = base.crop((left_crop, top_crop, left_crop + crop_width, top_crop + crop_height)).resize(base.size, Image.Resampling.BILINEAR)
             overlay = Image.new("RGBA", frame.size, (0, 0, 0, 0))
             panel = ImageDraw.Draw(overlay)
