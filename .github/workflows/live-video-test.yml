@@ -1,4 +1,4 @@
-name: Live Render video verification # Verify current production build after removing ASS subtitle filter
+name: Live Render video verification # Verify production build with low-memory Pillow word-highlight captions
 
 on:
   push:
