@@ -32,7 +32,7 @@ jobs:
           set -euo pipefail
           BASE="https://bangla-ai-voice-video-maker-api.onrender.com"
           curl -fsS --max-time 40 -X POST "$BASE/api/jobs" \
-            -F 'script=বাংলাদেশের নদী ও প্রকৃতি নিয়ে একটি ছোট ভিডিও পরীক্ষা।' \
+            -F 'script=বাংলাদেশের নদী ও প্রকৃতি নিয়ে একটি ছোট ভিডিও পরীক্ষা। এবার সবুজ মাঠ ও পাখির দৃশ্য দেখাও।' \
             -F 'mode=auto' -o job.json
           cat job.json
           JOB_ID="$(python3 -c 'import json; print(json.load(open("job.json"))["id"])')"

@@ -82,6 +82,27 @@ jobs:
           if [ "$done_job" -ne 1 ]; then echo 'Voice-clone test timed out'; docker logs bangla-video-api-release; exit 1; fi
           curl --fail --silent --show-error "http://127.0.0.1:10000/api/jobs/$job_id/download" -o clone-test.mp4
           test -s clone-test.mp4
+      - name: Verify English voice cloning provider and fallback
+        run: |
+          set -e
+          response=$(curl --fail --silent --show-error -X POST http://127.0.0.1:10000/api/jobs \
+            -F 'script=Hello, this is a free English voice cloning test.' \
+            -F 'mode=clone' -F 'voice_clone_consent=true' \
+            -F 'audio=@synthetic-reference.wav')
+          echo "$response"
+          job_id=$(echo "$response" | python -c 'import json,sys; print(json.load(sys.stdin)["id"])')
+          done_job=0
+          for i in $(seq 1 180); do
+            status=$(curl --fail --silent --show-error "http://127.0.0.1:10000/api/jobs/$job_id")
+            state=$(echo "$status" | python -c 'import json,sys; print(json.load(sys.stdin)["status"])')
+            if [ "$state" = "completed" ]; then done_job=1; break; fi
+            if [ "$state" = "failed" ]; then echo "$status"; docker logs bangla-video-api-release; exit 1; fi
+            sleep 2
+          done
+          if [ "$done_job" -ne 1 ]; then echo 'English voice-clone test timed out'; docker logs bangla-video-api-release; exit 1; fi
+          curl --fail --silent --show-error "http://127.0.0.1:10000/api/jobs/$job_id/download" -o clone-english-test.mp4
+          test -s clone-english-test.mp4
+          docker logs bangla-video-api-release | grep 'VOICE_PROVIDER selected='
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
