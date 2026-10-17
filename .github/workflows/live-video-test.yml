@@ -1,4 +1,4 @@
-name: Live Render video verification # Re-run against the latest production backend
+name: Live Render video verification # Re-run against the low-memory FFmpeg production build
 
 on:
   push:
