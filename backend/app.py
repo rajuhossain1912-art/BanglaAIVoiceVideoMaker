@@ -391,7 +391,14 @@ def make_caption_frames(script: str, duration: float, background: Path, folder: 
             start = cursor
             word_duration = sentence_duration * word_weight / word_total
             end = cursor + word_duration
-            frame = base.copy()
+            # Gentle zoom in/out across caption cards; Pillow keeps this low-memory on Render Free.
+            phase = (image_index % 16) / 15.0
+            zoom = 1.0 + 0.04 * (1.0 - abs(phase * 2.0 - 1.0))
+            crop_width = max(1, int(base.width / zoom))
+            crop_height = max(1, int(base.height / zoom))
+            left_crop = (base.width - crop_width) // 2
+            top_crop = (base.height - crop_height) // 2
+            frame = base.crop((left_crop, top_crop, left_crop + crop_width, top_crop + crop_height)).resize(base.size, Image.Resampling.BILINEAR)
             overlay = Image.new("RGBA", frame.size, (0, 0, 0, 0))
             panel = ImageDraw.Draw(overlay)
             panel.rounded_rectangle((7, 220, 173, 311), radius=9, fill=(0, 0, 0, 205), outline=(95, 170, 230, 220), width=1)
