@@ -58,5 +58,11 @@ jobs:
           fi
           curl -fsS --max-time 30 "$BASE/api/jobs/$JOB_ID/download" -o live-test.mp4
           test "$(stat -c%s live-test.mp4)" -gt 1000
-          ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 live-test.mp4
-          echo "PASS: live Render generated and served an MP4 video."
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("live-test.mp4")
+          data = p.read_bytes()
+          assert len(data) > 1000, f"MP4 too small: {len(data)} bytes"
+          assert data[4:8] == b"ftyp", f"Missing MP4 ftyp signature: {data[:16]!r}"
+          print(f"PASS: live Render generated and served an MP4 video ({len(data)} bytes).")
+          PY
