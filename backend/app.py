@@ -359,6 +359,92 @@ def make_ass(script: str, duration: float, path: Path, caption_offset: float = 0
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+
+def make_caption_frames(script: str, duration: float, background: Path, folder: Path, caption_offset: float = 0.0):
+    """Render small Pillow caption cards with per-word highlighting, avoiding FFmpeg's memory-heavy libass filter."""
+    frame_dir = folder / "caption-frames"
+    frame_dir.mkdir(parents=True, exist_ok=True)
+    with Image.open(background) as source:
+        base = source.convert("RGB").resize((180, 320), Image.Resampling.BILINEAR)
+
+    sentences = [x.strip() for x in re.split(r"(?<=[.!?।])\\s+|\\n+", script) if x.strip()]
+    if not sentences:
+        sentences = [script.strip()] if script.strip() else ["ভিডিও"]
+    sentence_words = [re.findall(r"\\S+", sentence) for sentence in sentences]
+    sentence_weights = [max(1, len(words)) for words in sentence_words]
+    total_weight = sum(sentence_weights)
+    cursor = max(0.0, caption_offset)
+    font = load_font(13, True)
+    entries = []
+    image_index = 0
+
+    for sentence, words, weight in zip(sentences, sentence_words, sentence_weights):
+        if not words:
+            continue
+        sentence_duration = max(0.05, duration * weight / total_weight)
+        word_weights = [max(1, len(word)) for word in words]
+        word_total = sum(word_weights)
+        for word_index, (word, word_weight) in enumerate(zip(words, word_weights)):
+            start = cursor
+            word_duration = sentence_duration * word_weight / word_total
+            end = cursor + word_duration
+            frame = base.copy()
+            overlay = Image.new("RGBA", frame.size, (0, 0, 0, 0))
+            panel = ImageDraw.Draw(overlay)
+            panel.rounded_rectangle((7, 220, 173, 311), radius=9, fill=(0, 0, 0, 205), outline=(95, 170, 230, 220), width=1)
+            frame = Image.alpha_composite(frame.convert("RGBA"), overlay)
+            draw = ImageDraw.Draw(frame)
+            # Keep the current word and nearby context visible, even for long sentences.
+            left = max(0, word_index - 7)
+            right = min(len(words), left + 14)
+            left = max(0, right - 14)
+            shown = words[left:right]
+            active_local = word_index - left
+            lines = []
+            current_line = []
+            current_width = 0
+            max_width = 150
+            for wi, token in enumerate(shown):
+                token_width = draw.textbbox((0, 0), token, font=font)[2]
+                needed = token_width + (draw.textbbox((0, 0), " ", font=font)[2] if current_line else 0)
+                if current_line and current_width + needed > max_width:
+                    lines.append(current_line)
+                    current_line = []
+                    current_width = 0
+                    needed = token_width
+                current_line.append((token, wi == active_local))
+                current_width += needed
+            if current_line:
+                lines.append(current_line)
+            visible_lines = lines[-4:]
+            y = 232 + max(0, (4 - len(visible_lines)) * 17)
+            for line in visible_lines:
+                x = 14
+                for token, active in line:
+                    color = (255, 224, 65) if active else (255, 255, 255)
+                    draw.text((x, y), token, font=font, fill=color, stroke_width=1, stroke_fill=(0, 0, 0))
+                    x += draw.textbbox((0, 0), token, font=font)[2] + draw.textbbox((0, 0), " ", font=font)[2]
+                y += 17
+            path = frame_dir / f"frame-{image_index:06d}.png"
+            frame.convert("RGB").save(path, optimize=True)
+            entries.append((path, max(0.05, end - start)))
+            image_index += 1
+            cursor = end
+
+    if not entries:
+        path = frame_dir / "frame-000000.png"
+        base.save(path, optimize=True)
+        entries.append((path, max(0.1, duration)))
+    listing = folder / "caption-frames.txt"
+    lines = []
+    for path, seconds in entries:
+        lines.append(f"file '{path.as_posix()}'\\n")
+        lines.append(f"duration {seconds:.4f}\\n")
+    # concat demuxer needs the last image repeated so its final duration is honored.
+    lines.append(f"file '{entries[-1][0].as_posix()}'\\n")
+    listing.write_text("".join(lines), encoding="utf-8")
+    return listing, image_index
+
 def render(job_id: str, script: str, mode: str, audio_path: Optional[Path], caption_offset: float = 0.0):
     folder = WORK_DIR / job_id
     folder.mkdir(parents=True, exist_ok=True)
@@ -391,26 +477,25 @@ def render(job_id: str, script: str, mode: str, audio_path: Optional[Path], capt
         with LOCK:
             JOBS[job_id]["progress"] = 40
             JOBS[job_id]["message"] = "পটভূমি তৈরি হয়েছে"
-        subtitles = folder / "captions.ass"
         print(f"VIDEO_STAGE job={job_id} stage=subtitles_start", flush=True)
-        make_ass(script, duration, subtitles, caption_offset)
-        print(f"VIDEO_STAGE job={job_id} stage=subtitles_done", flush=True)
+        frame_list, frame_count = make_caption_frames(script, duration, background, folder, caption_offset)
+        print(f"VIDEO_STAGE job={job_id} stage=subtitles_done frames={frame_count} method=pillow_word_highlight", flush=True)
         with LOCK:
             JOBS[job_id]["progress"] = 45
-            JOBS[job_id]["message"] = "সাবটাইটেল তৈরি হয়েছে"
+            JOBS[job_id]["message"] = "শব্দের সঙ্গে মিলিয়ে সাবটাইটেল তৈরি হয়েছে"
         output = folder / "video.mp4"
-        # The ASS/libass subtitle filter exceeded Render Free's 512 MiB memory limit even at low resolution.
-        # Keep the script readable on the generated background and mux speech without a second subtitle filter.
+        # Pre-rendered caption images avoid FFmpeg/libass memory spikes on Render Free.
         vf = "scale=180:320,format=yuv420p"
-        print(f"VIDEO_STAGE job={job_id} stage=ffmpeg_start duration={duration:.2f} size=180x320 fps=5 subtitles=background_text", flush=True)
+        print(f"VIDEO_STAGE job={job_id} stage=ffmpeg_start duration={duration:.2f} size=180x320 fps=5 subtitles=pillow_word_highlight frames={frame_count}", flush=True)
         with LOCK:
             JOBS[job_id]["progress"] = 50
-            JOBS[job_id]["message"] = "ভিডিও রেন্ডার হচ্ছে"
+            JOBS[job_id]["message"] = "সাবটাইটেলসহ ভিডিও রেন্ডার হচ্ছে"
         run([
             "ffmpeg", "-y", "-filter_threads", "1", "-filter_complex_threads", "1",
-            "-loop", "1", "-framerate", "1", "-i", str(background), "-i", str(audio_path),
-            "-vf", vf, "-t", str(duration), "-r", "5", "-c:v", "libx264", "-threads", "1", "-preset", "ultrafast",
-            "-crf", "32", "-c:a", "aac", "-b:a", "48k", "-threads", "1", "-shortest", "-movflags", "+faststart", str(output)
+            "-f", "concat", "-safe", "0", "-i", str(frame_list), "-i", str(audio_path),
+            "-map", "0:v:0", "-map", "1:a:0", "-vf", vf, "-t", str(duration), "-r", "5",
+            "-c:v", "libx264", "-threads", "1", "-preset", "ultrafast", "-crf", "32",
+            "-c:a", "aac", "-b:a", "48k", "-threads", "1", "-shortest", "-movflags", "+faststart", str(output)
         ], 240)
         print(f"VIDEO_STAGE job={job_id} stage=ffmpeg_done", flush=True)
         with LOCK:
