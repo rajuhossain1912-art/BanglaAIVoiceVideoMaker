@@ -385,24 +385,40 @@ def render(job_id: str, script: str, mode: str, audio_path: Optional[Path], capt
         with LOCK:
             JOBS[job_id]["progress"] = 35
             JOBS[job_id]["message"] = "ভিডিওর পটভূমি ও সাবটাইটেল তৈরি হচ্ছে"
+        print(f"VIDEO_STAGE job={job_id} stage=background_start", flush=True)
         background = make_background(script, folder)
+        print(f"VIDEO_STAGE job={job_id} stage=background_done", flush=True)
+        with LOCK:
+            JOBS[job_id]["progress"] = 40
+            JOBS[job_id]["message"] = "পটভূমি তৈরি হয়েছে"
         subtitles = folder / "captions.ass"
+        print(f"VIDEO_STAGE job={job_id} stage=subtitles_start", flush=True)
         make_ass(script, duration, subtitles, caption_offset)
+        print(f"VIDEO_STAGE job={job_id} stage=subtitles_done", flush=True)
+        with LOCK:
+            JOBS[job_id]["progress"] = 45
+            JOBS[job_id]["message"] = "সাবটাইটেল তৈরি হয়েছে"
         output = folder / "video.mp4"
         font_dir = "/usr/share/fonts/truetype/noto"
         subtitle_filter = f"ass={subtitles.as_posix()}:fontsdir={font_dir}"
         # Conservative settings for Render Free: avoid zoompan frame buffering.
         # Render a small vertical video first; higher-quality export can come later.
         vf = f"{subtitle_filter},format=yuv420p"
+        print(f"VIDEO_STAGE job={job_id} stage=ffmpeg_start duration={duration:.2f}", flush=True)
+        with LOCK:
+            JOBS[job_id]["progress"] = 50
+            JOBS[job_id]["message"] = "ভিডিও রেন্ডার হচ্ছে"
         run([
             "ffmpeg", "-y", "-filter_threads", "1", "-filter_complex_threads", "1",
             "-loop", "1", "-framerate", "1", "-i", str(background), "-i", str(audio_path),
             "-vf", vf, "-t", str(duration), "-r", "8", "-c:v", "libx264", "-threads", "1", "-preset", "ultrafast",
             "-crf", "30", "-c:a", "aac", "-b:a", "64k", "-shortest", "-movflags", "+faststart", str(output)
         ], 240)
+        print(f"VIDEO_STAGE job={job_id} stage=ffmpeg_done", flush=True)
         with LOCK:
             JOBS[job_id].update(status="completed", progress=100, message="ভিডিও তৈরি হয়েছে", download_url=f"/api/jobs/{job_id}/download", duration=round(duration, 2), completed_at=time.time())
     except Exception as exc:
+        print(f"VIDEO_STAGE job={job_id} stage=failed error={type(exc).__name__}: {str(exc)[:500]}", flush=True)
         with LOCK:
             JOBS[job_id].update(status="failed", progress=100, message=str(exc)[:1000], completed_at=time.time())
     finally:
