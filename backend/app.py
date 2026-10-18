@@ -481,10 +481,53 @@ def _english_visual_prompt(script: str):
     return ", ".join(dict.fromkeys(selected))[:450]
 
 
+def find_pollinations_image(script: str, folder: Path):
+    """Try Pollinations' free no-account classic image endpoint before quota-limited Spaces."""
+    prompt = (
+        "Create an original photorealistic vertical 9:16 video scene. Subject: "
+        + _english_visual_prompt(script)
+        + ". Natural realistic lighting, clear subject, no text, no captions, no logos, no watermark."
+    )
+    params = urllib.parse.urlencode({
+        "model": "flux",
+        "width": "512",
+        "height": "768",
+        "seed": str(int(uuid.uuid4().hex[:8], 16)),
+        "nologo": "true",
+        "private": "true",
+        "safe": "true",
+    })
+    url = "https://image.pollinations.ai/prompt/" + urllib.parse.quote(prompt, safe="") + "?" + params
+    target = folder / "pollinations-generated.jpg"
+    try:
+        request = urllib.request.Request(
+            url,
+            headers={"User-Agent": "BanglaAIVoiceVideoMaker/0.5 (free educational video maker)"}
+        )
+        with urllib.request.urlopen(request, timeout=18) as response:
+            content = response.read(8 * 1024 * 1024 + 1)
+        if not 100 < len(content) <= 8 * 1024 * 1024:
+            raise ValueError("Pollinations returned an empty or oversized image")
+        target.write_bytes(content)
+        with Image.open(target) as check:
+            if check.width < 80 or check.height < 80 or check.width * check.height > 4_000_000:
+                raise ValueError("Pollinations image dimensions outside safe limits")
+            check.verify()
+        print("IMAGE_PROVIDER selected=Pollinations-Flux", flush=True)
+        return target, "AI-generated with Pollinations | https://pollinations.ai"
+    except Exception as exc:
+        target.unlink(missing_ok=True)
+        print(f"IMAGE_PROVIDER failed provider=Pollinations-Flux error={type(exc).__name__}: {str(exc)[:140]}", flush=True)
+        return None, ""
+
+
 def find_generated_image(script: str, folder: Path):
     """Try free public image-generation Spaces; licensed image search remains a fallback."""
     if not AI_IMAGE_GENERATION_ENABLED:
         return None, ""
+    pollinations_image, pollinations_credit = find_pollinations_image(script, folder)
+    if pollinations_image:
+        return pollinations_image, pollinations_credit
     from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
     prompt = (
         "Create an original, photorealistic vertical 9:16 image for a short educational video. "
