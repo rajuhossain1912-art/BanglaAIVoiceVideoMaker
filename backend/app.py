@@ -21,6 +21,9 @@ VOICE_CLONE_SPACE = os.getenv("VOICE_CLONE_SPACE", "kawshikbuet17/bengali-cosyvo
 VOICE_CLONE_EN_SPACE = os.getenv("VOICE_CLONE_EN_SPACE", "ResembleAI/Chatterbox")
 VOICE_CLONE_ENABLED = os.getenv("VOICE_CLONE_ENABLED", "true").lower() in ("1", "true", "yes")
 AI_IMAGE_GENERATION_ENABLED = os.getenv("AI_IMAGE_GENERATION_ENABLED", "true").lower() in ("1", "true", "yes")
+AI_IMAGE_PROVIDER_ORDER = [x.strip().lower() for x in os.getenv("AI_IMAGE_PROVIDER_ORDER", "flux,zimage").split(",") if x.strip()]
+AI_IMAGE_PROVIDER_TIMEOUT = max(12, min(45, int(os.getenv("AI_IMAGE_PROVIDER_TIMEOUT", "28"))))
+ALLOW_LICENSED_IMAGE_FALLBACK = os.getenv("ALLOW_LICENSED_IMAGE_FALLBACK", "true").lower() in ("1", "true", "yes")
 WORK_DIR = Path(os.getenv("WORK_DIR", "/tmp/bangla-video-jobs"))
 WORK_DIR.mkdir(parents=True, exist_ok=True)
 MAX_SCRIPT_CHARS = int(os.getenv("MAX_SCRIPT_CHARS", "12000"))
@@ -487,11 +490,25 @@ def find_generated_image(script: str, folder: Path):
             ),
         ),
     ]
-    for provider_name, space_id, call in providers:
+    provider_aliases = {
+        "flux": "FLUX.1-schnell",
+        "zimage": "Z-Image-Turbo",
+    }
+    configured_names = [provider_aliases.get(alias, alias) for alias in AI_IMAGE_PROVIDER_ORDER]
+    ordered_providers = []
+    for wanted in configured_names:
+        for provider in providers:
+            if provider[0].lower() == wanted.lower() and provider not in ordered_providers:
+                ordered_providers.append(provider)
+    for provider in providers:
+        if provider not in ordered_providers:
+            ordered_providers.append(provider)
+    for provider_name, space_id, call in ordered_providers:
         executor = ThreadPoolExecutor(max_workers=1)
         try:
+            print(f"IMAGE_PROVIDER trying={provider_name} timeout={AI_IMAGE_PROVIDER_TIMEOUT}s", flush=True)
             future = executor.submit(lambda sid=space_id, fn=call: fn(_compatible_gradio_client()(sid, verbose=False)))
-            result = future.result(timeout=16)
+            result = future.result(timeout=AI_IMAGE_PROVIDER_TIMEOUT)
             image_result = _extract_generated_image(result)
             if isinstance(image_result, str) and Path(image_result).is_file():
                 target = folder / f"generated-{provider_name.lower().replace('.', '').replace('-', '-')}.png"
@@ -525,8 +542,10 @@ def make_background(script: str, folder: Path):
     # Use small Wikimedia Commons thumbnails with a strict pixel limit; fall back to graphics if unavailable.
     # Prefer a scene-matched AI image; use licensed image search only if generation is unavailable.
     source_image, credit = find_generated_image(script, folder)
-    if not source_image:
+    if not source_image and ALLOW_LICENSED_IMAGE_FALLBACK:
         source_image, credit = find_contextual_image(script, folder)
+    elif not source_image:
+        print("IMAGE_PROVIDER all_ai_models_failed licensed_fallback=disabled", flush=True)
     if source_image:
         try:
             with Image.open(source_image) as source:
@@ -908,6 +927,27 @@ def root():
 def health():
     tools = {name: shutil.which(name) is not None for name in ("ffmpeg", "ffprobe", "espeak-ng")}
     return {"status": "ok" if all(tools.values()) else "degraded", "tools": tools, "version": "0.2.0"}
+
+
+@app.get("/api/capabilities")
+def capabilities():
+    return {
+        "language_input": ["বাংলা", "English", "Banglish"],
+        "video_generation": True,
+        "scene_images": {
+            "enabled": AI_IMAGE_GENERATION_ENABLED,
+            "providers": [
+                {"id": "flux", "name": "FLUX.1-schnell", "license": "Apache-2.0 model license; generated output is not guaranteed copyright-free"},
+                {"id": "zimage", "name": "Z-Image-Turbo", "license": "Apache-2.0 model license; generated output is not guaranteed copyright-free"},
+            ],
+            "order": AI_IMAGE_PROVIDER_ORDER,
+            "timeout_seconds": AI_IMAGE_PROVIDER_TIMEOUT,
+            "automatic_fallback": True,
+            "licensed_image_fallback": ALLOW_LICENSED_IMAGE_FALLBACK,
+        },
+        "script_generation": {"available": False, "note": "Current API creates a video from supplied script; a reliable free AI script-generation provider is not integrated yet."},
+        "free_only": True,
+    }
 
 
 @app.post("/api/jobs", status_code=202)
