@@ -471,9 +471,101 @@ def _is_unrelated_map_image(script: str, image_title: str) -> bool:
     return technology_context and not explicit_map_context and any(term in title for term in map_terms)
 
 
-def _english_visual_prompt(script: str):
+
+LANGUAGE_MODEL_VISUAL_PLANNER_ENABLED = os.getenv("LANGUAGE_MODEL_VISUAL_PLANNER_ENABLED", "true").lower() in ("1", "true", "yes")
+LANGUAGE_MODEL_VISUAL_CACHE = {}
+
+
+def _parse_scene_visual_prompts(raw: str, expected_count: int):
+    """Accept only a JSON list with one short English visual prompt per input scene."""
+    text = (raw or "").strip()
+    text = re.sub(r"^```(?:json)?\s*|\s*```$", "", text, flags=re.I)
+    match = re.search(r"\[.*?\]", text, flags=re.S)
+    try:
+        parsed = json.loads(match.group(0)) if match else None
+        values = [item.get("visual_prompt", "") if isinstance(item, dict) else item for item in parsed] if isinstance(parsed, list) else []
+    except Exception:
+        values = []
+    if len(values) != expected_count:
+        return None
+    cleaned = []
+    for value in values:
+        value = re.sub(r"\s+", " ", str(value or "")).strip().strip('"')
+        if not 25 <= len(value) <= 360 or re.search(r"[\x00-\x1f]", value):
+            return None
+        cleaned.append(value)
+    return cleaned
+
+
+def _plan_scene_visual_prompts(scenes):
+    """Use best-effort free language-model endpoints to ground image prompts in each scene."""
+    if not LANGUAGE_MODEL_VISUAL_PLANNER_ENABLED or not scenes:
+        return None
+    cache_key = json.dumps([re.sub(r"\s+", " ", x).strip()[:300] for x in scenes], ensure_ascii=False)
+    if cache_key in LANGUAGE_MODEL_VISUAL_CACHE:
+        return LANGUAGE_MODEL_VISUAL_CACHE[cache_key]
+    scene_payload = [{"scene": i + 1, "text": re.sub(r"\s+", " ", text).strip()[:300]} for i, text in enumerate(scenes)]
+    prompt = (
+        "You are a visual storyboard planner for a Bangladeshi educational video. "
+        "For each input scene, write one specific, photorealistic English image prompt matching only that scene. "
+        "Preserve the actual subject; do not invent unrelated subjects. Prefer Bangladesh-local details when relevant. "
+        "For smartphone, TalkBack, accessibility or screen-reader scenes show a real person using a phone, never a world map or globe unless geography is explicitly discussed. "
+        "Do not include text, subtitles, letters, logos, or watermarks. "
+        "Return ONLY valid JSON as an array of objects with keys scene and visual_prompt, in the same order, exactly one object per input. "
+        "Keep each visual_prompt between 25 and 220 characters. Input scenes: "
+        + json.dumps(scene_payload, ensure_ascii=False)
+    )
+    # Hugging Face inference is attempted only with an explicitly configured token.
+    hf_token = os.getenv("HF_TOKEN", "").strip()
+    if hf_token:
+        try:
+            body = json.dumps({
+                "model": os.getenv("LANGUAGE_MODEL_NAME", "Qwen/Qwen2.5-7B-Instruct"),
+                "messages": [
+                    {"role": "system", "content": "Return valid JSON only. Plan scene-matched visuals, not speech."},
+                    {"role": "user", "content": prompt},
+                ],
+                "temperature": 0.15, "max_tokens": 900, "stream": False,
+            }).encode("utf-8")
+            request = urllib.request.Request(
+                "https://router.huggingface.co/v1/chat/completions",
+                data=body,
+                headers={"Authorization": "Bearer " + hf_token, "Content-Type": "application/json", "User-Agent": "BanglaAIVoiceVideoMaker/0.6"},
+                method="POST",
+            )
+            with urllib.request.urlopen(request, timeout=8) as response:
+                data = json.loads(response.read(250_000).decode("utf-8"))
+            raw = data["choices"][0]["message"]["content"]
+            prompts = _parse_scene_visual_prompts(raw, len(scenes))
+            if prompts:
+                LANGUAGE_MODEL_VISUAL_CACHE[cache_key] = prompts
+                print("LANGUAGE_MODEL selected=HuggingFace-Inference-Providers model=" + os.getenv("LANGUAGE_MODEL_NAME", "Qwen/Qwen2.5-7B-Instruct"), flush=True)
+                return prompts
+        except Exception as exc:
+            print(f"LANGUAGE_MODEL fallback=keyword_planner provider=huggingface error={type(exc).__name__}: {str(exc)[:120]}", flush=True)
+    # Legacy anonymous Pollinations text endpoint is attempted as a no-key free option.
+    # If unavailable or rate-limited, the local planner safely takes over.
+    try:
+        url = "https://text.pollinations.ai/" + urllib.parse.quote(prompt[:6500], safe="")
+        request = urllib.request.Request(url, headers={"User-Agent": "BanglaAIVoiceVideoMaker/0.6"})
+        with urllib.request.urlopen(request, timeout=8) as response:
+            raw = response.read(100_000).decode("utf-8", "replace")
+        prompts = _parse_scene_visual_prompts(raw, len(scenes))
+        if prompts:
+            LANGUAGE_MODEL_VISUAL_CACHE[cache_key] = prompts
+            print("LANGUAGE_MODEL selected=Pollinations-text-free-endpoint", flush=True)
+            return prompts
+        print("LANGUAGE_MODEL fallback=keyword_planner reason=invalid_model_response", flush=True)
+    except Exception as exc:
+        print(f"LANGUAGE_MODEL fallback=keyword_planner provider=pollinations error={type(exc).__name__}: {str(exc)[:120]}", flush=True)
+    return None
+
+
+def _english_visual_prompt(script: str, model_visual_prompt: Optional[str] = None):
     """Create a focused prompt and explicitly suppress common off-topic map/globe imagery."""
     concepts = _matched_visual_concepts(script, limit=2)
+    if model_visual_prompt:
+        concepts = [re.sub(r"\s+", " ", model_visual_prompt).strip()[:360]]
     if not concepts:
         english_words = re.findall(r"[A-Za-z]{3,}", (script or "")[:500])
         subject = "a realistic educational scene in Bangladesh"
@@ -509,11 +601,11 @@ def _english_visual_prompt(script: str):
     )[:1100]
 
 
-def find_pollinations_image(script: str, folder: Path):
+def find_pollinations_image(script: str, folder: Path, model_visual_prompt: Optional[str] = None):
     """Try Pollinations' free no-account classic image endpoint before quota-limited Spaces."""
     prompt = (
         "Create an original photorealistic vertical 9:16 video scene. Subject: "
-        + _english_visual_prompt(script)
+        + _english_visual_prompt(script, model_visual_prompt)
         + ". Natural realistic lighting, clear subject, no text, no captions, no logos, no watermark."
     )
     params = urllib.parse.urlencode({
@@ -549,17 +641,17 @@ def find_pollinations_image(script: str, folder: Path):
         return None, ""
 
 
-def find_generated_image(script: str, folder: Path):
+def find_generated_image(script: str, folder: Path, model_visual_prompt: Optional[str] = None):
     """Try free public image-generation Spaces; licensed image search remains a fallback."""
     if not AI_IMAGE_GENERATION_ENABLED:
         return None, ""
-    pollinations_image, pollinations_credit = find_pollinations_image(script, folder)
+    pollinations_image, pollinations_credit = find_pollinations_image(script, folder, model_visual_prompt)
     if pollinations_image:
         return pollinations_image, pollinations_credit
     from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
     prompt = (
         "Create an original, photorealistic vertical 9:16 image for a short educational video. "
-        "Scene: " + _english_visual_prompt(script) + ". "
+        "Scene: " + _english_visual_prompt(script, model_visual_prompt) + ". "
         "Natural realistic lighting, clear subject, visually rich, suitable as a video background. "
         "No text, no captions, no letters, no logos, no watermark, no recognizable copyrighted characters."
     )
@@ -627,12 +719,12 @@ def find_generated_image(script: str, folder: Path):
             executor.shutdown(wait=False, cancel_futures=True)
     return None, ""
 
-def make_background(script: str, folder: Path):
+def make_background(script: str, folder: Path, model_visual_prompt: Optional[str] = None):
     # Small canvas is intentional: keep peak memory below Render Free's 512 MiB limit.
     width, height = 360, 640
     # Use small Wikimedia Commons thumbnails with a strict pixel limit; fall back to graphics if unavailable.
     # Prefer a scene-matched AI image; use licensed image search only if generation is unavailable.
-    source_image, credit = find_generated_image(script, folder)
+    source_image, credit = find_generated_image(script, folder, model_visual_prompt)
     if not source_image and ALLOW_LICENSED_IMAGE_FALLBACK:
         source_image, credit = find_contextual_image(script, folder)
     elif not source_image:
@@ -750,12 +842,14 @@ def _split_script_into_scenes(script: str, max_scenes: int = 12, target_words: i
 def make_scene_backgrounds(script: str, folder: Path):
     """Create a bounded set of semantically focused images for reuse across timed scene changes."""
     scenes = _split_script_into_scenes(script, max_scenes=12, target_words=32)
+    # One language-model request plans all scenes, avoiding a request for every image.
+    visual_prompts = _plan_scene_visual_prompts(scenes)
     backgrounds = []
     for index, scene_text in enumerate(scenes):
         scene_dir = folder / f"scene-{index:02d}"
         scene_dir.mkdir(parents=True, exist_ok=True)
         print(f"IMAGE_SCENE index={index + 1}/{len(scenes)} words={len(scene_text.split())}", flush=True)
-        backgrounds.append(make_background(scene_text, scene_dir))
+        backgrounds.append(make_background(scene_text, scene_dir, visual_prompts[index] if visual_prompts else None))
     return backgrounds, scenes
 
 def make_srt(script: str, duration: float, path: Path):
@@ -1125,6 +1219,13 @@ def api_version():
         "service_id": os.getenv("RENDER_SERVICE_ID", "unknown"),
         "deploy_id": os.getenv("RENDER_DEPLOY_ID", "unknown"),
         "checked_at_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "language_model_visual_planner": {
+            "enabled": LANGUAGE_MODEL_VISUAL_PLANNER_ENABLED,
+            "providers": ["Hugging Face Inference Providers when HF_TOKEN is configured", "best-effort free Pollinations text endpoint", "local keyword fallback"],
+            "default_model": os.getenv("LANGUAGE_MODEL_NAME", "Qwen/Qwen2.5-7B-Instruct"),
+            "requires_paid_service": False,
+            "fallback_enabled": True,
+        },
         "free_only": True,
     }
 
@@ -1148,7 +1249,13 @@ def capabilities():
             "automatic_fallback": True,
             "licensed_image_fallback": ALLOW_LICENSED_IMAGE_FALLBACK,
         },
-        "script_generation": {"available": False, "note": "Current API creates a video from supplied script; a reliable free AI script-generation provider is not integrated yet."},
+        "language_model_visual_planner": {
+            "enabled": LANGUAGE_MODEL_VISUAL_PLANNER_ENABLED,
+            "default_model": os.getenv("LANGUAGE_MODEL_NAME", "Qwen/Qwen2.5-7B-Instruct"),
+            "providers": ["Hugging Face Inference Providers (only if HF_TOKEN is configured)", "best-effort free Pollinations text endpoint", "local keyword fallback"],
+            "note": "The language model improves per-scene image prompts; unavailable free endpoints fall back to local planning.",
+        },
+        "script_generation": {"available": False, "note": "Video creation uses the user's supplied script; the language model plans visuals and does not invent narration."},
         "free_only": True,
     }
 
