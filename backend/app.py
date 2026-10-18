@@ -1,4 +1,5 @@
 import json
+import math
 import os
 import re
 import shutil
@@ -908,7 +909,7 @@ def make_caption_frames(script: str, duration: float, background: Path, folder: 
     # each timed text segment rather than making dozens of expensive remote image requests.
     interval = scene_interval if scene_interval in (3, 5, 10, 15, 20) else 5
     slot_count = max(1, int(math.ceil(duration / interval)))
-    all_words = re.findall(r"\\S+", script or "")
+    all_words = re.findall(r"\S+", script or "")
     words_per_slot = max(1, int(math.ceil(len(all_words) / slot_count)))
     slot_texts = [" ".join(all_words[i:i + words_per_slot]) for i in range(0, len(all_words), words_per_slot)]
     scene_texts = list(visual_scene_texts or sentences)
