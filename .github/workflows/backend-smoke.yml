@@ -44,6 +44,8 @@ jobs:
           grep -q "অনুমতি" clone-consent.json
           bad_offset=$(curl --silent --output offset-error.json --write-out "%{http_code}" -X POST http://127.0.0.1:10000/api/jobs -F "script=পরীক্ষা" -F "caption_offset=9")
           test "$bad_offset" = "400"
+          bad_interval=$(curl --silent --output interval-error.json --write-out "%{http_code}" -X POST http://127.0.0.1:10000/api/jobs -F "script=পরীক্ষা" -F "scene_interval=7")
+          test "$bad_interval" = "400"
       - name: Generate Bangla and English videos end to end
         run: |
           set -e
