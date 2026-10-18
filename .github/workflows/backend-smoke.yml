@@ -22,7 +22,7 @@ jobs:
       - name: Build backend container
         run: docker build -t bangla-video-api-test .
       - name: Start backend
-        run: docker run -d --name bangla-video-api -e AI_IMAGE_GENERATION_ENABLED=false -p 10000:10000 bangla-video-api-test
+        run: docker run -d --name bangla-video-api -e AI_IMAGE_GENERATION_ENABLED=false -e LANGUAGE_MODEL_VISUAL_PLANNER_ENABLED=false -p 10000:10000 bangla-video-api-test
       - name: Wait for health endpoint
         run: |
           for i in $(seq 1 30); do
@@ -34,7 +34,7 @@ jobs:
       - name: Verify scene-aware visual planning
         run: |
           set -e
-          docker exec bangla-video-api python -c 'from app import _english_visual_prompt, _is_unrelated_map_image, _split_script_into_scenes; p=_english_visual_prompt("একজন দৃষ্টিপ্রতিবন্ধী মানুষ সাদা ছড়ি ব্যবহার করছেন"); assert "white cane" in p.lower(), p; assert "hospital" not in p.lower(), p; q=_english_visual_prompt("শিক্ষার্থীরা স্কুলে শিক্ষা গ্রহণ করছে"); assert "classroom" in q.lower(), q; t=_english_visual_prompt("স্মার্টফোনে স্ক্রিন রিডার ও অ্যাক্সেসিবিলিটি প্রযুক্তি ব্যবহার"); assert "world map" in t.lower() and "do not show" in t.lower(), t; assert _is_unrelated_map_image("স্মার্টফোনে স্ক্রিন রিডার ব্যবহার", "World map illustration"); assert not _is_unrelated_map_image("বিশ্ব মানচিত্র ও ভূগোল শেখা", "World map illustration"); scenes=_split_script_into_scenes(("প্রথম বিষয়।\\n\\nদ্বিতীয় বিষয়। " * 100)); assert len(scenes) <= 12, len(scenes); assert len(scenes) > 1, len(scenes); print("Scene-aware visual planning and map-filter checks passed")'
+          docker exec bangla-video-api python -c 'from app import _english_visual_prompt, _is_unrelated_map_image, _split_script_into_scenes, _parse_scene_visual_prompts; p=_english_visual_prompt("একজন দৃষ্টিপ্রতিবন্ধী মানুষ সাদা ছড়ি ব্যবহার করছেন"); assert "white cane" in p.lower(), p; assert "hospital" not in p.lower(), p; q=_english_visual_prompt("শিক্ষার্থীরা স্কুলে শিক্ষা গ্রহণ করছে"); assert "classroom" in q.lower(), q; t=_english_visual_prompt("স্মার্টফোনে স্ক্রিন রিডার ও অ্যাক্সেসিবিলিটি প্রযুক্তি ব্যবহার"); assert "world map" in t.lower() and "do not show" in t.lower(), t; assert _is_unrelated_map_image("স্মার্টফোনে স্ক্রিন রিডার ব্যবহার", "World map illustration"); assert not _is_unrelated_map_image("বিশ্ব মানচিত্র ও ভূগোল শেখা", "World map illustration"); scenes=_split_script_into_scenes(("প্রথম বিষয়।\\n\\nদ্বিতীয় বিষয়। " * 100)); assert len(scenes) <= 12, len(scenes); assert len(scenes) > 1, len(scenes); parsed=_parse_scene_visual_prompts('[{"scene":1,"visual_prompt":"A realistic Bangladeshi student reading Braille in a classroom"}]',1); assert parsed and "Braille" in parsed[0], parsed; assert _parse_scene_visual_prompts("not json",1) is None; print("Scene-aware visual planning, model-response parsing and map-filter checks passed")'
       - name: Verify voice cloning requires explicit consent
         run: |
           set -e
