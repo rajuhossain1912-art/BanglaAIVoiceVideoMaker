@@ -243,22 +243,43 @@ def wrap_text(draw, text, font, max_width):
 
 
 def _image_keywords(script: str):
+    """Build useful English search terms from Bangla scripts, then retain useful original words."""
+    text = re.sub(r"\\s+", " ", script).strip().lower()
+    # English search terms improve Openverse/Wikimedia results for Bangla narration.
+    concept_map = [
+        (("সকাল", "ভোর", "সূর্যোদয়", "সূর্যোদয়"), "sunrise morning landscape"),
+        (("গাছপালা", "গাছ", "সবুজ", "বন", "প্রকৃতি"), "green trees forest nature"),
+        (("আকাশ", "মেঘ", "নীল আকাশ"), "blue sky clouds"),
+        (("পাখি", "পাখির", "কাক", "চড়ুই", "চড়ুই"), "birds flying in trees"),
+        (("নদী", "পুকুর", "পানি", "জল"), "river lake water landscape"),
+        (("গ্রাম", "কৃষক", "ধান", "মাঠ"), "Bangladesh rural village green field"),
+        (("শহর", "রাস্তা", "গাড়ি", "গাড়ি", "বাস"), "city street traffic"),
+        (("শিশু", "বাচ্চা", "ছেলে", "মেয়ে", "মেয়ে"), "children smiling"),
+        (("মানুষ", "মানবতা", "সহযোগিতা"), "people helping each other"),
+        (("পরিশ্রম", "চেষ্টা", "কাজ", "সাফল্য"), "person working hard success"),
+        (("স্বপ্ন", "আশা", "সাহস", "নতুন দিন"), "inspiring sunrise hopeful landscape"),
+        (("বৃষ্টি", "বর্ষা"), "rainy weather landscape"),
+        (("ফুল", "ফুলের"), "colorful flowers garden"),
+        (("সমুদ্র", "সাগর", "সমুদ্রসৈকত"), "ocean beach waves"),
+    ]
+    translated = []
+    for terms, english in concept_map:
+        if any(term in text for term in terms):
+            for word in english.split():
+                if word not in translated:
+                    translated.append(word)
     stopwords = set("""
     the and for with this that from your you are was were have has had will would can could
     about into over under then than when where what why how not but or as is am be
     আমি তুমি তিনি তারা আমরা আপনার আমাদের তাদের এটা এটি এই সেই যে কী কেন কিভাবে এবং অথবা
     থেকে জন্য নিয়ে করা হবে হয় আছে ছিল একটি একজন আজকে যেন কিন্তু
     """.split())
-    tokens = re.findall(r"[\u0980-\u09FF]{3,}|[A-Za-z]{3,}", script[:900])
-    keywords, seen = [], set()
+    tokens = re.findall(r"[\\u0980-\\u09FF]{3,}|[A-Za-z]{3,}", script[:900])
     for token in tokens:
         key = token.lower()
-        if key not in stopwords and key not in seen:
-            seen.add(key)
-            keywords.append(token)
-        if len(keywords) >= 5:
-            break
-    return keywords
+        if key not in stopwords and key not in translated:
+            translated.append(key)
+    return translated[:8]
 
 
 def _download_checked_image(image_url: str, folder: Path, filename: str, credit: str):
