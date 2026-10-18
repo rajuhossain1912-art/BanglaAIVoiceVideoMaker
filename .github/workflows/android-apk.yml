@@ -1,4 +1,4 @@
-name: Build Android APK
+name: Build and Release Android APK
 on:
   push:
     branches: [main]
@@ -10,15 +10,17 @@ on:
       - '.github/workflows/android-apk.yml'
   workflow_dispatch:
 permissions:
-  contents: read
+  contents: write
 concurrency:
   group: android-apk-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 jobs:
   build:
     runs-on: ubuntu-latest
     env:
       API_BASE_URL: https://bangla-ai-voice-video-maker-api.onrender.com
+      APP_VERSION_CODE: ${{ github.run_number }}
+      APP_VERSION_NAME: 0.3.${{ github.run_number }}
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
@@ -33,9 +35,21 @@ jobs:
           gradle-version: "8.9"
       - name: Build debug APK
         run: gradle --no-daemon assembleDebug -PAPI_BASE_URL="$API_BASE_URL"
-      - name: Upload debug APK
+      - name: Prepare release APK
+        run: cp app/build/outputs/apk/debug/app-debug.apk BanglaAIVoiceVideoMaker-v${{ env.APP_VERSION_NAME }}.apk
+      - name: Upload debug APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: BanglaAIVoiceVideoMaker-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: BanglaAIVoiceVideoMaker-v${{ env.APP_VERSION_NAME }}-apk
+          path: BanglaAIVoiceVideoMaker-v${{ env.APP_VERSION_NAME }}.apk
           if-no-files-found: error
+          retention-days: 90
+      - name: Publish GitHub Release with latest APK
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ env.APP_VERSION_NAME }}
+          name: Bangla AI Voice Video Maker v${{ env.APP_VERSION_NAME }}
+          target_commitish: ${{ github.sha }}
+          generate_release_notes: true
+          make_latest: true
+          files: BanglaAIVoiceVideoMaker-v${{ env.APP_VERSION_NAME }}.apk
