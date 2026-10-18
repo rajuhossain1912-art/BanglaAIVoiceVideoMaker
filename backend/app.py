@@ -747,15 +747,15 @@ def _split_script_into_scenes(script: str, max_scenes: int = 12, target_words: i
 
 
 def make_scene_backgrounds(script: str, folder: Path):
-    """Create up to twelve topic-sized backgrounds, with prompts focused on each scene."""
-    scenes = _split_script_into_scenes(script)
+    """Create a bounded set of semantically focused images for reuse across timed scene changes."""
+    scenes = _split_script_into_scenes(script, max_scenes=12, target_words=32)
     backgrounds = []
     for index, scene_text in enumerate(scenes):
         scene_dir = folder / f"scene-{index:02d}"
         scene_dir.mkdir(parents=True, exist_ok=True)
         print(f"IMAGE_SCENE index={index + 1}/{len(scenes)} words={len(scene_text.split())}", flush=True)
         backgrounds.append(make_background(scene_text, scene_dir))
-    return backgrounds
+    return backgrounds, scenes
 
 def make_srt(script: str, duration: float, path: Path):
     # Estimated sentence timing is a fallback, not forced alignment.
@@ -889,7 +889,7 @@ def sentence_timing_spans(audio_path: Optional[Path], sentences, duration: float
     return list(zip(expected[:-1], expected[1:]))
 
 
-def make_caption_frames(script: str, duration: float, background: Path, folder: Path, caption_offset: float = 0.0, audio_path: Optional[Path] = None, job_id: Optional[str] = None):
+def make_caption_frames(script: str, duration: float, background: Path, folder: Path, caption_offset: float = 0.0, audio_path: Optional[Path] = None, job_id: Optional[str] = None, scene_interval: int = 5, visual_scene_texts=None):
     """Render small Pillow caption cards with per-word highlighting, avoiding FFmpeg's memory-heavy libass filter."""
     frame_dir = folder / "caption-frames"
     frame_dir.mkdir(parents=True, exist_ok=True)
@@ -903,6 +903,28 @@ def make_caption_frames(script: str, duration: float, background: Path, folder: 
     sentence_words = [re.findall(r"\S+", sentence) for sentence in sentences]
     total_words = max(1, sum(len(words) for words in sentence_words))
     sentence_spans = sentence_timing_spans(audio_path, sentences, duration)
+    # The chosen interval controls visual changes. To stay within Render Free memory/time limits,
+    # generate at most twelve unique semantic images, then choose the closest matching image for
+    # each timed text segment rather than making dozens of expensive remote image requests.
+    interval = scene_interval if scene_interval in (3, 5, 10, 15, 20) else 5
+    slot_count = max(1, int(math.ceil(duration / interval)))
+    all_words = re.findall(r"\\S+", script or "")
+    words_per_slot = max(1, int(math.ceil(len(all_words) / slot_count)))
+    slot_texts = [" ".join(all_words[i:i + words_per_slot]) for i in range(0, len(all_words), words_per_slot)]
+    scene_texts = list(visual_scene_texts or sentences)
+    scene_concepts = [_matched_visual_concepts(x, limit=3) for x in scene_texts]
+    slot_backgrounds = []
+    for slot_index in range(slot_count):
+        slot_text = slot_texts[min(slot_index, len(slot_texts) - 1)] if slot_texts else script
+        concepts = _matched_visual_concepts(slot_text, limit=3)
+        scores = [sum(1 for concept in concepts if concept in candidates) for candidates in scene_concepts]
+        if scores and max(scores) > 0:
+            best = max(scores)
+            choices = [i for i, score in enumerate(scores) if score == best]
+            slot_backgrounds.append(choices[slot_index % len(choices)])
+        else:
+            slot_backgrounds.append(slot_index % max(1, len(bases)))
+    print(f"VISUAL_TIMELINE interval_seconds={interval} slots={slot_count} unique_images={len(bases)}", flush=True)
     safe_offset = max(-max(0.0, duration - 0.1), min(max(0.0, duration - 0.1), caption_offset))
     font = load_font(13, True)
     entries = []
@@ -916,7 +938,6 @@ def make_caption_frames(script: str, duration: float, background: Path, folder: 
     for sentence_index, (sentence, words, span) in enumerate(zip(sentences, sentence_words, sentence_spans)):
         if not words:
             continue
-        base = bases[min(sentence_index, len(bases) - 1)]
         raw_start, raw_end = span
         sentence_start = max(0.0, raw_start + safe_offset)
         sentence_end = max(sentence_start + 0.05, min(duration, raw_end + safe_offset))
@@ -928,6 +949,8 @@ def make_caption_frames(script: str, duration: float, background: Path, folder: 
             start = cursor
             word_duration = sentence_duration * word_weight / word_total
             end = sentence_end if word_index == len(words) - 1 else min(sentence_end, cursor + word_duration)
+            slot_index = min(slot_count - 1, max(0, int(start / interval)))
+            base = bases[slot_backgrounds[slot_index] % len(bases)]
             # Smooth Ken Burns motion: zoom in toward the sentence midpoint, then ease out.
             # Progress is sentence-local so movement remains visible even for short captions.
             phase = (word_index + 0.5) / max(1, len(words))
@@ -1005,7 +1028,7 @@ def make_caption_frames(script: str, duration: float, background: Path, folder: 
     listing.write_text("".join(lines), encoding="utf-8")
     return listing, image_index
 
-def render(job_id: str, script: str, mode: str, audio_path: Optional[Path], caption_offset: float = 0.0):
+def render(job_id: str, script: str, mode: str, audio_path: Optional[Path], caption_offset: float = 0.0, scene_interval: int = 5):
     folder = WORK_DIR / job_id
     folder.mkdir(parents=True, exist_ok=True)
     uploaded_audio_path = audio_path
@@ -1032,13 +1055,13 @@ def render(job_id: str, script: str, mode: str, audio_path: Optional[Path], capt
             JOBS[job_id]["progress"] = 35
             JOBS[job_id]["message"] = "ভিডিওর পটভূমি ও সাবটাইটেল তৈরি হচ্ছে"
         print(f"VIDEO_STAGE job={job_id} stage=background_start", flush=True)
-        backgrounds = make_scene_backgrounds(script, folder)
-        print(f"VIDEO_STAGE job={job_id} stage=background_done scenes={len(backgrounds)} providers=openverse,wikimedia,graphic_fallback", flush=True)
+        backgrounds, visual_scene_texts = make_scene_backgrounds(script, folder)
+        print(f"VIDEO_STAGE job={job_id} stage=background_done scenes={len(backgrounds)} interval={scene_interval}s providers=openverse,wikimedia,graphic_fallback", flush=True)
         with LOCK:
             JOBS[job_id]["progress"] = 40
             JOBS[job_id]["message"] = "বাক্যভিত্তিক দৃশ্য ও পটভূমি তৈরি হয়েছে"
         print(f"VIDEO_STAGE job={job_id} stage=subtitles_start", flush=True)
-        frame_list, frame_count = make_caption_frames(script, duration, backgrounds, folder, caption_offset, audio_path, job_id)
+        frame_list, frame_count = make_caption_frames(script, duration, backgrounds, folder, caption_offset, audio_path, job_id, scene_interval, visual_scene_texts)
         print(f"VIDEO_STAGE job={job_id} stage=subtitles_done frames={frame_count} method=pillow_word_highlight", flush=True)
         with LOCK:
             JOBS[job_id]["progress"] = 45
@@ -1110,6 +1133,8 @@ def capabilities():
     return {
         "language_input": ["বাংলা", "English", "Banglish"],
         "video_generation": True,
+        "scene_interval_seconds": [3, 5, 10, 15, 20],
+        "scene_interval_default_seconds": 5,
         "scene_images": {
             "enabled": AI_IMAGE_GENERATION_ENABLED,
             "providers": [
@@ -1128,7 +1153,7 @@ def capabilities():
 
 
 @app.post("/api/jobs", status_code=202)
-async def create_job(script: str = Form(...), mode: str = Form("auto"), audio: Optional[UploadFile] = File(None), voice_clone_consent: bool = Form(False), caption_offset: float = Form(0.0)):
+async def create_job(script: str = Form(...), mode: str = Form("auto"), audio: Optional[UploadFile] = File(None), voice_clone_consent: bool = Form(False), caption_offset: float = Form(0.0), scene_interval: int = Form(5)):
     script = script.strip()
     if not script:
         raise HTTPException(400, "আগে বাংলা বা ইংরেজি লেখা যোগ করুন।")
@@ -1138,6 +1163,8 @@ async def create_job(script: str = Form(...), mode: str = Form("auto"), audio: O
         raise HTTPException(400, "ভিডিও তৈরির পদ্ধতি সঠিক নয়।")
     if not -1.5 <= caption_offset <= 1.5:
         raise HTTPException(400, "সাবটাইটেলের সময় -১.৫ থেকে +১.৫ সেকেন্ডের মধ্যে দিন।")
+    if scene_interval not in (3, 5, 10, 15, 20):
+        raise HTTPException(400, "ছবি পরিবর্তনের বিরতি ৩, ৫, ১০, ১৫ অথবা ২০ সেকেন্ড হতে হবে।")
     if mode in ("audio", "clone") and audio is None:
         raise HTTPException(400, "অডিও ফাইল নির্বাচন করুন।")
     if mode == "clone":
@@ -1166,7 +1193,7 @@ async def create_job(script: str = Form(...), mode: str = Form("auto"), audio: O
                 target.write(chunk)
     with LOCK:
         JOBS[job_id] = {"id": job_id, "status": "queued", "progress": 0, "message": "অনুরোধ গ্রহণ করা হয়েছে", "created_at": time.time()}
-    threading.Thread(target=render, args=(job_id, script, mode, audio_path, caption_offset), daemon=True).start()
+    threading.Thread(target=render, args=(job_id, script, mode, audio_path, caption_offset, scene_interval), daemon=True).start()
     return {"id": job_id, "status": "queued", "status_url": f"/api/jobs/{job_id}", "download_url": f"/api/jobs/{job_id}/download"}
 
 
