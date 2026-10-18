@@ -245,163 +245,62 @@ def wrap_text(draw, text, font, max_width):
     return lines
 
 
+VISUAL_CONCEPTS = [
+    (("সাদাছড়ি", "সাদাছড়ি", "দৃষ্টিপ্রতিবন্ধী", "প্রতিবন্ধী", "অন্ধ", "দৃষ্টিহীন"), "a visually impaired person using a white cane in an accessible Bangladeshi setting"),
+    (("কর্মসংস্থান", "চাকরি", "নিয়োগ", "নিয়োগ", "কর্মী", "কারখানা", "অফিস"), "Bangladeshi people working in a workplace or factory"),
+    (("ব্রেইল", "শিক্ষার্থী", "শিক্ষা", "স্কুল", "কলেজ", "বিশ্ববিদ্যালয়", "বিশ্ববিদ্যালয়", "শিক্ষক", "পড়াশোনা", "পড়াশোনা"), "Bangladeshi students learning in an accessible classroom"),
+    (("হাসপাতাল", "চিকিৎসা", "ডাক্তার", "রোগী", "ওষুধ", "স্বাস্থ্য", "ক্লিনিক"), "a doctor consulting a patient in a clean clinic"),
+    (("মোবাইল", "ফোন", "ইন্টারনেট", "প্রযুক্তি", "কম্পিউটার", "অ্যাপ", "স্ক্রিন রিডার"), "a person using a smartphone and accessible digital technology"),
+    (("পরিবার", "মা", "বাবা", "সন্তান", "সংসার", "বিবাহ", "স্বামী", "স্ত্রী"), "a Bangladeshi family spending time together at home"),
+    (("মসজিদ", "নামাজ", "কোরআন", "কুরআন", "রমজান", "ইসলাম"), "a peaceful mosque courtyard in Bangladesh"),
+    (("দারিদ্র্য", "গরিব", "দাম", "দ্রব্যমূল্য", "বাজার", "খরচ", "অর্থ"), "a Bangladeshi family budgeting household expenses"),
+    (("বাংলাদেশ", "সরকার", "নীতি", "আইন", "নাগরিক", "অধিকার"), "Bangladeshi community and civic life"),
+    (("বন্যা", "ঘূর্ণিঝড়", "ঘূর্ণিঝড়", "দুর্যোগ", "জলোচ্ছ্বাস"), "a Bangladeshi village responding to monsoon flooding"),
+    (("রাস্তা", "গাড়ি", "গাড়ি", "বাস", "পরিবহন", "চালক", "যাত্রী", "পথচারী"), "a realistic Bangladeshi street with safe public transport"),
+    (("শিশু", "বাচ্চা", "ছেলে", "মেয়ে", "মেয়ে", "খেলাধুলা"), "children learning or playing safely outdoors"),
+    (("পরিশ্রম", "চেষ্টা", "সাফল্য", "কাজ", "দক্ষতা"), "a person working diligently toward a goal"),
+    (("স্বপ্ন", "আশা", "সাহস", "ভবিষ্যৎ", "ভবিষ্যত"), "an inspiring hopeful sunrise over Bangladesh"),
+    (("সকাল", "ভোর", "সূর্যোদয়", "সূর্যোদয়"), "sunrise over a peaceful green landscape"),
+    (("গাছপালা", "গাছ", "সবুজ", "বন", "প্রকৃতি"), "lush green trees and natural scenery"),
+    (("আকাশ", "মেঘ", "নীল আকাশ"), "blue sky with soft white clouds"),
+    (("পাখি", "পাখির", "কাক", "চড়ুই", "চড়ুই"), "birds flying among tree branches"),
+    (("নদী", "পুকুর", "পানি", "জল"), "a peaceful river and reflective water"),
+    (("গ্রাম", "কৃষক", "ধান", "মাঠ"), "a rural Bangladeshi village with green fields"),
+    (("বৃষ্টি", "বর্ষা"), "a realistic rainy landscape"),
+    (("ফুল", "ফুলের"), "a colorful flower garden"),
+    (("সমুদ্র", "সাগর", "সমুদ্রসৈকত"), "ocean waves on a beach"),
+]
+
+def _matched_visual_concepts(script: str, limit: int = 2):
+    """Choose only the strongest topics present in this scene, avoiding unrelated mixed prompts."""
+    text = re.sub(r"\\s+", " ", script or "").strip().lower()
+    ranked = []
+    for order, (terms, prompt) in enumerate(VISUAL_CONCEPTS):
+        hits = sum(text.count(term.lower()) for term in terms if term.lower() in text)
+        if hits:
+            # Specific terms win ties over broad concepts; original order is a stable final tie-breaker.
+            specificity = max(len(term) for term in terms if term.lower() in text)
+            ranked.append((hits * 10 + min(specificity, 20) / 100 - order / 10000, order, prompt))
+    ranked.sort(reverse=True)
+    selected = []
+    for _, _, prompt in ranked:
+        if prompt not in selected:
+            selected.append(prompt)
+        if len(selected) >= limit:
+            break
+    return selected
+
 def _image_keywords(script: str):
-    """Build useful English search terms from Bangla scripts, then retain useful original words."""
-    text = re.sub(r"\s+", " ", script).strip().lower()
-    # English search terms improve Openverse/Wikimedia results for Bangla narration.
-    concept_map = [
-        (("সকাল", "ভোর", "সূর্যোদয়", "সূর্যোদয়"), "sunrise morning landscape"),
-        (("গাছপালা", "গাছ", "সবুজ", "বন", "প্রকৃতি"), "green trees forest nature"),
-        (("আকাশ", "মেঘ", "নীল আকাশ"), "blue sky clouds"),
-        (("পাখি", "পাখির", "কাক", "চড়ুই", "চড়ুই"), "birds flying in trees"),
-        (("নদী", "পুকুর", "পানি", "জল"), "river lake water landscape"),
-        (("গ্রাম", "কৃষক", "ধান", "মাঠ"), "Bangladesh rural village green field"),
-        (("শহর", "রাস্তা", "গাড়ি", "গাড়ি", "বাস"), "city street traffic"),
-        (("শিশু", "বাচ্চা", "ছেলে", "মেয়ে", "মেয়ে"), "children smiling"),
-        (("মানুষ", "মানবতা", "সহযোগিতা"), "people helping each other"),
-        (("পরিশ্রম", "চেষ্টা", "কাজ", "সাফল্য"), "person working hard success"),
-        (("স্বপ্ন", "আশা", "সাহস", "নতুন দিন"), "inspiring sunrise hopeful landscape"),
-        (("বৃষ্টি", "বর্ষা"), "rainy weather landscape"),
-        (("ফুল", "ফুলের"), "colorful flowers garden"),
-        (("সমুদ্র", "সাগর", "সমুদ্রসৈকত"), "ocean beach waves"),
-        (("প্রতিবন্ধী", "দৃষ্টিপ্রতিবন্ধী", "অন্ধ", "সাদাছড়ি", "সাদাছড়ি"), "visually impaired person white cane accessibility"),
-        (("চাকরি", "কর্মসংস্থান", "অফিস", "কারখানা"), "Bangladesh workplace employment"),
-        (("শিক্ষা", "স্কুল", "কলেজ", "বিশ্ববিদ্যালয়", "বিশ্ববিদ্যালয়", "শিক্ষার্থী", "ছাত্র"), "Bangladesh students classroom education"),
-        (("হাসপাতাল", "চিকিৎসা", "ডাক্তার", "রোগী", "ওষুধ", "স্বাস্থ্য"), "doctor patient clinic healthcare"),
-        (("মোবাইল", "ফোন", "ইন্টারনেট", "প্রযুক্তি", "কম্পিউটার"), "smartphone digital technology"),
-        (("পরিবার", "মা", "বাবা", "সন্তান", "সংসার"), "Bangladeshi family home"),
-        (("মসজিদ", "নামাজ", "কোরআন", "কুরআন", "রমজান", "ইসলাম"), "mosque courtyard"),
-        (("দারিদ্র্য", "গরিব", "দাম", "দ্রব্যমূল্য", "বাজার"), "family budgeting Bangladesh market"),
-        (("বাংলাদেশ", "সরকার", "নীতি", "আইন", "নাগরিক"), "Bangladesh community civic life"),
-        (("বন্যা", "ঘূর্ণিঝড়", "ঘূর্ণিঝড়", "দুর্যোগ"), "Bangladesh monsoon flood village"),
-    ]
-    translated = []
-    for terms, english in concept_map:
-        if any(term in text for term in terms):
-            for word in english.split():
-                if word not in translated:
-                    translated.append(word)
-    stopwords = set("""
-    the and for with this that from your you are was were have has had will would can could
-    about into over under then than when where what why how not but or as is am be
-    আমি তুমি তিনি তারা আমরা আপনার আমাদের তাদের এটা এটি এই সেই যে কী কেন কিভাবে এবং অথবা
-    থেকে জন্য নিয়ে করা হবে হয় আছে ছিল একটি একজন আজকে যেন কিন্তু
-    """.split())
-    tokens = re.findall(r"[\u0980-\u09FF]{3,}|[A-Za-z]{3,}", script[:900])
-    for token in tokens:
-        key = token.lower()
-        if key not in stopwords and key not in translated:
-            translated.append(key)
-    return translated[:8]
-
-
-def _download_checked_image(image_url: str, folder: Path, filename: str, credit: str):
-    if not image_url or not image_url.startswith("https://"):
-        return None, ""
-    try:
-        request = urllib.request.Request(
-            image_url,
-            headers={"User-Agent": "BanglaAIVoiceVideoMaker/0.4 (free educational video maker)"}
-        )
-        with urllib.request.urlopen(request, timeout=10) as response:
-            content = response.read(8 * 1024 * 1024 + 1)
-        if len(content) > 8 * 1024 * 1024:
-            return None, ""
-        target = folder / filename
-        target.write_bytes(content)
-        with Image.open(target) as check:
-            if check.width < 80 or check.height < 80 or check.width * check.height > 4_000_000:
-                raise ValueError("Image dimensions outside safe limits")
-            check.verify()
-        return target, credit[:180]
-    except Exception:
-        try:
-            (folder / filename).unlink(missing_ok=True)
-        except Exception:
-            pass
-        return None, ""
-
-
-def find_openverse_image(script: str, folder: Path):
-    """Try Openverse's anonymous endpoint; only use CC0, public-domain, CC BY or CC BY-SA results."""
-    keywords = _image_keywords(script)
-    if not keywords:
-        return None, ""
-    params = urllib.parse.urlencode({
-        "q": " ".join(keywords),
-        "license": "cc0,pdm,by,by-sa",
-        "page_size": "8",
-        "mature": "false",
-    })
-    try:
-        request = urllib.request.Request(
-            "https://api.openverse.org/v1/images/?" + params,
-            headers={"User-Agent": "BanglaAIVoiceVideoMaker/0.4 (free educational video maker)"}
-        )
-        with urllib.request.urlopen(request, timeout=6) as response:
-            data = json.loads(response.read(1_500_000).decode("utf-8"))
-        for item in data.get("results", []):
-            license_code = str(item.get("license", "")).lower()
-            if license_code not in {"cc0", "pdm", "by", "by-sa"}:
-                continue
-            image_url = item.get("thumbnail") or item.get("url")
-            title = re.sub(r"\s+", " ", str(item.get("title") or "Openverse image")).strip()
-            creator = re.sub(r"\s+", " ", str(item.get("creator") or "Unknown creator")).strip()
-            landing = str(item.get("foreign_landing_url") or "")
-            license_url = str(item.get("license_url") or "")
-            credit = f"{title[:55]} | {creator[:45]} | {license_code.upper()} {landing[:65]} {license_url[:55]}"
-            image, attribution = _download_checked_image(image_url, folder, "openverse-context-image", credit)
-            if image:
-                return image, attribution
-    except Exception:
-        pass
-    return None, ""
-
-
-def find_contextual_image(script: str, folder: Path):
-    """Try Openverse then Wikimedia Commons; use licensed reusable thumbnails only."""
-    image, credit = find_openverse_image(script, folder)
-    if image:
-        return image, credit
-    keywords = _image_keywords(script)
-    if not keywords:
-        return None, ""
-    params = urllib.parse.urlencode({
-        "action": "query", "generator": "search",
-        "gsrsearch": "filetype:bitmap " + " ".join(keywords),
-        "gsrnamespace": "6", "gsrlimit": "8",
-        "prop": "imageinfo", "iiprop": "url|extmetadata",
-        "iiurlwidth": "900", "format": "json"
-    })
-    request = urllib.request.Request(
-        "https://commons.wikimedia.org/w/api.php?" + params,
-        headers={"User-Agent": "BanglaAIVoiceVideoMaker/0.4 (free educational video maker)"}
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=8) as response:
-            data = json.loads(response.read(2_000_000).decode("utf-8"))
-        pages = list((data.get("query", {}).get("pages") or {}).values())
-        for page in pages:
-            info = (page.get("imageinfo") or [{}])[0]
-            metadata = info.get("extmetadata") or {}
-            license_name = str((metadata.get("LicenseShortName") or {}).get("value", "")).strip()
-            license_upper = license_name.upper().replace("-", " ")
-            is_reusable = (
-                "PUBLIC DOMAIN" in license_upper or "CC0" in license_upper
-                or (license_upper.startswith("CC BY") and "NC" not in license_upper and "ND" not in license_upper)
-            )
-            image_url = info.get("thumburl") or info.get("url")
-            title = str(page.get("title", "Wikimedia Commons image")).replace("File:", "")
-            artist = re.sub(r"<[^>]+>", "", str((metadata.get("Artist") or {}).get("value", "")).strip())
-            credit = f"{title[:55]} | {artist[:45]} | {license_name[:20]} https://commons.wikimedia.org/wiki/{urllib.parse.quote(str(page.get('title', '')))}"
-            if not is_reusable:
-                continue
-            image, attribution = _download_checked_image(image_url, folder, "commons-context-image", credit)
-            if image:
-                return image, attribution
-    except Exception:
-        pass
-    return None, ""
+    """Create a focused image-search query from the dominant topic(s) of one scene."""
+    concepts = _matched_visual_concepts(script, limit=2)
+    if concepts:
+        phrase = " ".join(concepts)
+        tokens = re.findall(r"[A-Za-z]{3,}", phrase.lower())
+        return list(dict.fromkeys(tokens))[:8]
+    # For text without a known Bangla topic, use a few meaningful Latin words if present.
+    tokens = re.findall(r"[A-Za-z]{3,}", (script or "")[:500].lower())
+    stopwords = {"the", "and", "for", "with", "this", "that", "from", "your", "you", "are", "was", "were", "have", "has", "had", "will", "would", "can", "could", "about", "into", "over", "under", "then", "than", "when", "where", "what", "why", "how", "not", "but", "or", "as", "is", "am", "be"}
+    return [word for word in dict.fromkeys(tokens) if word not in stopwords][:8]
 
 
 def _compatible_gradio_client():
@@ -446,39 +345,22 @@ def _extract_generated_image(result):
 
 
 def _english_visual_prompt(script: str):
-    """Turn common Bangla scene concepts into English prompt terms for English-focused image models."""
-    text = re.sub(r"\s+", " ", script).strip().lower()
-    concepts = [
-        (("সকাল", "ভোর", "সূর্যোদয়", "সূর্যোদয়", "নতুন দিন"), "a beautiful sunrise over a peaceful green landscape"),
-        (("গাছপালা", "গাছ", "সবুজ", "বন", "প্রকৃতি"), "lush green trees and natural scenery"),
-        (("আকাশ", "মেঘ", "নীল আকাশ"), "a vivid blue sky with soft white clouds"),
-        (("পাখি", "পাখির", "চড়ুই", "চড়ুই"), "small birds flying among tree branches"),
-        (("নদী", "পুকুর", "পানি", "জল"), "a peaceful river and reflective water"),
-        (("গ্রাম", "কৃষক", "ধান", "মাঠ"), "a rural Bangladeshi village with green fields"),
-        (("শহর", "রাস্তা", "গাড়ি", "গাড়ি", "বাস"), "a realistic busy city street in Bangladesh"),
-        (("শিশু", "বাচ্চা", "ছেলে", "মেয়ে", "মেয়ে"), "happy children playing outdoors"),
-        (("মানুষ", "মানবতা", "সহযোগিতা"), "people helping one another with kindness"),
-        (("পরিশ্রম", "চেষ্টা", "কাজ", "সাফল্য"), "a person working hard toward success"),
-        (("স্বপ্ন", "আশা", "সাহস"), "an inspiring hopeful sunrise scene"),
-        (("বৃষ্টি", "বর্ষা"), "a realistic rainy landscape with green trees"),
-        (("ফুল", "ফুলের"), "a colorful flower garden in natural daylight"),
-        (("সমুদ্র", "সাগর", "সমুদ্রসৈকত"), "a beautiful ocean beach with gentle waves"),
-        (("প্রতিবন্ধী", "দৃষ্টিপ্রতিবন্ধী", "অন্ধ", "সাদাছড়ি", "সাদাছড়ি"), "a visually impaired person using a white cane on an accessible Bangladeshi street"),
-        (("চাকরি", "কর্মসংস্থান", "কাজের", "অফিস", "কারখানা"), "Bangladeshi people working in a modern workplace"),
-        (("শিক্ষা", "স্কুল", "কলেজ", "বিশ্ববিদ্যালয়", "বিশ্ববিদ্যালয়", "শিক্ষার্থী", "ছাত্র"), "Bangladeshi students learning in a classroom"),
-        (("হাসপাতাল", "চিকিৎসা", "ডাক্তার", "রোগী", "ওষুধ", "স্বাস্থ্য"), "a doctor consulting a patient in a clean clinic"),
-        (("মোবাইল", "ফোন", "ইন্টারনেট", "প্রযুক্তি", "কম্পিউটার"), "a person using a smartphone and digital technology"),
-        (("পরিবার", "মা", "বাবা", "সন্তান", "সংসার"), "a Bangladeshi family spending time together at home"),
-        (("মসজিদ", "নামাজ", "কোরআন", "কুরআন", "রমজান", "ইসলাম"), "a peaceful mosque courtyard at golden hour"),
-        (("দারিদ্র্য", "গরিব", "দাম", "দ্রব্যমূল্য", "বাজার"), "a family carefully budgeting household expenses in Bangladesh"),
-        (("বাংলাদেশ", "সরকার", "নীতি", "আইন", "নাগরিক"), "a realistic Bangladeshi community and civic life"),
-        (("বন্যা", "ঘূর্ণিঝড়", "ঘূর্ণিঝড়", "দুর্যোগ"), "a Bangladeshi village responding to monsoon flooding"),
-    ]
-    selected = [english for terms, english in concepts if any(term in text for term in terms)]
-    if not selected:
-        english_words = re.findall(r"[A-Za-z]{3,}", script)
-        selected = ["realistic scene inspired by " + " ".join(english_words[:12])] if english_words else ["peaceful green landscape in Bangladesh"]
-    return ", ".join(dict.fromkeys(selected))[:450]
+    """Create a focused scene prompt using the strongest topics in this specific scene."""
+    concepts = _matched_visual_concepts(script, limit=2)
+    if not concepts:
+        english_words = re.findall(r"[A-Za-z]{3,}", (script or "")[:500])
+        subject = "a realistic educational scene in Bangladesh"
+        if english_words:
+            subject += " related to " + " ".join(english_words[:8])
+        concepts = [subject]
+    subject = " and ".join(concepts)
+    return (
+        "One coherent photorealistic vertical 9:16 scene for a Bangladeshi educational video. "
+        "Show the main subject clearly: " + subject + ". "
+        "Use one central visual idea that matches this scene's message, realistic local details, "
+        "natural lighting, clear composition and an uncluttered background. "
+        "Do not combine unrelated topics. No text, no captions, no letters, no logos, no watermark."
+    )[:900]
 
 
 def find_pollinations_image(script: str, folder: Path):
@@ -656,41 +538,66 @@ def make_background(script: str, folder: Path):
     image.save(target, optimize=True)
     return target
 
-def _split_script_into_scenes(script: str, max_scenes: int = 8, target_words: int = 32):
-    """Split short or long scripts into topic-sized scenes, even when punctuation is missing."""
+def _split_script_into_scenes(script: str, max_scenes: int = 12, target_words: int = 45):
+    """Plan topic-sized scenes from sentence/paragraph boundaries, capped for Render Free resources."""
     text = (script or "").strip()
     if not text:
         return ["বাংলা ভিডিও"]
 
-    units = [part.strip() for part in re.split(r"(?<=[.!?।;])\s+|\n+", text) if part.strip()]
-    if not units:
-        units = [text]
+    paragraphs = [part.strip() for part in re.split(r"\\n\\s*\\n+", text) if part.strip()]
+    if not paragraphs:
+        paragraphs = [text]
 
     chunks = []
-    current = []
-    for unit in units:
-        remaining = unit.split()
-        while remaining:
-            room = target_words - len(current)
-            if room <= 0:
-                chunks.append(" ".join(current))
-                current = []
-                room = target_words
-            current.extend(remaining[:room])
-            remaining = remaining[room:]
-            if len(current) >= target_words:
-                chunks.append(" ".join(current))
-                current = []
-    if current:
-        chunks.append(" ".join(current))
+    for paragraph in paragraphs:
+        sentences = [part.strip() for part in re.split(r"(?<=[.!?।;])\\s+", paragraph) if part.strip()]
+        if not sentences:
+            sentences = [paragraph]
+        current = []
+        for sentence in sentences:
+            words = sentence.split()
+            while words:
+                room = target_words - len(current)
+                if room <= 0:
+                    chunks.append(" ".join(current))
+                    current = []
+                    room = target_words
+                current.extend(words[:room])
+                words = words[room:]
+                if len(current) >= target_words:
+                    chunks.append(" ".join(current))
+                    current = []
+        if current:
+            chunks.append(" ".join(current))
 
-    # Keep runtime bounded on Render Free while distributing a very long script
-    # across all available scenes instead of reusing one background.
+    if not chunks:
+        chunks = [text]
     if len(chunks) > max_scenes:
-        all_words = " ".join(chunks).split()
-        group_size = max(1, (len(all_words) + max_scenes - 1) // max_scenes)
-        chunks = [" ".join(all_words[i:i + group_size]) for i in range(0, len(all_words), group_size)]
-        chunks = chunks[:max_scenes]
+        # Preserve scene order and neighboring context while keeping the number of expensive
+        # image-generation attempts bounded on Render Free.
+        all_words = [chunk.split() for chunk in chunks]
+        total_words = sum(len(words) for words in all_words)
+        target_size = max(1, (total_words + max_scenes - 1) // max_scenes)
+        merged = []
+        current = []
+        remaining_scenes = max_scenes
+        remaining_words = total_words
+        for index, words in enumerate(all_words):
+            current.extend(words)
+            remaining_words -= len(words)
+            should_close = (
+                len(merged) < max_scenes - 1
+                and len(current) >= target_size
+                and (remaining_words > 0)
+            )
+            if should_close:
+                merged.append(" ".join(current))
+                current = []
+                remaining_scenes -= 1
+                target_size = max(1, (remaining_words + remaining_scenes - 1) // remaining_scenes)
+        if current:
+            merged.append(" ".join(current))
+        chunks = merged[:max_scenes]
     return chunks or [text]
 
 
