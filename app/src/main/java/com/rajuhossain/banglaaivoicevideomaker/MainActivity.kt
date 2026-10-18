@@ -61,6 +61,8 @@ private fun VideoMakerScreen() {
     var mode by remember { mutableStateOf("auto") }
     var cloneConsent by remember { mutableStateOf(false) }
     var captionOffset by remember { mutableStateOf(0f) }
+    var sceneInterval by remember { mutableStateOf(5) }
+    var sceneIntervalMenu by remember { mutableStateOf(false) }
     var hasSavedVoiceProfile by remember { mutableStateOf(File(context.filesDir, "voice_profile_sample").exists()) }
     var isRecording by remember { mutableStateOf(false) }
     var recorder by remember { mutableStateOf<MediaRecorder?>(null) }
@@ -228,6 +230,23 @@ private fun VideoMakerScreen() {
             minLines = 5, enabled = !running,
             supportingText = { Text("সার্ভার লেখা গ্রহণ করে ভিডিও তৈরি করবে।") }
         )
+        Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("ছবি পরিবর্তনের বিরতি", fontWeight = FontWeight.Bold)
+            Text("প্রতি নির্দিষ্ট সময়ে বক্তব্যের সঙ্গে সবচেয়ে মানানসই উপলব্ধ দৃশ্য দেখানোর চেষ্টা হবে।", style = MaterialTheme.typography.bodySmall)
+            Box {
+                OutlinedButton(onClick = { sceneIntervalMenu = true }, enabled = !running) {
+                    Text("প্রতি $sceneInterval সেকেন্ডে ছবি পরিবর্তন")
+                }
+                DropdownMenu(expanded = sceneIntervalMenu, onDismissRequest = { sceneIntervalMenu = false }) {
+                    listOf(3, 5, 10, 15, 20).forEach { seconds ->
+                        DropdownMenuItem(
+                            text = { Text("প্রতি $seconds সেকেন্ডে") },
+                            onClick = { sceneInterval = seconds; sceneIntervalMenu = false }
+                        )
+                    }
+                }
+            }
+        }
         if (mode == "clone") {
             OutlinedButton(
                 onClick = {
@@ -273,7 +292,7 @@ private fun VideoMakerScreen() {
                         status = "অনলাইন সার্ভারে কাজ পাঠানো হচ্ছে।"
                         scope.launch {
                             try {
-                                val job = withContext(Dispatchers.IO) { createJob(context, baseUrl, script.trim(), mode, audioUri, cloneConsent, captionOffset) }
+                                val job = withContext(Dispatchers.IO) { createJob(context, baseUrl, script.trim(), mode, audioUri, cloneConsent, captionOffset, sceneInterval) }
                                 val jobId = job.getString("id")
                                 status = "অনুরোধ গ্রহণ করা হয়েছে। ভিডিও তৈরি চলছে।"
                                 var finished = false
@@ -356,7 +375,7 @@ private fun makeTopicDraft(topic: String): String {
     }
     return listOf("আসসালামু আলাইকুম।", "আজকের ভিডিওর বিষয়: $clean।", body, "আপনার মতামত কমেন্টে জানাতে পারেন। তথ্যটি উপকারী মনে হলে অন্যদের সঙ্গেও শেয়ার করুন। ধন্যবাদ।").joinToString("\n\n")
 }
-private fun createJob(context: Context, baseUrl: String, script: String, mode: String, audioUri: Uri?, cloneConsent: Boolean, captionOffset: Float): JSONObject {
+private fun createJob(context: Context, baseUrl: String, script: String, mode: String, audioUri: Uri?, cloneConsent: Boolean, captionOffset: Float, sceneInterval: Int): JSONObject {
     val boundary = "----BanglaAI" + UUID.randomUUID().toString()
     val connection = (URL(baseUrl + "/api/jobs").openConnection() as HttpURLConnection).apply {
         requestMethod = "POST"
@@ -377,6 +396,7 @@ private fun createJob(context: Context, baseUrl: String, script: String, mode: S
             field("mode", mode)
             field("voice_clone_consent", cloneConsent.toString())
             field("caption_offset", captionOffset.toString())
+            field("scene_interval", sceneInterval.toString())
             if (mode in listOf("audio", "clone") && audioUri != null) {
                 output.write(("--" + boundary + "\r\n").toByteArray())
                 output.write("Content-Disposition: form-data; name=\"audio\"; filename=\"voice-file\"\r\n".toByteArray())
