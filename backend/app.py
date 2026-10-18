@@ -273,7 +273,7 @@ VISUAL_CONCEPTS = [
 
 def _matched_visual_concepts(script: str, limit: int = 2):
     """Choose only the strongest topics present in this scene, avoiding unrelated mixed prompts."""
-    text = re.sub(r"\\s+", " ", script or "").strip().lower()
+    text = re.sub(r"\s+", " ", script or "").strip().lower()
     ranked = []
     for order, (terms, prompt) in enumerate(VISUAL_CONCEPTS):
         hits = sum(text.count(term.lower()) for term in terms if term.lower() in text)
@@ -544,13 +544,13 @@ def _split_script_into_scenes(script: str, max_scenes: int = 12, target_words: i
     if not text:
         return ["বাংলা ভিডিও"]
 
-    paragraphs = [part.strip() for part in re.split(r"\\n\\s*\\n+", text) if part.strip()]
+    paragraphs = [part.strip() for part in re.split(r"\n\s*\n+", text) if part.strip()]
     if not paragraphs:
         paragraphs = [text]
 
     chunks = []
     for paragraph in paragraphs:
-        sentences = [part.strip() for part in re.split(r"(?<=[.!?।;])\\s+", paragraph) if part.strip()]
+        sentences = [part.strip() for part in re.split(r"(?<=[.!?।;])\s+", paragraph) if part.strip()]
         if not sentences:
             sentences = [paragraph]
         current = []
@@ -602,7 +602,7 @@ def _split_script_into_scenes(script: str, max_scenes: int = 12, target_words: i
 
 
 def make_scene_backgrounds(script: str, folder: Path):
-    """Create up to eight topic-sized backgrounds, including for unpunctuated text."""
+    """Create up to twelve topic-sized backgrounds, with prompts focused on each scene."""
     scenes = _split_script_into_scenes(script)
     backgrounds = []
     for index, scene_text in enumerate(scenes):
