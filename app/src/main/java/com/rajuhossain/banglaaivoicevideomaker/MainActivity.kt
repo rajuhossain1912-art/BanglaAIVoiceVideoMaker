@@ -55,6 +55,7 @@ private fun VideoMakerScreen() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var script by remember { mutableStateOf("") }
+    var topic by remember { mutableStateOf("") }
     var audioUri by remember { mutableStateOf<Uri?>(null) }
     var audioName by remember { mutableStateOf("") }
     var mode by remember { mutableStateOf("auto") }
@@ -201,6 +202,25 @@ private fun VideoMakerScreen() {
             }
         }
         OutlinedTextField(
+            value = topic, onValueChange = { topic = it },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("ভিডিওর বিষয়") },
+            placeholder = { Text("যেমন: প্রতিবন্ধীদের কর্মসংস্থান") },
+            singleLine = true, enabled = !running,
+            supportingText = { Text("বিষয় লিখে নিচের বোতামে চাপলে সম্পাদনাযোগ্য খসড়া তৈরি হবে।") }
+        )
+        OutlinedButton(
+            onClick = {
+                if (topic.isBlank()) status = "আগে ভিডিওর বিষয় লিখুন।"
+                else {
+                    script = makeTopicDraft(topic.trim())
+                    mode = "auto"
+                    status = "বিষয় থেকে প্রাথমিক খসড়া তৈরি হয়েছে। ভিডিও করার আগে পড়ে সম্পাদনা করুন। এটি বিনামূল্যের টেমপ্লেট, সম্পূর্ণ AI-লেখা নয়।"
+                }
+            },
+            modifier = Modifier.fillMaxWidth(), enabled = !running
+        ) { Text("বিষয় থেকে খসড়া তৈরি করুন") }
+        OutlinedTextField(
             value = script, onValueChange = { script = it },
             modifier = Modifier.fillMaxWidth().height(210.dp),
             label = { Text(if (mode == "clone") "নিজের কণ্ঠে পড়ার লেখা (সর্বোচ্চ ৫০০ অক্ষর)" else "বাংলা বা ইংরেজি লেখা") },
@@ -324,6 +344,18 @@ private fun VideoMakerScreen() {
     }
 }
 
+private fun makeTopicDraft(topic: String): String {
+    val clean = topic.trim().trimEnd('।', '.', '!', '?')
+    val lower = clean.lowercase()
+    val body = when {
+        listOf("প্রতিবন্ধী", "দৃষ্টি", "অন্ধ", "disability", "blind").any { lower.contains(it) } -> "প্রতিবন্ধী মানুষের অধিকার, মর্যাদা ও সমান সুযোগ নিশ্চিত করা আমাদের সবার দায়িত্ব। সহায়তার পাশাপাশি শিক্ষা, প্রশিক্ষণ, সহজগম্য সেবা এবং সম্মানজনক কর্মসংস্থানের সুযোগ বাড়াতে হবে। নীতি থাকলেই যথেষ্ট নয়; বাস্তবে তা কার্যকর হচ্ছে কি না সেটিও পর্যবেক্ষণ করা জরুরি।"
+        listOf("চাকরি", "কর্মসংস্থান", "আয়", "কাজ", "job", "income").any { lower.contains(it) } -> "সম্মানজনক জীবনের জন্য কাজের সুযোগ অত্যন্ত গুরুত্বপূর্ণ। দক্ষতা ও যোগ্যতা থাকা সত্ত্বেও অনেক মানুষ উপযুক্ত কাজ পান না। নিয়োগে বৈষম্য কমানো, দক্ষতাভিত্তিক প্রশিক্ষণ বাড়ানো এবং কর্মক্ষেত্রকে সবার জন্য সহজগম্য করা দরকার।"
+        listOf("স্বাস্থ্য", "চিকিৎসা", "হাসপাতাল", "health", "hospital").any { lower.contains(it) } -> "স্বাস্থ্যসেবা মানুষের মৌলিক প্রয়োজন। চিকিৎসার খরচ, দূরত্ব ও তথ্যের অভাব যেন বাধা না হয়, সে বিষয়ে গুরুত্ব দিতে হবে। সেবাকেন্দ্রে স্বচ্ছ তথ্য, ন্যায্য খরচ এবং রোগীর প্রতি সম্মান থাকা দরকার।"
+        listOf("পরিবেশ", "গাছ", "দূষণ", "নদী", "environment").any { lower.contains(it) } -> "পরিবেশ রক্ষা সবার দায়িত্ব। বর্জ্য কমানো, গাছ লাগানো, পানি ও বিদ্যুতের অপচয় রোধ এবং দূষণ নিয়ন্ত্রণে সচেতনতা বাড়ানো জরুরি। ছোট ছোট দায়িত্বশীল পদক্ষেপ মিলেই ইতিবাচক পরিবর্তন আনতে পারে।"
+        else -> "এই বিষয়টি আমাদের দৈনন্দিন জীবন ও সমাজের সঙ্গে কীভাবে সম্পর্কিত, তা বোঝা জরুরি। প্রথমে নির্ভরযোগ্য তথ্য জানা, বিভিন্ন দিক বিবেচনা করা এবং বাস্তব অভিজ্ঞতা থেকে শিক্ষা নেওয়া দরকার। সিদ্ধান্তে পৌঁছানোর আগে তথ্য যাচাই করা উচিত এবং ভিন্নমত থাকলেও পারস্পরিক সম্মান বজায় রাখা প্রয়োজন।"
+    }
+    return listOf("আসসালামু আলাইকুম।", "আজকের ভিডিওর বিষয়: $clean।", body, "আপনার মতামত কমেন্টে জানাতে পারেন। তথ্যটি উপকারী মনে হলে অন্যদের সঙ্গেও শেয়ার করুন। ধন্যবাদ।").joinToString("\n\n")
+}
 private fun createJob(context: Context, baseUrl: String, script: String, mode: String, audioUri: Uri?, cloneConsent: Boolean, captionOffset: Float): JSONObject {
     val boundary = "----BanglaAI" + UUID.randomUUID().toString()
     val connection = (URL(baseUrl + "/api/jobs").openConnection() as HttpURLConnection).apply {
