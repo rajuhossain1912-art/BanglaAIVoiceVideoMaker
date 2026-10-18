@@ -925,7 +925,7 @@ def make_caption_frames(script: str, duration: float, background: Path, folder: 
                     x += draw.textbbox((0, 0), token, font=font)[2] + draw.textbbox((0, 0), " ", font=font)[2]
                 y += 17
             path = frame_dir / f"frame-{image_index:06d}.png"
-            frame.convert("RGB").save(path, optimize=True)
+            frame.convert("RGB").save(path, compress_level=1)
             entries.append((path, max(0.05, end - start)))
             image_index += 1
             cursor = end
