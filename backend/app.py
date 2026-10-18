@@ -1029,7 +1029,28 @@ def root():
 @app.get("/health")
 def health():
     tools = {name: shutil.which(name) is not None for name in ("ffmpeg", "ffprobe", "espeak-ng")}
-    return {"status": "ok" if all(tools.values()) else "degraded", "tools": tools, "version": "0.2.0"}
+    return {
+        "status": "ok" if all(tools.values()) else "degraded",
+        "tools": tools,
+        "version": os.getenv("API_VERSION", "0.3.0"),
+        "git_commit": os.getenv("RENDER_GIT_COMMIT", "unknown"),
+        "git_branch": os.getenv("RENDER_GIT_BRANCH", "unknown"),
+    }
+
+
+@app.get("/api/version")
+def api_version():
+    """Expose deployed source identity so the live server can be matched to GitHub history."""
+    return {
+        "name": "Bangla AI Voice Video Maker API",
+        "version": os.getenv("API_VERSION", "0.3.0"),
+        "git_commit": os.getenv("RENDER_GIT_COMMIT", "unknown"),
+        "git_branch": os.getenv("RENDER_GIT_BRANCH", "unknown"),
+        "service_id": os.getenv("RENDER_SERVICE_ID", "unknown"),
+        "deploy_id": os.getenv("RENDER_DEPLOY_ID", "unknown"),
+        "checked_at_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "free_only": True,
+    }
 
 
 @app.get("/api/capabilities")
