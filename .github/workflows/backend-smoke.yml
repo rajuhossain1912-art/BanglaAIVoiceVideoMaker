@@ -57,7 +57,7 @@ jobs:
             else
               script='আসসালামু আলাইকুম everyone, আজকে আমরা AI voice video test করব.'
             fi
-            response=$(curl --fail --silent --show-error -X POST http://127.0.0.1:10000/api/jobs -F "script=$script" -F 'mode=auto' -F 'caption_offset=0.5')
+            response=$(curl --fail --silent --show-error -X POST http://127.0.0.1:10000/api/jobs -F "script=$script" -F 'mode=auto' -F 'caption_offset=0.5' -F 'scene_interval=3')
             echo "$response"
             job_id=$(echo "$response" | python -c 'import json,sys; print(json.load(sys.stdin)["id"])')
             done_job=0
