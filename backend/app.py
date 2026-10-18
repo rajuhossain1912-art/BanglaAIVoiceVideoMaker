@@ -837,7 +837,7 @@ def sentence_timing_spans(audio_path: Optional[Path], sentences, duration: float
     return list(zip(expected[:-1], expected[1:]))
 
 
-def make_caption_frames(script: str, duration: float, background: Path, folder: Path, caption_offset: float = 0.0, audio_path: Optional[Path] = None):
+def make_caption_frames(script: str, duration: float, background: Path, folder: Path, caption_offset: float = 0.0, audio_path: Optional[Path] = None, job_id: Optional[str] = None):
     """Render small Pillow caption cards with per-word highlighting, avoiding FFmpeg's memory-heavy libass filter."""
     frame_dir = folder / "caption-frames"
     frame_dir.mkdir(parents=True, exist_ok=True)
@@ -849,6 +849,7 @@ def make_caption_frames(script: str, duration: float, background: Path, folder: 
 
     sentences = _split_script_into_scenes(script)
     sentence_words = [re.findall(r"\S+", sentence) for sentence in sentences]
+    total_words = max(1, sum(len(words) for words in sentence_words))
     sentence_spans = sentence_timing_spans(audio_path, sentences, duration)
     safe_offset = max(-max(0.0, duration - 0.1), min(max(0.0, duration - 0.1), caption_offset))
     font = load_font(13, True)
@@ -929,6 +930,11 @@ def make_caption_frames(script: str, duration: float, background: Path, folder: 
             entries.append((path, max(0.05, end - start)))
             image_index += 1
             cursor = end
+            if job_id and (image_index % 20 == 0 or image_index >= total_words):
+                with LOCK:
+                    if job_id in JOBS and JOBS[job_id].get("status") == "processing":
+                        JOBS[job_id]["progress"] = 40 + min(9, int(9 * image_index / total_words))
+                        JOBS[job_id]["message"] = f"সাবটাইটেল ও শব্দের হাইলাইট তৈরি হচ্ছে: {image_index}/{total_words}"
 
     last_end = sum(seconds for _, seconds in entries)
     if last_end < duration:
@@ -980,7 +986,7 @@ def render(job_id: str, script: str, mode: str, audio_path: Optional[Path], capt
             JOBS[job_id]["progress"] = 40
             JOBS[job_id]["message"] = "বাক্যভিত্তিক দৃশ্য ও পটভূমি তৈরি হয়েছে"
         print(f"VIDEO_STAGE job={job_id} stage=subtitles_start", flush=True)
-        frame_list, frame_count = make_caption_frames(script, duration, backgrounds, folder, caption_offset, audio_path)
+        frame_list, frame_count = make_caption_frames(script, duration, backgrounds, folder, caption_offset, audio_path, job_id)
         print(f"VIDEO_STAGE job={job_id} stage=subtitles_done frames={frame_count} method=pillow_word_highlight", flush=True)
         with LOCK:
             JOBS[job_id]["progress"] = 45
