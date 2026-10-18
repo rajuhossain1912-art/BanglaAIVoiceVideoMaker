@@ -355,6 +355,9 @@ def find_openverse_image(script: str, folder: Path):
             image_url = item.get("thumbnail") or item.get("url")
             title = re.sub(r"\s+", " ", str(item.get("title") or "Openverse image")).strip()
             creator = re.sub(r"\s+", " ", str(item.get("creator") or "Unknown creator")).strip()
+            if _is_unrelated_map_image(script, title):
+                print(f"IMAGE_FILTER rejected=unrelated_map source=openverse title={title[:90]}", flush=True)
+                continue
             landing = str(item.get("foreign_landing_url") or "")
             license_url = str(item.get("license_url") or "")
             credit = f"{title[:55]} | {creator[:45]} | {license_code.upper()} {landing[:65]} {license_url[:55]}"
@@ -401,6 +404,9 @@ def find_contextual_image(script: str, folder: Path):
             image_url = info.get("thumburl") or info.get("url")
             title = str(page.get("title", "Wikimedia Commons image")).replace("File:", "")
             artist = re.sub(r"<[^>]+>", "", str((metadata.get("Artist") or {}).get("value", "")).strip())
+            if _is_unrelated_map_image(script, title):
+                print(f"IMAGE_FILTER rejected=unrelated_map source=wikimedia title={title[:90]}", flush=True)
+                continue
             credit = f"{title[:55]} | {artist[:45]} | {license_name[:20]} https://commons.wikimedia.org/wiki/{urllib.parse.quote(str(page.get('title', '')))}"
             if not is_reusable:
                 continue
@@ -453,8 +459,19 @@ def _extract_generated_image(result):
     return result
 
 
+def _is_unrelated_map_image(script: str, image_title: str) -> bool:
+    """Reject map/globe search results for technology scenes unless geography is actually discussed."""
+    text = re.sub(r"\s+", " ", (script or "").lower())
+    title = re.sub(r"\s+", " ", (image_title or "").lower())
+    map_terms = ("মানচিত্র", "বিশ্ব মানচিত্র", "ভূগোল", "পৃথিবীর মানচিত্র", "world map", "map of the world", "globe", "atlas", "geographic map", "geography")
+    tech_terms = ("মোবাইল", "ফোন", "ইন্টারনেট", "প্রযুক্তি", "কম্পিউটার", "অ্যাপ", "স্ক্রিন রিডার", "টকব্যাক", "smartphone", "screen reader", "talkback", "accessibility", "digital technology", "mobile app")
+    explicit_map_context = any(term in text for term in map_terms)
+    technology_context = any(term in text for term in tech_terms)
+    return technology_context and not explicit_map_context and any(term in title for term in map_terms)
+
+
 def _english_visual_prompt(script: str):
-    """Create a focused scene prompt using the strongest topics in this specific scene."""
+    """Create a focused prompt and explicitly suppress common off-topic map/globe imagery."""
     concepts = _matched_visual_concepts(script, limit=2)
     if not concepts:
         english_words = re.findall(r"[A-Za-z]{3,}", (script or "")[:500])
@@ -463,13 +480,32 @@ def _english_visual_prompt(script: str):
             subject += " related to " + " ".join(english_words[:8])
         concepts = [subject]
     subject = " and ".join(concepts)
+    text = (script or "").lower()
+    technology_context = any(term in text for term in (
+        "মোবাইল", "ফোন", "ইন্টারনেট", "প্রযুক্তি", "কম্পিউটার", "অ্যাপ", "স্ক্রিন রিডার",
+        "টকব্যাক", "smartphone", "screen reader", "talkback", "accessibility", "mobile app"
+    ))
+    geography_context = any(term in text for term in (
+        "মানচিত্র", "বিশ্ব মানচিত্র", "ভূগোল", "পৃথিবীর মানচিত্র", "world map", "globe", "atlas", "geography"
+    ))
+    if technology_context and not geography_context:
+        exclusions = (
+            " For a technology or screen-reader scene, show a real person using a smartphone "
+            "with an accessibility feature; absolutely do not show a world map, globe, atlas, "
+            "geographic map, planet Earth, or abstract global-network visualization."
+        )
+    else:
+        exclusions = (
+            " Do not show maps, globes, atlases, or geographic diagrams unless the scene explicitly discusses geography or maps."
+        )
     return (
         "One coherent photorealistic vertical 9:16 scene for a Bangladeshi educational video. "
         "Show the main subject clearly: " + subject + ". "
         "Use one central visual idea that matches this scene's message, realistic local details, "
         "natural lighting, clear composition and an uncluttered background. "
-        "Do not combine unrelated topics. No text, no captions, no letters, no logos, no watermark."
-    )[:900]
+        "Do not combine unrelated topics." + exclusions +
+        " No text, no captions, no letters, no logos, no watermark."
+    )[:1100]
 
 
 def find_pollinations_image(script: str, folder: Path):
