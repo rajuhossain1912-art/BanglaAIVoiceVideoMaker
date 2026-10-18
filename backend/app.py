@@ -21,7 +21,7 @@ VOICE_CLONE_SPACE = os.getenv("VOICE_CLONE_SPACE", "kawshikbuet17/bengali-cosyvo
 VOICE_CLONE_EN_SPACE = os.getenv("VOICE_CLONE_EN_SPACE", "ResembleAI/Chatterbox")
 VOICE_CLONE_ENABLED = os.getenv("VOICE_CLONE_ENABLED", "true").lower() in ("1", "true", "yes")
 AI_IMAGE_GENERATION_ENABLED = os.getenv("AI_IMAGE_GENERATION_ENABLED", "true").lower() in ("1", "true", "yes")
-AI_IMAGE_PROVIDER_ORDER = [x.strip().lower() for x in os.getenv("AI_IMAGE_PROVIDER_ORDER", "flux,zimage").split(",") if x.strip()]
+AI_IMAGE_PROVIDER_ORDER = [x.strip().lower() for x in os.getenv("AI_IMAGE_PROVIDER_ORDER", "pollinations,flux,zimage").split(",") if x.strip()]
 AI_IMAGE_PROVIDER_TIMEOUT = max(12, min(45, int(os.getenv("AI_IMAGE_PROVIDER_TIMEOUT", "28"))))
 ALLOW_LICENSED_IMAGE_FALLBACK = os.getenv("ALLOW_LICENSED_IMAGE_FALLBACK", "true").lower() in ("1", "true", "yes")
 WORK_DIR = Path(os.getenv("WORK_DIR", "/tmp/bangla-video-jobs"))
@@ -877,8 +877,8 @@ def make_caption_frames(script: str, duration: float, background: Path, folder: 
             end = sentence_end if word_index == len(words) - 1 else min(sentence_end, cursor + word_duration)
             # Smooth Ken Burns motion: zoom in toward the sentence midpoint, then ease out.
             # Progress is sentence-local so movement remains visible even for short captions.
-            phase = word_index / max(1, len(words) - 1)
-            zoom = 1.0 + 0.09 * (1.0 - abs(phase * 2.0 - 1.0))
+            phase = (word_index + 0.5) / max(1, len(words))
+            zoom = 1.0 + 0.10 * (1.0 - abs(phase * 2.0 - 1.0))
             crop_width = max(1, int(base.width / zoom))
             crop_height = max(1, int(base.height / zoom))
             travel_x = max(0, base.width - crop_width)
@@ -1036,6 +1036,7 @@ def capabilities():
             "providers": [
                 {"id": "flux", "name": "FLUX.1-schnell", "license": "Apache-2.0 model license; generated output is not guaranteed copyright-free"},
                 {"id": "zimage", "name": "Z-Image-Turbo", "license": "Apache-2.0 model license; generated output is not guaranteed copyright-free"},
+                {"id": "pollinations_flux", "name": "Pollinations Flux (free classic endpoint)", "license": "Hosted image service; free anonymous access and rate limits may change"},
             ],
             "order": AI_IMAGE_PROVIDER_ORDER,
             "timeout_seconds": AI_IMAGE_PROVIDER_TIMEOUT,
