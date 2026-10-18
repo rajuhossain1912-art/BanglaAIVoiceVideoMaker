@@ -23,7 +23,7 @@ VOICE_CLONE_ENABLED = os.getenv("VOICE_CLONE_ENABLED", "true").lower() in ("1", 
 AI_IMAGE_GENERATION_ENABLED = os.getenv("AI_IMAGE_GENERATION_ENABLED", "true").lower() in ("1", "true", "yes")
 AI_IMAGE_PROVIDER_ORDER = [x.strip().lower() for x in os.getenv("AI_IMAGE_PROVIDER_ORDER", "flux,zimage").split(",") if x.strip()]
 AI_IMAGE_PROVIDER_TIMEOUT = max(12, min(45, int(os.getenv("AI_IMAGE_PROVIDER_TIMEOUT", "28"))))
-ALLOW_LICENSED_IMAGE_FALLBACK = os.getenv("ALLOW_LICENSED_IMAGE_FALLBACK", "false").lower() in ("1", "true", "yes")
+ALLOW_LICENSED_IMAGE_FALLBACK = os.getenv("ALLOW_LICENSED_IMAGE_FALLBACK", "true").lower() in ("1", "true", "yes")
 WORK_DIR = Path(os.getenv("WORK_DIR", "/tmp/bangla-video-jobs"))
 WORK_DIR.mkdir(parents=True, exist_ok=True)
 MAX_SCRIPT_CHARS = int(os.getenv("MAX_SCRIPT_CHARS", "12000"))
@@ -247,7 +247,7 @@ def wrap_text(draw, text, font, max_width):
 
 def _image_keywords(script: str):
     """Build useful English search terms from Bangla scripts, then retain useful original words."""
-    text = re.sub(r"\\s+", " ", script).strip().lower()
+    text = re.sub(r"\s+", " ", script).strip().lower()
     # English search terms improve Openverse/Wikimedia results for Bangla narration.
     concept_map = [
         (("সকাল", "ভোর", "সূর্যোদয়", "সূর্যোদয়"), "sunrise morning landscape"),
@@ -264,6 +264,16 @@ def _image_keywords(script: str):
         (("বৃষ্টি", "বর্ষা"), "rainy weather landscape"),
         (("ফুল", "ফুলের"), "colorful flowers garden"),
         (("সমুদ্র", "সাগর", "সমুদ্রসৈকত"), "ocean beach waves"),
+        (("প্রতিবন্ধী", "দৃষ্টিপ্রতিবন্ধী", "অন্ধ", "সাদাছড়ি", "সাদাছড়ি"), "visually impaired person white cane accessibility"),
+        (("চাকরি", "কর্মসংস্থান", "অফিস", "কারখানা"), "Bangladesh workplace employment"),
+        (("শিক্ষা", "স্কুল", "কলেজ", "বিশ্ববিদ্যালয়", "বিশ্ববিদ্যালয়", "শিক্ষার্থী", "ছাত্র"), "Bangladesh students classroom education"),
+        (("হাসপাতাল", "চিকিৎসা", "ডাক্তার", "রোগী", "ওষুধ", "স্বাস্থ্য"), "doctor patient clinic healthcare"),
+        (("মোবাইল", "ফোন", "ইন্টারনেট", "প্রযুক্তি", "কম্পিউটার"), "smartphone digital technology"),
+        (("পরিবার", "মা", "বাবা", "সন্তান", "সংসার"), "Bangladeshi family home"),
+        (("মসজিদ", "নামাজ", "কোরআন", "কুরআন", "রমজান", "ইসলাম"), "mosque courtyard"),
+        (("দারিদ্র্য", "গরিব", "দাম", "দ্রব্যমূল্য", "বাজার"), "family budgeting Bangladesh market"),
+        (("বাংলাদেশ", "সরকার", "নীতি", "আইন", "নাগরিক"), "Bangladesh community civic life"),
+        (("বন্যা", "ঘূর্ণিঝড়", "ঘূর্ণিঝড়", "দুর্যোগ"), "Bangladesh monsoon flood village"),
     ]
     translated = []
     for terms, english in concept_map:
@@ -437,7 +447,7 @@ def _extract_generated_image(result):
 
 def _english_visual_prompt(script: str):
     """Turn common Bangla scene concepts into English prompt terms for English-focused image models."""
-    text = re.sub(r"\\s+", " ", script).strip().lower()
+    text = re.sub(r"\s+", " ", script).strip().lower()
     concepts = [
         (("সকাল", "ভোর", "সূর্যোদয়", "সূর্যোদয়", "নতুন দিন"), "a beautiful sunrise over a peaceful green landscape"),
         (("গাছপালা", "গাছ", "সবুজ", "বন", "প্রকৃতি"), "lush green trees and natural scenery"),
@@ -453,6 +463,16 @@ def _english_visual_prompt(script: str):
         (("বৃষ্টি", "বর্ষা"), "a realistic rainy landscape with green trees"),
         (("ফুল", "ফুলের"), "a colorful flower garden in natural daylight"),
         (("সমুদ্র", "সাগর", "সমুদ্রসৈকত"), "a beautiful ocean beach with gentle waves"),
+        (("প্রতিবন্ধী", "দৃষ্টিপ্রতিবন্ধী", "অন্ধ", "সাদাছড়ি", "সাদাছড়ি"), "a visually impaired person using a white cane on an accessible Bangladeshi street"),
+        (("চাকরি", "কর্মসংস্থান", "কাজের", "অফিস", "কারখানা"), "Bangladeshi people working in a modern workplace"),
+        (("শিক্ষা", "স্কুল", "কলেজ", "বিশ্ববিদ্যালয়", "বিশ্ববিদ্যালয়", "শিক্ষার্থী", "ছাত্র"), "Bangladeshi students learning in a classroom"),
+        (("হাসপাতাল", "চিকিৎসা", "ডাক্তার", "রোগী", "ওষুধ", "স্বাস্থ্য"), "a doctor consulting a patient in a clean clinic"),
+        (("মোবাইল", "ফোন", "ইন্টারনেট", "প্রযুক্তি", "কম্পিউটার"), "a person using a smartphone and digital technology"),
+        (("পরিবার", "মা", "বাবা", "সন্তান", "সংসার"), "a Bangladeshi family spending time together at home"),
+        (("মসজিদ", "নামাজ", "কোরআন", "কুরআন", "রমজান", "ইসলাম"), "a peaceful mosque courtyard at golden hour"),
+        (("দারিদ্র্য", "গরিব", "দাম", "দ্রব্যমূল্য", "বাজার"), "a family carefully budgeting household expenses in Bangladesh"),
+        (("বাংলাদেশ", "সরকার", "নীতি", "আইন", "নাগরিক"), "a realistic Bangladeshi community and civic life"),
+        (("বন্যা", "ঘূর্ণিঝড়", "ঘূর্ণিঝড়", "দুর্যোগ"), "a Bangladeshi village responding to monsoon flooding"),
     ]
     selected = [english for terms, english in concepts if any(term in text for term in terms)]
     if not selected:
@@ -593,17 +613,53 @@ def make_background(script: str, folder: Path):
     image.save(target, optimize=True)
     return target
 
+def _split_script_into_scenes(script: str, max_scenes: int = 8, target_words: int = 32):
+    """Split short or long scripts into topic-sized scenes, even when punctuation is missing."""
+    text = (script or "").strip()
+    if not text:
+        return ["বাংলা ভিডিও"]
+
+    units = [part.strip() for part in re.split(r"(?<=[.!?।;])\s+|\n+", text) if part.strip()]
+    if not units:
+        units = [text]
+
+    chunks = []
+    current = []
+    for unit in units:
+        remaining = unit.split()
+        while remaining:
+            room = target_words - len(current)
+            if room <= 0:
+                chunks.append(" ".join(current))
+                current = []
+                room = target_words
+            current.extend(remaining[:room])
+            remaining = remaining[room:]
+            if len(current) >= target_words:
+                chunks.append(" ".join(current))
+                current = []
+    if current:
+        chunks.append(" ".join(current))
+
+    # Keep runtime bounded on Render Free while distributing a very long script
+    # across all available scenes instead of reusing one background.
+    if len(chunks) > max_scenes:
+        all_words = " ".join(chunks).split()
+        group_size = max(1, (len(all_words) + max_scenes - 1) // max_scenes)
+        chunks = [" ".join(all_words[i:i + group_size]) for i in range(0, len(all_words), group_size)]
+        chunks = chunks[:max_scenes]
+    return chunks or [text]
+
+
 def make_scene_backgrounds(script: str, folder: Path):
-    """Create up to six scene backgrounds from separate sentences; later sentences reuse the last scene."""
-    sentences = [x.strip() for x in re.split(r"(?<=[.!?।])\s+|\n+", script) if x.strip()]
-    if not sentences:
-        sentences = [script.strip() or "বাংলা ভিডিও"]
-    selected = sentences[:6]
+    """Create up to eight topic-sized backgrounds, including for unpunctuated text."""
+    scenes = _split_script_into_scenes(script)
     backgrounds = []
-    for index, sentence in enumerate(selected):
+    for index, scene_text in enumerate(scenes):
         scene_dir = folder / f"scene-{index:02d}"
         scene_dir.mkdir(parents=True, exist_ok=True)
-        backgrounds.append(make_background(sentence, scene_dir))
+        print(f"IMAGE_SCENE index={index + 1}/{len(scenes)} words={len(scene_text.split())}", flush=True)
+        backgrounds.append(make_background(scene_text, scene_dir))
     return backgrounds
 
 def make_srt(script: str, duration: float, path: Path):
@@ -748,9 +804,7 @@ def make_caption_frames(script: str, duration: float, background: Path, folder: 
         with Image.open(background_path) as source:
             bases.append(source.convert("RGB").resize((180, 320), Image.Resampling.BILINEAR))
 
-    sentences = [x.strip() for x in re.split(r"(?<=[.!?।])\s+|\n+", script) if x.strip()]
-    if not sentences:
-        sentences = [script.strip()] if script.strip() else ["ভিডিও"]
+    sentences = _split_script_into_scenes(script)
     sentence_words = [re.findall(r"\S+", sentence) for sentence in sentences]
     sentence_spans = sentence_timing_spans(audio_path, sentences, duration)
     safe_offset = max(-max(0.0, duration - 0.1), min(max(0.0, duration - 0.1), caption_offset))
