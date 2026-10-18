@@ -515,6 +515,39 @@ def _plan_scene_visual_prompts(scenes):
         "Keep each visual_prompt between 25 and 220 characters. Input scenes: "
         + json.dumps(scene_payload, ensure_ascii=False)
     )
+    # Cloudflare Workers AI is the preferred optional external model.
+    # Use only the Free plan within its daily free allocation; failures fall back safely.
+    cf_account_id = os.getenv("CLOUDFLARE_ACCOUNT_ID", "").strip()
+    cf_api_token = os.getenv("CLOUDFLARE_AI_API_TOKEN", "").strip()
+    if cf_account_id and cf_api_token:
+        try:
+            model = os.getenv("CLOUDFLARE_AI_MODEL", "@cf/meta/llama-3.2-3b-instruct").strip()
+            body = json.dumps({
+                "messages": [
+                    {"role": "system", "content": "Return valid JSON only. Plan scene-matched visuals, not speech."},
+                    {"role": "user", "content": prompt},
+                ],
+                "temperature": 0.15, "max_tokens": 900,
+            }).encode("utf-8")
+            model_path = urllib.parse.quote(model, safe="@/-")
+            request = urllib.request.Request(
+                f"https://api.cloudflare.com/client/v4/accounts/{cf_account_id}/ai/run/{model_path}",
+                data=body,
+                headers={"Authorization": "Bearer " + cf_api_token, "Content-Type": "application/json", "User-Agent": "BanglaAIVoiceVideoMaker/0.7"},
+                method="POST",
+            )
+            with urllib.request.urlopen(request, timeout=8) as response:
+                data = json.loads(response.read(250_000).decode("utf-8"))
+            result = data.get("result") or {}
+            raw = result.get("response") or result.get("choices", [{}])[0].get("message", {}).get("content", "")
+            prompts = _parse_scene_visual_prompts(raw, len(scenes))
+            if prompts:
+                LANGUAGE_MODEL_VISUAL_CACHE[cache_key] = prompts
+                print("LANGUAGE_MODEL selected=Cloudflare-Workers-AI model=" + model, flush=True)
+                return prompts
+            print("LANGUAGE_MODEL fallback=next_provider provider=cloudflare reason=invalid_model_response", flush=True)
+        except Exception as exc:
+            print(f"LANGUAGE_MODEL fallback=next_provider provider=cloudflare error={type(exc).__name__}: {str(exc)[:120]}", flush=True)
     # Hugging Face inference is attempted only with an explicitly configured token.
     hf_token = os.getenv("HF_TOKEN", "").strip()
     if hf_token:
@@ -543,21 +576,7 @@ def _plan_scene_visual_prompts(scenes):
                 return prompts
         except Exception as exc:
             print(f"LANGUAGE_MODEL fallback=keyword_planner provider=huggingface error={type(exc).__name__}: {str(exc)[:120]}", flush=True)
-    # Legacy anonymous Pollinations text endpoint is attempted as a no-key free option.
-    # If unavailable or rate-limited, the local planner safely takes over.
-    try:
-        url = "https://text.pollinations.ai/" + urllib.parse.quote(prompt[:6500], safe="")
-        request = urllib.request.Request(url, headers={"User-Agent": "BanglaAIVoiceVideoMaker/0.6"})
-        with urllib.request.urlopen(request, timeout=8) as response:
-            raw = response.read(100_000).decode("utf-8", "replace")
-        prompts = _parse_scene_visual_prompts(raw, len(scenes))
-        if prompts:
-            LANGUAGE_MODEL_VISUAL_CACHE[cache_key] = prompts
-            print("LANGUAGE_MODEL selected=Pollinations-text-free-endpoint", flush=True)
-            return prompts
-        print("LANGUAGE_MODEL fallback=keyword_planner reason=invalid_model_response", flush=True)
-    except Exception as exc:
-        print(f"LANGUAGE_MODEL fallback=keyword_planner provider=pollinations error={type(exc).__name__}: {str(exc)[:120]}", flush=True)
+    # Do not call unauthenticated Pollinations text endpoints; current API requires a key.
     return None
 
 
@@ -1221,8 +1240,8 @@ def api_version():
         "checked_at_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "language_model_visual_planner": {
             "enabled": LANGUAGE_MODEL_VISUAL_PLANNER_ENABLED,
-            "providers": ["Hugging Face Inference Providers when HF_TOKEN is configured", "best-effort free Pollinations text endpoint", "local keyword fallback"],
-            "default_model": os.getenv("LANGUAGE_MODEL_NAME", "Qwen/Qwen2.5-7B-Instruct"),
+            "providers": ["Cloudflare Workers AI when CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_AI_API_TOKEN are configured", "Hugging Face Inference Providers when HF_TOKEN is configured", "local keyword fallback"],
+            "default_model": os.getenv("CLOUDFLARE_AI_MODEL", "@cf/meta/llama-3.2-3b-instruct"),
             "requires_paid_service": False,
             "fallback_enabled": True,
         },
@@ -1251,9 +1270,9 @@ def capabilities():
         },
         "language_model_visual_planner": {
             "enabled": LANGUAGE_MODEL_VISUAL_PLANNER_ENABLED,
-            "default_model": os.getenv("LANGUAGE_MODEL_NAME", "Qwen/Qwen2.5-7B-Instruct"),
-            "providers": ["Hugging Face Inference Providers (only if HF_TOKEN is configured)", "best-effort free Pollinations text endpoint", "local keyword fallback"],
-            "note": "The language model improves per-scene image prompts; unavailable free endpoints fall back to local planning.",
+            "default_model": os.getenv("CLOUDFLARE_AI_MODEL", "@cf/meta/llama-3.2-3b-instruct"),
+            "providers": ["Cloudflare Workers AI (when account ID and API token are configured)", "Hugging Face Inference Providers (only if HF_TOKEN is configured)", "local keyword fallback"],
+            "note": "Cloudflare Workers AI is attempted first; configure it on Free plan within its daily free allocation. If unavailable or quota is exhausted, optional Hugging Face then local planning are tried.",
         },
         "script_generation": {"available": False, "note": "Video creation uses the user's supplied script; the language model plans visuals and does not invent narration."},
         "free_only": True,
