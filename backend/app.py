@@ -287,7 +287,7 @@ def _image_keywords(script: str):
     আমি তুমি তিনি তারা আমরা আপনার আমাদের তাদের এটা এটি এই সেই যে কী কেন কিভাবে এবং অথবা
     থেকে জন্য নিয়ে করা হবে হয় আছে ছিল একটি একজন আজকে যেন কিন্তু
     """.split())
-    tokens = re.findall(r"[\\u0980-\\u09FF]{3,}|[A-Za-z]{3,}", script[:900])
+    tokens = re.findall(r"[\u0980-\u09FF]{3,}|[A-Za-z]{3,}", script[:900])
     for token in tokens:
         key = token.lower()
         if key not in stopwords and key not in translated:
