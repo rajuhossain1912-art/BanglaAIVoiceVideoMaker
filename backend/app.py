@@ -432,15 +432,42 @@ def _extract_generated_image(result):
     return result
 
 
+def _english_visual_prompt(script: str):
+    """Turn common Bangla scene concepts into English prompt terms for English-focused image models."""
+    text = re.sub(r"\\s+", " ", script).strip().lower()
+    concepts = [
+        (("সকাল", "ভোর", "সূর্যোদয়", "সূর্যোদয়", "নতুন দিন"), "a beautiful sunrise over a peaceful green landscape"),
+        (("গাছপালা", "গাছ", "সবুজ", "বন", "প্রকৃতি"), "lush green trees and natural scenery"),
+        (("আকাশ", "মেঘ", "নীল আকাশ"), "a vivid blue sky with soft white clouds"),
+        (("পাখি", "পাখির", "চড়ুই", "চড়ুই"), "small birds flying among tree branches"),
+        (("নদী", "পুকুর", "পানি", "জল"), "a peaceful river and reflective water"),
+        (("গ্রাম", "কৃষক", "ধান", "মাঠ"), "a rural Bangladeshi village with green fields"),
+        (("শহর", "রাস্তা", "গাড়ি", "গাড়ি", "বাস"), "a realistic busy city street in Bangladesh"),
+        (("শিশু", "বাচ্চা", "ছেলে", "মেয়ে", "মেয়ে"), "happy children playing outdoors"),
+        (("মানুষ", "মানবতা", "সহযোগিতা"), "people helping one another with kindness"),
+        (("পরিশ্রম", "চেষ্টা", "কাজ", "সাফল্য"), "a person working hard toward success"),
+        (("স্বপ্ন", "আশা", "সাহস"), "an inspiring hopeful sunrise scene"),
+        (("বৃষ্টি", "বর্ষা"), "a realistic rainy landscape with green trees"),
+        (("ফুল", "ফুলের"), "a colorful flower garden in natural daylight"),
+        (("সমুদ্র", "সাগর", "সমুদ্রসৈকত"), "a beautiful ocean beach with gentle waves"),
+    ]
+    selected = [english for terms, english in concepts if any(term in text for term in terms)]
+    if not selected:
+        english_words = re.findall(r"[A-Za-z]{3,}", script)
+        selected = ["realistic scene inspired by " + " ".join(english_words[:12])] if english_words else ["peaceful green landscape in Bangladesh"]
+    return ", ".join(dict.fromkeys(selected))[:450]
+
+
 def find_generated_image(script: str, folder: Path):
-    """Try two free public image-generation Spaces; image search and graphics remain fallbacks."""
+    """Try free public image-generation Spaces; licensed image search remains a fallback."""
     if not AI_IMAGE_GENERATION_ENABLED:
         return None, ""
     from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
     prompt = (
-        "Vertical documentary-style scene illustration for a short educational video. "
-        "Show the real-world subject described here. No text, no captions, no letters, no watermark. "
-        + re.sub(r"\s+", " ", script).strip()[:350]
+        "Create an original, photorealistic vertical 9:16 image for a short educational video. "
+        "Scene: " + _english_visual_prompt(script) + ". "
+        "Natural realistic lighting, clear subject, visually rich, suitable as a video background. "
+        "No text, no captions, no letters, no logos, no watermark, no recognizable copyrighted characters."
     )
     providers = [
         (
