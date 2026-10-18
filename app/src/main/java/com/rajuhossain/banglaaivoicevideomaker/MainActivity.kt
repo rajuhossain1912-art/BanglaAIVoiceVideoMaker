@@ -278,7 +278,7 @@ private fun VideoMakerScreen() {
                                 status = "অনুরোধ গ্রহণ করা হয়েছে। ভিডিও তৈরি চলছে।"
                                 var finished = false
                                 var attempts = 0
-                                while (!finished && attempts < 240) {
+                                while (!finished && attempts < 1800) {
                                     delay(2500)
                                     attempts++
                                     val info = withContext(Dispatchers.IO) { getJobStatus(baseUrl, jobId) }
