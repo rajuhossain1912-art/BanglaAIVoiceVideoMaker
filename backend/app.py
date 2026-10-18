@@ -303,6 +303,115 @@ def _image_keywords(script: str):
     return [word for word in dict.fromkeys(tokens) if word not in stopwords][:8]
 
 
+def _download_checked_image(image_url: str, folder: Path, filename: str, credit: str):
+    if not image_url or not image_url.startswith("https://"):
+        return None, ""
+    try:
+        request = urllib.request.Request(
+            image_url,
+            headers={"User-Agent": "BanglaAIVoiceVideoMaker/0.4 (free educational video maker)"}
+        )
+        with urllib.request.urlopen(request, timeout=10) as response:
+            content = response.read(8 * 1024 * 1024 + 1)
+        if len(content) > 8 * 1024 * 1024:
+            return None, ""
+        target = folder / filename
+        target.write_bytes(content)
+        with Image.open(target) as check:
+            if check.width < 80 or check.height < 80 or check.width * check.height > 4_000_000:
+                raise ValueError("Image dimensions outside safe limits")
+            check.verify()
+        return target, credit[:180]
+    except Exception:
+        try:
+            (folder / filename).unlink(missing_ok=True)
+        except Exception:
+            pass
+        return None, ""
+
+
+def find_openverse_image(script: str, folder: Path):
+    """Try Openverse's anonymous endpoint; only use CC0, public-domain, CC BY or CC BY-SA results."""
+    keywords = _image_keywords(script)
+    if not keywords:
+        return None, ""
+    params = urllib.parse.urlencode({
+        "q": " ".join(keywords),
+        "license": "cc0,pdm,by,by-sa",
+        "page_size": "8",
+        "mature": "false",
+    })
+    try:
+        request = urllib.request.Request(
+            "https://api.openverse.org/v1/images/?" + params,
+            headers={"User-Agent": "BanglaAIVoiceVideoMaker/0.4 (free educational video maker)"}
+        )
+        with urllib.request.urlopen(request, timeout=6) as response:
+            data = json.loads(response.read(1_500_000).decode("utf-8"))
+        for item in data.get("results", []):
+            license_code = str(item.get("license", "")).lower()
+            if license_code not in {"cc0", "pdm", "by", "by-sa"}:
+                continue
+            image_url = item.get("thumbnail") or item.get("url")
+            title = re.sub(r"\s+", " ", str(item.get("title") or "Openverse image")).strip()
+            creator = re.sub(r"\s+", " ", str(item.get("creator") or "Unknown creator")).strip()
+            landing = str(item.get("foreign_landing_url") or "")
+            license_url = str(item.get("license_url") or "")
+            credit = f"{title[:55]} | {creator[:45]} | {license_code.upper()} {landing[:65]} {license_url[:55]}"
+            image, attribution = _download_checked_image(image_url, folder, "openverse-context-image", credit)
+            if image:
+                return image, attribution
+    except Exception:
+        pass
+    return None, ""
+
+
+def find_contextual_image(script: str, folder: Path):
+    """Try Openverse then Wikimedia Commons; use licensed reusable thumbnails only."""
+    image, credit = find_openverse_image(script, folder)
+    if image:
+        return image, credit
+    keywords = _image_keywords(script)
+    if not keywords:
+        return None, ""
+    params = urllib.parse.urlencode({
+        "action": "query", "generator": "search",
+        "gsrsearch": "filetype:bitmap " + " ".join(keywords),
+        "gsrnamespace": "6", "gsrlimit": "8",
+        "prop": "imageinfo", "iiprop": "url|extmetadata",
+        "iiurlwidth": "900", "format": "json"
+    })
+    request = urllib.request.Request(
+        "https://commons.wikimedia.org/w/api.php?" + params,
+        headers={"User-Agent": "BanglaAIVoiceVideoMaker/0.4 (free educational video maker)"}
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=8) as response:
+            data = json.loads(response.read(2_000_000).decode("utf-8"))
+        pages = list((data.get("query", {}).get("pages") or {}).values())
+        for page in pages:
+            info = (page.get("imageinfo") or [{}])[0]
+            metadata = info.get("extmetadata") or {}
+            license_name = str((metadata.get("LicenseShortName") or {}).get("value", "")).strip()
+            license_upper = license_name.upper().replace("-", " ")
+            is_reusable = (
+                "PUBLIC DOMAIN" in license_upper or "CC0" in license_upper
+                or (license_upper.startswith("CC BY") and "NC" not in license_upper and "ND" not in license_upper)
+            )
+            image_url = info.get("thumburl") or info.get("url")
+            title = str(page.get("title", "Wikimedia Commons image")).replace("File:", "")
+            artist = re.sub(r"<[^>]+>", "", str((metadata.get("Artist") or {}).get("value", "")).strip())
+            credit = f"{title[:55]} | {artist[:45]} | {license_name[:20]} https://commons.wikimedia.org/wiki/{urllib.parse.quote(str(page.get('title', '')))}"
+            if not is_reusable:
+                continue
+            image, attribution = _download_checked_image(image_url, folder, "commons-context-image", credit)
+            if image:
+                return image, attribution
+    except Exception:
+        pass
+    return None, ""
+
+
 def _compatible_gradio_client():
     """Work around public Spaces exposing valid boolean JSON-schema nodes."""
     from gradio_client import Client, utils
