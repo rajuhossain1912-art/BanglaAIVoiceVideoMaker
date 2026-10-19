@@ -739,30 +739,8 @@ def make_background(script: str, folder: Path, model_visual_prompt: Optional[str
             draw.rectangle((0, y, width, min(height, y + 7)), fill=color)
         draw.ellipse((235, -65, 450, 150), fill=(30, 69, 113))
         draw.ellipse((-100, 440, 165, 705), fill=(23, 57, 91))
-    draw = ImageDraw.Draw(image)
-    title_font = load_font(24, True)
-    body_font = load_font(17)
-    title = "বাংলা AI ভিডিও"
-    title_lines = wrap_text(draw, title, title_font, 300)
-    y = 75
-    for line in title_lines:
-        box = draw.textbbox((0, 0), line, font=title_font)
-        draw.text(((width - (box[2] - box[0])) / 2, y), line, font=title_font, fill=(255, 255, 255), stroke_width=1, stroke_fill=(0, 0, 0))
-        y += 33
-    draw.rounded_rectangle((30, 150, 330, 153), radius=2, fill=(83, 177, 244))
-    excerpt = re.sub(r"\s+", " ", script).strip()
-    if not source_image:
-        lines = wrap_text(draw, excerpt[:300], body_font, 295)
-        y = 185
-        for line in lines[:10]:
-            draw.text((33, y), line, font=body_font, fill=(255, 255, 255), stroke_width=1, stroke_fill=(0, 0, 0))
-            y += 27
-    draw.text((33, 580), "Bangla AI Voice Video Maker", font=load_font(11), fill=(240, 245, 255), stroke_width=1, stroke_fill=(0, 0, 0))
-    if credit:
-        credit_font = load_font(6)
-        credit_lines = wrap_text(draw, "Image credit: " + credit, credit_font, 340)
-        for index, line in enumerate(credit_lines[:2]):
-            draw.text((10, 605 + index * 9), line, font=credit_font, fill=(255, 255, 255), stroke_width=1, stroke_fill=(0, 0, 0))
+    # Keep the visual background clean: narration text belongs only in the timed caption layer.
+    # Do not burn the script, app title, or provider credits into every background image.
     target = folder / "background.png"
     image.save(target, optimize=True)
     return target
@@ -983,7 +961,7 @@ def make_caption_frames(script: str, duration: float, background: Path, folder: 
     bases = []
     for background_path in background_paths:
         with Image.open(background_path) as source:
-            bases.append(source.convert("RGB").resize((180, 320), Image.Resampling.BILINEAR))
+            bases.append(source.convert("RGB").resize((360, 640), Image.Resampling.LANCZOS))
 
     sentences = _split_script_into_scenes(script)
     sentence_words = [re.findall(r"\S+", sentence) for sentence in sentences]
@@ -1012,7 +990,7 @@ def make_caption_frames(script: str, duration: float, background: Path, folder: 
             slot_backgrounds.append(slot_index % max(1, len(bases)))
     print(f"VISUAL_TIMELINE interval_seconds={interval} slots={slot_count} unique_images={len(bases)}", flush=True)
     safe_offset = max(-max(0.0, duration - 0.1), min(max(0.0, duration - 0.1), caption_offset))
-    font = load_font(13, True)
+    font = load_font(25, True)
     entries = []
     image_index = 0
     blank_path = frame_dir / "timing-gap.png"
@@ -1052,7 +1030,7 @@ def make_caption_frames(script: str, duration: float, background: Path, folder: 
             frame = base.crop((left_crop, top_crop, left_crop + crop_width, top_crop + crop_height)).resize(base.size, Image.Resampling.BILINEAR)
             overlay = Image.new("RGBA", frame.size, (0, 0, 0, 0))
             panel = ImageDraw.Draw(overlay)
-            panel.rounded_rectangle((7, 220, 173, 311), radius=9, fill=(0, 0, 0, 205), outline=(95, 170, 230, 220), width=1)
+            panel.rounded_rectangle((14, 440, 346, 622), radius=18, fill=(0, 0, 0, 205), outline=(95, 170, 230, 220), width=2)
             frame = Image.alpha_composite(frame.convert("RGBA"), overlay)
             draw = ImageDraw.Draw(frame)
             # Keep the current word and nearby context visible, even for long sentences.
@@ -1064,7 +1042,7 @@ def make_caption_frames(script: str, duration: float, background: Path, folder: 
             lines = []
             current_line = []
             current_width = 0
-            max_width = 150
+            max_width = 300
             for wi, token in enumerate(shown):
                 token_width = draw.textbbox((0, 0), token, font=font)[2]
                 needed = token_width + (draw.textbbox((0, 0), " ", font=font)[2] if current_line else 0)
@@ -1078,14 +1056,14 @@ def make_caption_frames(script: str, duration: float, background: Path, folder: 
             if current_line:
                 lines.append(current_line)
             visible_lines = lines[-4:]
-            y = 232 + max(0, (4 - len(visible_lines)) * 17)
+            y = 464 + max(0, (4 - len(visible_lines)) * 34)
             for line in visible_lines:
                 x = 14
                 for token, active in line:
                     color = (255, 224, 65) if active else (255, 255, 255)
                     draw.text((x, y), token, font=font, fill=color, stroke_width=1, stroke_fill=(0, 0, 0))
                     x += draw.textbbox((0, 0), token, font=font)[2] + draw.textbbox((0, 0), " ", font=font)[2]
-                y += 17
+                y += 34
             path = frame_dir / f"frame-{image_index:06d}.png"
             frame.convert("RGB").save(path, compress_level=1)
             entries.append((path, max(0.05, end - start)))
@@ -1154,17 +1132,17 @@ def render(job_id: str, script: str, mode: str, audio_path: Optional[Path], capt
             JOBS[job_id]["message"] = "শব্দের সঙ্গে মিলিয়ে সাবটাইটেল তৈরি হয়েছে"
         output = folder / "video.mp4"
         # Pre-rendered caption images avoid FFmpeg/libass memory spikes on Render Free.
-        vf = "scale=180:320,format=yuv420p"
-        print(f"VIDEO_STAGE job={job_id} stage=ffmpeg_start duration={duration:.2f} size=180x320 fps=5 subtitles=pillow_word_highlight frames={frame_count}", flush=True)
+        vf = "scale=360:640:flags=lanczos,format=yuv420p"
+        print(f"VIDEO_STAGE job={job_id} stage=ffmpeg_start duration={duration:.2f} size=360x640 fps=15 subtitles=pillow_word_highlight frames={frame_count}", flush=True)
         with LOCK:
             JOBS[job_id]["progress"] = 50
             JOBS[job_id]["message"] = "সাবটাইটেলসহ ভিডিও রেন্ডার হচ্ছে"
         run([
             "ffmpeg", "-y", "-filter_threads", "1", "-filter_complex_threads", "1",
             "-f", "concat", "-safe", "0", "-i", str(frame_list), "-i", str(audio_path),
-            "-map", "0:v:0", "-map", "1:a:0", "-vf", vf, "-t", str(duration), "-r", "5",
-            "-c:v", "libx264", "-threads", "1", "-preset", "ultrafast", "-crf", "32",
-            "-c:a", "aac", "-b:a", "48k", "-threads", "1", "-shortest", "-movflags", "+faststart", str(output)
+            "-map", "0:v:0", "-map", "1:a:0", "-vf", vf, "-t", str(duration), "-r", "15",
+            "-c:v", "libx264", "-threads", "1", "-preset", "ultrafast", "-crf", "27",
+            "-c:a", "aac", "-b:a", "96k", "-threads", "1", "-shortest", "-movflags", "+faststart", str(output)
         ], 240)
         print(f"VIDEO_STAGE job={job_id} stage=ffmpeg_done", flush=True)
         with LOCK:
