@@ -4,6 +4,9 @@ on:
     branches: [main]
     paths:
       - 'app/**'
+      - 'backend/**'
+      - 'Dockerfile'
+      - 'render.yaml'
       - 'build.gradle.kts'
       - 'settings.gradle.kts'
       - 'gradle.properties'
