@@ -73,6 +73,8 @@ jobs:
             curl --fail --silent --show-error "http://127.0.0.1:10000/api/jobs/$job_id/download" -o "$language.mp4"
             docker run --rm -v "$PWD":/test -w /test bangla-video-api-test ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$language.mp4"
             test -s "$language.mp4"
+            curl --fail --silent --show-error "http://127.0.0.1:10000/api/jobs/$job_id/report" -o "$language-report.json"
+            python -c 'import json,sys; d=json.load(open(sys.argv[1])); assert d["overall"] == "passed_with_limits", d; assert d["checks"]["video_track"], d; assert d["checks"]["audio_track"], d; assert d["checks"]["duration_seconds"] > 0, d; assert "প্রতিবেদন" in d["report_text"], d; print("Accessible video quality report passed:", d["report_text"])' "$language-report.json"
           done
       - name: Show backend logs on failure
         if: failure()
