@@ -13,8 +13,8 @@ android {
         applicationId = "com.rajuhossain.banglaaivoicevideomaker"
         minSdk = 26
         targetSdk = 35
-        versionCode = 3
-        versionName = "0.3.0"
+        versionCode = providers.environmentVariable("APP_VERSION_CODE").getOrElse("4").toInt()
+        versionName = providers.environmentVariable("APP_VERSION_NAME").getOrElse("0.3.0")
         buildConfigField("String", "API_BASE_URL", "\"$configuredApiBaseUrl\"")
     }
     buildFeatures { compose = true; buildConfig = true }
