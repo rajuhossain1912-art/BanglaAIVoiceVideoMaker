@@ -1236,7 +1236,7 @@ def render(job_id: str, script: str, mode: str, audio_path: Optional[Path], capt
         ], 240)
         print(f"VIDEO_STAGE job={job_id} stage=ffmpeg_done", flush=True)
         with LOCK:
-            JOBS[job_id].update(status="completed", progress=100, message="ভিডিও তৈরি হয়েছে", download_url=f"/api/jobs/{job_id}/download", duration=round(duration, 2), completed_at=time.time())
+            JOBS[job_id].update(status="completed", progress=100, message="ভিডিও তৈরি হয়েছে", download_url=f"/api/jobs/{job_id}/download", duration=round(duration, 2), scene_count=len(backgrounds), caption_frame_count=frame_count, script_characters=len(script), video_mode=mode, completed_at=time.time())
     except Exception as exc:
         print(f"VIDEO_STAGE job={job_id} stage=failed error={type(exc).__name__}: {str(exc)[:500]}", flush=True)
         with LOCK:
@@ -1371,6 +1371,138 @@ def job_status(job_id: str):
         if not job:
             raise HTTPException(404, "কাজটি পাওয়া যায়নি। সার্ভার পুনরায় চালু হলে অস্থায়ী কাজের তথ্য মুছে যেতে পারে।")
         return dict(job)
+
+
+@app.get("/api/jobs/{job_id}/report")
+def video_quality_report(job_id: str):
+    """Create a TalkBack-friendly, free technical report for a completed MP4."""
+    with LOCK:
+        job = JOBS.get(job_id)
+        if not job:
+            raise HTTPException(404, "ভিডিওর কাজটি পাওয়া যায়নি। সার্ভার পুনরায় চালু হলে অস্থায়ী কাজের তথ্য মুছে যেতে পারে।")
+        snapshot = dict(job)
+    if snapshot.get("status") != "completed":
+        raise HTTPException(409, "ভিডিও তৈরি সম্পূর্ণ হলে পরীক্ষা করা যাবে।")
+    video_path = WORK_DIR / job_id / "video.mp4"
+    if not video_path.exists() or video_path.stat().st_size <= 0:
+        raise HTTPException(404, "ভিডিও ফাইলটি পাওয়া যাচ্ছে না।")
+    try:
+        probe = json.loads(run([
+            "ffprobe", "-v", "error", "-show_entries",
+            "format=duration,size,format_name:stream=codec_type,codec_name,width,height,sample_rate,channels",
+            "-of", "json", str(video_path)
+        ], 30).decode("utf-8", "replace"))
+    except Exception as exc:
+        raise HTTPException(500, "ভিডিওর তথ্য পরীক্ষা করা যায়নি।") from exc
+
+    streams = probe.get("streams", [])
+    video_stream = next((s for s in streams if s.get("codec_type") == "video"), None)
+    audio_stream = next((s for s in streams if s.get("codec_type") == "audio"), None)
+    try:
+        duration = float(probe.get("format", {}).get("duration", 0))
+    except (TypeError, ValueError):
+        duration = 0.0
+    size_bytes = video_path.stat().st_size
+
+    audio_check = "অডিও ট্র্যাক পাওয়া যায়নি।"
+    audio_level = None
+    if audio_stream:
+        try:
+            audio_log = subprocess.run(
+                ["ffmpeg", "-hide_banner", "-i", str(video_path), "-vn", "-af", "volumedetect", "-f", "null", "-"],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=45, check=False
+            ).stderr.decode("utf-8", "replace")
+            match = re.search(r"mean_volume:\s*(-?inf|-?[0-9.]+) dB", audio_log)
+            peak = re.search(r"max_volume:\s*(-?inf|-?[0-9.]+) dB", audio_log)
+            audio_level = match.group(1) if match else None
+            if peak and peak.group(1) != "-inf":
+                audio_check = "অডিও ট্র্যাক আছে এবং শব্দের সংকেত পাওয়া গেছে।"
+            else:
+                audio_check = "অডিও ট্র্যাক আছে, কিন্তু শব্দ নীরব বা পরীক্ষা করা যায়নি।"
+        except Exception:
+            audio_check = "অডিও ট্র্যাক আছে; শব্দের মাত্রা পরীক্ষা সম্পূর্ণ হয়নি।"
+
+    distinct_frames = None
+    scene_check = "দৃশ্য পরিবর্তন আলাদাভাবে পরীক্ষা করা যায়নি।"
+    if video_stream:
+        try:
+            frame_result = subprocess.run(
+                ["ffmpeg", "-v", "error", "-i", str(video_path), "-vf",
+                 "fps=1,scale=32:56:flags=fast_bilinear,format=gray",
+                 "-an", "-f", "framemd5", "-"],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=60, check=False
+            )
+            if frame_result.returncode == 0:
+                hashes = []
+                for line in frame_result.stdout.decode("utf-8", "replace").splitlines():
+                    if line and not line.startswith("#") and "," in line:
+                        hashes.append(line.rsplit(",", 1)[-1].strip())
+                distinct_frames = len(set(hashes))
+                if len(hashes) == 0:
+                    scene_check = "ভিডিওর দৃশ্য নমুনা পড়া যায়নি।"
+                elif distinct_frames >= 2:
+                    scene_check = f"প্রতি সেকেন্ডে নমুনা নিয়ে {distinct_frames}টি আলাদা দৃশ্যচিত্র পাওয়া গেছে।"
+                else:
+                    scene_check = "নমুনা নেওয়া দৃশ্যচিত্র একই রকম; দৃশ্য পরিবর্তন কম হতে পারে।"
+        except Exception:
+            pass
+
+    checks = {
+        "file_exists": True,
+        "video_track": video_stream is not None,
+        "audio_track": audio_stream is not None,
+        "duration_seconds": round(duration, 2),
+        "width": video_stream.get("width") if video_stream else None,
+        "height": video_stream.get("height") if video_stream else None,
+        "video_codec": video_stream.get("codec_name") if video_stream else None,
+        "audio_codec": audio_stream.get("codec_name") if audio_stream else None,
+        "audio_mean_volume_db": audio_level,
+        "scene_sample_count": distinct_frames,
+        "scene_count_from_generator": snapshot.get("scene_count"),
+        "caption_frame_count": snapshot.get("caption_frame_count"),
+        "file_size_bytes": size_bytes,
+        "format": probe.get("format", {}).get("format_name", "unknown"),
+    }
+    if not video_stream:
+        summary = "পরীক্ষায় সমস্যা পাওয়া গেছে: ভিডিও ট্র্যাক নেই।"
+        overall = "problem"
+    elif not audio_stream:
+        summary = "ভিডিও ফাইল তৈরি হয়েছে, কিন্তু অডিও ট্র্যাক নেই।"
+        overall = "problem"
+    elif duration <= 0:
+        summary = "ভিডিওর দৈর্ঘ্য সঠিকভাবে পড়া যায়নি।"
+        overall = "problem"
+    else:
+        summary = "প্রাথমিক প্রযুক্তিগত পরীক্ষা সফল। ভিডিও ও অডিও ট্র্যাক এবং ফাইলের দৈর্ঘ্য পাওয়া গেছে। দৃশ্য ও সাবটাইটেলের বিষয়বস্তু শতভাগ সঠিক কি না, এই পরীক্ষা তা নিশ্চিত করে না।"
+        overall = "passed_with_limits"
+
+    report_text = "ভিডিও পরীক্ষার প্রতিবেদন। " + summary + " "
+    report_text += f"ভিডিওর দৈর্ঘ্য {round(duration, 1)} সেকেন্ড। "
+    report_text += f"ফাইলের আকার {round(size_bytes / (1024 * 1024), 2)} মেগাবাইট। "
+    report_text += ("ভিডিও ট্র্যাক আছে। " if video_stream else "ভিডিও ট্র্যাক নেই। ")
+    report_text += audio_check + " "
+    report_text += scene_check + " "
+    captions = snapshot.get("caption_frame_count")
+    if isinstance(captions, int) and captions > 0:
+        report_text += f"তৈরির সময় {captions}টি সাবটাইটেল ফ্রেম তৈরি হয়েছিল। "
+    else:
+        report_text += "সাবটাইটেলের দৃশ্যমান লেখা আলাদাভাবে যাচাই করা যায়নি। "
+    report_text += "এই প্রতিবেদন ফাইলের প্রযুক্তিগত পরীক্ষা; কণ্ঠে লেখা হুবহু পড়া হয়েছে কি না বা প্রতিটি সাবটাইটেল ঠিক আছে কি না তা নিশ্চিত করে না।"
+
+    return {
+        "job_id": job_id,
+        "overall": overall,
+        "summary": summary,
+        "report_text": report_text,
+        "checks": checks,
+        "audio_check": audio_check,
+        "scene_check": scene_check,
+        "limitations": [
+            "কণ্ঠে লেখা হুবহু পড়া হয়েছে কি না স্বয়ংক্রিয়ভাবে নিশ্চিত করা হয়নি।",
+            "সাবটাইটেলের বানান ও সময়ের সঙ্গে কণ্ঠের মিল OCR বা মানুষের পর্যালোচনা ছাড়া নিশ্চিত নয়।",
+            "দৃশ্য নমুনা পরীক্ষা দৃশ্যের বিষয়বস্তু সঠিক কি না যাচাই করে না।"
+        ],
+    }
 
 
 @app.get("/api/jobs/{job_id}/download")
