@@ -768,7 +768,7 @@ def make_background(script: str, folder: Path, model_visual_prompt: Optional[str
             (("বই", "শিক্ষা", "স্কুল", "শিক্ষার্থী", "education", "book"), (95, 63, 128), "education"),
             (("বাংলাদেশ", "দেশ", "জাতীয়", "বাংলা", "bangladesh"), (24, 111, 73), "bangladesh"),
         ]
-        theme = next((item for keywords, color, name in themes if any(k in text for k in keywords)), None)
+        theme = next(((keywords, color, name) for keywords, color, name in themes if any(k in text for k in keywords)), None)
         if theme:
             base_color, theme_name = theme[1], theme[2]
         else:
