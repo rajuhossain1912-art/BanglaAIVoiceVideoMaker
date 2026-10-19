@@ -751,15 +751,84 @@ def make_background(script: str, folder: Path, model_visual_prompt: Optional[str
         except Exception:
             source_image = None
     if not source_image:
+        # Distinct topic-aware vector fallback: never reuse the same generic blue card
+        # for every scene when free image-generation providers are unavailable.
         image = Image.new("RGB", (width, height))
         draw = ImageDraw.Draw(image)
-        # Draw horizontal bands instead of allocating a Python tuple for every pixel.
-        for y in range(0, height, 8):
-            ratio = y / height
-            color = (int(13 + 22 * ratio), int(29 + 18 * ratio), int(63 + 42 * ratio))
-            draw.rectangle((0, y, width, min(height, y + 7)), fill=color)
-        draw.ellipse((235, -65, 450, 150), fill=(30, 69, 113))
-        draw.ellipse((-100, 440, 165, 705), fill=(23, 57, 91))
+        text = (script or "").lower()
+        themes = [
+            (("ক্রিকেট", "ব্যাটসম্যান", "বোলার", "স্টেডিয়াম", "cricket", "football", "ফুটবল"), (22, 91, 65), "sport"),
+            (("রান্না", "খাবার", "রেসিপি", "খাদ্য", "cooking", "food"), (150, 76, 31), "food"),
+            (("নদী", "সমুদ্র", "ভ্রমণ", "পাহাড়", "পর্যটন", "travel", "river", "sea"), (25, 95, 135), "travel"),
+            (("বিজ্ঞান", "মহাকাশ", "গ্রহ", "পরমাণু", "science", "space"), (56, 47, 123), "science"),
+            (("ইতিহাস", "ঐতিহাসিক", "রাজা", "যুদ্ধ", "history"), (119, 75, 42), "history"),
+            (("ইসলাম", "মসজিদ", "নামাজ", "কোরআন", "আল্লাহ", "islam"), (31, 104, 81), "faith"),
+            (("মোবাইল", "ফোন", "প্রযুক্তি", "কম্পিউটার", "অ্যাপ", "technology", "smartphone"), (30, 72, 125), "technology"),
+            (("কৃষি", "কৃষক", "ধান", "ফসল", "agriculture", "farm"), (65, 112, 43), "farm"),
+            (("বই", "শিক্ষা", "স্কুল", "শিক্ষার্থী", "education", "book"), (95, 63, 128), "education"),
+            (("বাংলাদেশ", "দেশ", "জাতীয়", "বাংলা", "bangladesh"), (24, 111, 73), "bangladesh"),
+        ]
+        theme = next((item for keywords, color, name in themes if any(k in text for k in keywords)), None)
+        if theme:
+            base_color, theme_name = theme[1], theme[2]
+        else:
+            # Stable per-scene variation for topics without a recognized keyword.
+            seed = sum(ord(ch) for ch in text[:180])
+            base_color = (35 + seed % 75, 45 + (seed // 3) % 75, 70 + (seed // 7) % 90)
+            theme_name = "general"
+        for y in range(height):
+            ratio = y / max(1, height - 1)
+            color = tuple(max(0, min(255, int(channel * (0.72 + ratio * 0.48)))) for channel in base_color)
+            draw.line((0, y, width, y), fill=color)
+        # A large, legible subject symbol gives the fallback a scene-specific composition.
+        if theme_name == "sport":
+            draw.ellipse((245, 160, 315, 230), fill=(232, 105, 49), outline=(255, 255, 255), width=4)
+            draw.polygon([(65, 340), (92, 320), (235, 500), (212, 520)], fill=(225, 191, 125))
+            draw.line((75, 350, 220, 505), fill=(255, 255, 255), width=5)
+        elif theme_name == "food":
+            draw.ellipse((45, 240, 315, 510), fill=(244, 229, 194), outline=(255, 255, 255), width=10)
+            draw.ellipse((85, 280, 275, 470), fill=(206, 91, 40), outline=(255, 203, 112), width=5)
+            for px, py in ((135, 330), (205, 360), (160, 415), (235, 420)):
+                draw.ellipse((px, py, px+20, py+20), fill=(65, 132, 60))
+        elif theme_name == "travel":
+            draw.polygon([(0, 430), (90, 240), (155, 360), (235, 180), (360, 430)], fill=(184, 213, 224))
+            draw.polygon([(0, 510), (115, 355), (210, 480), (300, 340), (360, 470), (360, 640), (0, 640)], fill=(35, 133, 111))
+            draw.ellipse((250, 90, 310, 150), fill=(255, 214, 116))
+        elif theme_name == "science":
+            draw.ellipse((65, 245, 295, 475), outline=(220, 228, 255), width=8)
+            draw.ellipse((135, 315, 225, 405), fill=(244, 187, 91))
+            draw.ellipse((170, 220, 190, 240), fill=(255, 255, 255))
+        elif theme_name == "history":
+            draw.polygon([(50, 390), (180, 215), (310, 390)], fill=(218, 190, 142))
+            draw.rectangle((75, 390, 285, 510), fill=(228, 207, 164))
+            for px in (105, 165, 225):
+                draw.rectangle((px, 410, px+25, 500), fill=(123, 82, 49))
+        elif theme_name == "faith":
+            draw.rectangle((70, 360, 290, 505), fill=(221, 208, 169))
+            draw.rectangle((95, 300, 265, 360), fill=(221, 208, 169))
+            draw.arc((110, 225, 250, 365), 180, 360, fill=(255, 225, 145), width=10)
+            draw.line((180, 190, 180, 225), fill=(255, 225, 145), width=7)
+        elif theme_name == "technology":
+            draw.rounded_rectangle((105, 190, 255, 475), radius=24, fill=(20, 25, 38), outline=(231, 240, 255), width=7)
+            draw.rounded_rectangle((120, 220, 240, 430), radius=10, fill=(97, 190, 220))
+            draw.ellipse((166, 445, 194, 465), fill=(231, 240, 255))
+        elif theme_name == "farm":
+            draw.ellipse((245, 95, 310, 160), fill=(255, 217, 114))
+            for y in (380, 425, 470, 515):
+                draw.arc((-50, y-50, 410, y+90), 5, 175, fill=(218, 228, 136), width=12)
+            draw.line((95, 370, 135, 300, 170, 370), fill=(235, 226, 180), width=8)
+        elif theme_name == "education":
+            draw.polygon([(55, 300), (180, 245), (305, 300), (180, 355)], fill=(236, 214, 151))
+            draw.polygon([(100, 325), (100, 420), (180, 465), (260, 420), (260, 325), (180, 370)], fill=(240, 234, 207))
+            draw.line((180, 355, 180, 465), fill=(145, 106, 65), width=5)
+        elif theme_name == "bangladesh":
+            draw.ellipse((65, 230, 295, 460), fill=(20, 106, 73), outline=(255, 255, 255), width=5)
+            draw.ellipse((135, 285, 225, 375), fill=(220, 42, 55))
+        else:
+            draw.ellipse((225, 95, 310, 180), fill=(255, 220, 135))
+            draw.polygon([(0, 490), (95, 350), (170, 445), (265, 315), (360, 455), (360, 640), (0, 640)], fill=tuple(max(0, c-18) for c in base_color))
+        draw.ellipse((18, 25, 42, 49), fill=(255, 255, 255))
+        draw.ellipse((315, 550, 342, 577), fill=(255, 255, 255))
     # Keep the visual background clean: narration text belongs only in the timed caption layer.
     # Do not burn the script, app title, or provider credits into every background image.
     target = folder / "background.png"
