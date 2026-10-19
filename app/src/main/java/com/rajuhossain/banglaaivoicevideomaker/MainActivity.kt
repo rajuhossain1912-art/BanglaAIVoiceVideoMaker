@@ -72,6 +72,9 @@ private fun VideoMakerScreen() {
     var online by remember { mutableStateOf(isInternetAvailable(context)) }
     var running by remember { mutableStateOf(false) }
     var downloadPath by remember { mutableStateOf("") }
+    var currentJobId by remember { mutableStateOf("") }
+    var reportRunning by remember { mutableStateOf(false) }
+    var reportText by remember { mutableStateOf("") }
 
     LaunchedEffect(mode, hasSavedVoiceProfile) {
         val profile = File(context.filesDir, "voice_profile_sample")
@@ -289,6 +292,8 @@ private fun VideoMakerScreen() {
                         running = true
                         progress = 0
                         downloadPath = ""
+                        currentJobId = ""
+                        reportText = ""
                         status = "অনলাইন সার্ভারে কাজ পাঠানো হচ্ছে।"
                         scope.launch {
                             try {
@@ -305,8 +310,9 @@ private fun VideoMakerScreen() {
                                     status = info.optString("message", "ভিডিও তৈরি চলছে।")
                                     when (info.optString("status")) {
                                         "completed" -> {
+                                            currentJobId = jobId
                                             downloadPath = info.optString("download_url", "/api/jobs/" + jobId + "/download")
-                                            status = "ভিডিও তৈরি হয়েছে। এখন ভিডিও সংরক্ষণ করতে নিচের ডাউনলোড বোতাম চাপুন।"
+                                            status = "ভিডিও তৈরি হয়েছে। চাইলে আগে ভিডিও পরীক্ষা ও প্রতিবেদন শুনুন, অথবা ভিডিও ডাউনলোড করুন।"
                                             finished = true
                                         }
                                         "failed" -> {
@@ -351,6 +357,37 @@ private fun VideoMakerScreen() {
                 },
                 modifier = Modifier.fillMaxWidth()
             ) { Text("ভিডিও ডাউনলোড করুন") }
+            Button(
+                onClick = {
+                    val baseUrl = BuildConfig.API_BASE_URL.trim().trimEnd('/')
+                    reportRunning = true
+                    reportText = ""
+                    status = "ভিডিওর প্রযুক্তিগত পরীক্ষা চলছে।"
+                    scope.launch {
+                        try {
+                            val report = withContext(Dispatchers.IO) { getVideoReport(baseUrl, currentJobId) }
+                            reportText = report.optString("report_text", "পরীক্ষার প্রতিবেদন পাওয়া যায়নি।")
+                            status = "ভিডিও পরীক্ষা সম্পন্ন হয়েছে। নিচের প্রতিবেদন TalkBack দিয়ে পড়ুন।"
+                        } catch (e: Exception) {
+                            reportText = "ভিডিও পরীক্ষা করা যায়নি: " + (e.message ?: "অজানা সমস্যা")
+                            status = reportText
+                        } finally {
+                            reportRunning = false
+                        }
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !reportRunning && currentJobId.isNotBlank()
+            ) { Text(if (reportRunning) "ভিডিও পরীক্ষা চলছে" else "ভিডিও পরীক্ষা ও প্রতিবেদন শুনুন") }
+            if (reportText.isNotBlank()) {
+                Card(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(14.dp)) {
+                        Text("ভিডিও পরীক্ষার প্রতিবেদন", fontWeight = FontWeight.SemiBold)
+                        Spacer(Modifier.height(6.dp))
+                        Text(reportText, modifier = Modifier.semantics { contentDescription = "ভিডিও পরীক্ষার প্রতিবেদন: " + reportText })
+                    }
+                }
+            }
         }
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(14.dp)) {
@@ -441,6 +478,31 @@ private fun getJobStatus(baseUrl: String, jobId: String): JSONObject {
         if (code !in 200..299) {
             val detail = runCatching { JSONObject(body).optString("detail") }.getOrNull().orEmpty()
             throw IllegalStateException(detail.ifBlank { "সার্ভারের অবস্থা পাওয়া যায়নি (HTTP $code)।" })
+        }
+        return JSONObject(body)
+    } finally {
+        connection.disconnect()
+    }
+}
+
+
+private fun getVideoReport(baseUrl: String, jobId: String): JSONObject {
+    require(jobId.matches(Regex("[a-fA-F0-9]{16,64}"))) { "ভিডিওর পরিচয় পাওয়া যায়নি।" }
+    val connection = (URL(baseUrl + "/api/jobs/" + jobId + "/report").openConnection() as HttpURLConnection).apply {
+        requestMethod = "GET"
+        connectTimeout = 15000
+        readTimeout = 120000
+    }
+    try {
+        val code = connection.responseCode
+        val stream = if (code in 200..299) connection.inputStream else connection.errorStream
+        val body = stream?.use { it.readBytes().toString(Charsets.UTF_8) } ?: ""
+        if (body.isBlank()) {
+            throw IllegalStateException("পরীক্ষার প্রতিবেদন খালি এসেছে (HTTP $code)।")
+        }
+        if (code !in 200..299) {
+            val detail = runCatching { JSONObject(body).optString("detail") }.getOrNull().orEmpty()
+            throw IllegalStateException(detail.ifBlank { "প্রতিবেদন পাওয়া যায়নি (HTTP $code)।" })
         }
         return JSONObject(body)
     } finally {
