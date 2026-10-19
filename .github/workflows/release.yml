@@ -7,7 +7,7 @@ on:
       version:
         description: Release tag (for example v0.1.0)
         required: true
-        default: v0.1.0
+        default: v0.3.1
         type: string
 permissions:
   contents: write
@@ -17,7 +17,7 @@ jobs:
     timeout-minutes: 25
     env:
       API_BASE_URL: https://bangla-ai-voice-video-maker-api.onrender.com
-      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.version || 'v0.1.0' }}
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.version || format('v0.3.{0}', github.run_number) }}
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
@@ -112,6 +112,10 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.9"
+      - name: Set a unique installable app version
+        run: |
+          echo "APP_VERSION_CODE=$((1000 + $GITHUB_RUN_NUMBER))" >> "$GITHUB_ENV"
+          echo "APP_VERSION_NAME=0.3.$GITHUB_RUN_NUMBER" >> "$GITHUB_ENV"
       - name: Build Android debug APK
         run: gradle --no-daemon assembleDebug -PAPI_BASE_URL="$API_BASE_URL"
       - name: Give APK a simple download filename
@@ -128,7 +132,7 @@ jobs:
             
             **সহজে ডাউনলোড করতে নিচের লিংকে চাপ দিন:**
             
-            [**app-release.apk — Android অ্যাপ ডাউনলোড করুন**](https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/releases/download/v0.1.0/app-release.apk)
+            [**app-release.apk — Android অ্যাপ ডাউনলোড করুন**](https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/releases/latest/download/app-release.apk)
             
             অথবা নিচের Assets অংশে **app-release.apk** ফাইলটি নির্বাচন করুন।
             
