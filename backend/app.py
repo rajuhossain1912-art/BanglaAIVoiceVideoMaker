@@ -270,6 +270,27 @@ VISUAL_CONCEPTS = [
     (("বৃষ্টি", "বর্ষা"), "a realistic rainy landscape"),
     (("ফুল", "ফুলের"), "a colorful flower garden"),
     (("সমুদ্র", "সাগর", "সমুদ্রসৈকত"), "ocean waves on a beach"),
+    # Broad everyday subjects so arbitrary Bangla scripts do not default to generic graphics.
+    (("ক্রিকেট", "ব্যাট", "বোলার", "উইকেট", "রান", "ক্রিকেটার"), "a realistic cricket match in Bangladesh with players on a green field"),
+    (("ফুটবল", "গোল", "ফুটবলার", "মাঠে খেলা"), "a football match with players competing on a green pitch"),
+    (("খেলাধুলা", "খেলা", "খেলোয়াড়", "খেলোয়াড়", "টুর্নামেন্ট", "অলিম্পিক"), "athletes competing in a sports event"),
+    (("ইতিহাস", "ঐতিহাসিক", "মুক্তিযুদ্ধ", "ভাষা আন্দোলন", "১৯৭১", "একাত্তর"), "a respectful historical scene connected to Bangladesh's past"),
+    (("বিজ্ঞান", "গবেষণা", "পরীক্ষাগার", "আবিষ্কার", "বিজ্ঞানী", "মহাকাশ"), "scientists conducting research in a modern laboratory"),
+    (("রান্না", "খাবার", "রেসিপি", "রান্নাঘর", "পুষ্টি", "সবজি"), "fresh ingredients being prepared in a home kitchen"),
+    (("ভ্রমণ", "পর্যটন", "ঘুরতে", "কক্সবাজার", "সুন্দরবন", "সেন্টমার্টিন", "পাহাড়", "পাহাড়"), "travelers exploring a beautiful destination in Bangladesh"),
+    (("ব্যবসা", "বাণিজ্য", "দোকান", "উদ্যোক্তা", "ক্রেতা", "বিক্রেতা"), "a small Bangladeshi business owner serving customers"),
+    (("ব্যাংক", "সঞ্চয়", "সঞ্চয়", "ঋণ", "লেনদেন", "টাকা", "মুদ্রা"), "a person managing household finances and savings"),
+    (("নির্বাচন", "ভোট", "সংসদ", "রাজনীতি", "জনসভা", "প্রার্থী"), "a neutral civic scene showing people participating in a democratic election"),
+    (("আবহাওয়া", "আবহাওয়া", "তাপমাত্রা", "জলবায়ু", "জলবায়ু", "গরম", "শীত", "ঝড়", "ঝড়"), "a realistic weather scene showing the relevant season and sky"),
+    (("বিদ্যুৎ", "সৌরশক্তি", "জ্বালানি", "পরিবেশ", "দূষণ", "পুনর্ব্যবহার"), "renewable energy and environmental sustainability in Bangladesh"),
+    (("সঙ্গীত", "গান", "গায়ক", "গায়ক", "বাদ্যযন্ত্র", "নাচ"), "musicians performing on a small stage with instruments"),
+    (("বই", "লাইব্রেরি", "গ্রন্থাগার", "সাহিত্য", "কবিতা", "লেখক", "লেখা"), "a reader exploring books in a welcoming library"),
+    (("প্রাণী", "পশু", "বিড়াল", "বিড়াল", "কুকুর", "গরু", "ছাগল", "বাঘ", "হাতি"), "animals in a natural or farm setting appropriate to the subject"),
+    (("মাছ", "মাছধরা", "জেলে", "মৎস্য", "চিংড়ি", "চিংড়ি"), "Bangladeshi fishers working beside a river with fishing nets"),
+    (("বিয়ে", "বিয়ে", "অনুষ্ঠান", "উৎসব", "ঈদ", "পূজা", "মেলা"), "a respectful community celebration in Bangladesh"),
+    (("বাড়ি", "বাড়ি", "নির্মাণ", "স্থাপত্য", "ভবন", "বাসস্থান"), "a realistic home or building scene in Bangladesh"),
+    (("যুদ্ধ", "শান্তি", "সংঘাত", "শরণার্থী"), "a humanitarian scene focused on civilian safety and peace"),
+    (("মহিলা", "নারী", "মেয়ে", "মেয়ে", "নারীর অধিকার", "মাতৃত্ব"), "Bangladeshi women participating in everyday community life"),
 ]
 
 def _matched_visual_concepts(script: str, limit: int = 2):
