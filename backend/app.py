@@ -221,13 +221,32 @@ def synthesize_cloned_voice(script: str, reference_audio: Path, folder: Path) ->
         normalized.unlink(missing_ok=True)
 
 def load_font(size: int, bold=False):
-    candidates = [
+    # Debian's Noto package may install variable-font filenames rather than
+    # the older NotoSansBengali-Regular/Bold names. Search Bengali-capable
+    # fonts before falling back to DejaVu/default, which may render tofu boxes.
+    preferred = [
         "/usr/share/fonts/truetype/noto/NotoSansBengali-Bold.ttf" if bold else "/usr/share/fonts/truetype/noto/NotoSansBengali-Regular.ttf",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/noto/NotoSansBengaliUI-Bold.ttf" if bold else "/usr/share/fonts/truetype/noto/NotoSansBengaliUI-Regular.ttf",
     ]
+    candidates = [p for p in preferred if Path(p).exists()]
+    for pattern in (
+        "/usr/share/fonts/**/*Bengali*Bold*.ttf" if bold else "/usr/share/fonts/**/*Bengali*Regular*.ttf",
+        "/usr/share/fonts/**/*Bengali*.ttf",
+    ):
+        candidates.extend(sorted(Path("/").glob(pattern.lstrip("/"))))
+    candidates.extend([
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    ])
+    seen = set()
     for candidate in candidates:
-        if Path(candidate).exists():
+        candidate = str(candidate)
+        if candidate in seen or not Path(candidate).exists():
+            continue
+        seen.add(candidate)
+        try:
             return ImageFont.truetype(candidate, size)
+        except Exception:
+            continue
     return ImageFont.load_default()
 
 
@@ -1068,16 +1087,29 @@ def make_caption_frames(script: str, duration: float, background: Path, folder: 
     scene_texts = list(visual_scene_texts or sentences)
     scene_concepts = [_matched_visual_concepts(x, limit=3) for x in scene_texts]
     slot_backgrounds = []
+    previous_background = None
     for slot_index in range(slot_count):
         slot_text = slot_texts[min(slot_index, len(slot_texts) - 1)] if slot_texts else script
         concepts = _matched_visual_concepts(slot_text, limit=3)
         scores = [sum(1 for concept in concepts if concept in candidates) for candidates in scene_concepts]
         if scores and max(scores) > 0:
             best = max(scores)
+            # Prefer a semantically relevant image, but avoid showing the exact
+            # same background in consecutive timed slots when another near-match exists.
             choices = [i for i, score in enumerate(scores) if score == best]
-            slot_backgrounds.append(choices[slot_index % len(choices)])
+            near_choices = [i for i, score in enumerate(scores) if score >= best - 1]
+            if previous_background in choices and len(choices) > 1:
+                choices = [i for i in choices if i != previous_background]
+            elif previous_background is not None and len(near_choices) > 1:
+                choices = [i for i in near_choices if i != previous_background]
+            if not choices:
+                choices = near_choices or list(range(len(bases)))
+            chosen = choices[slot_index % len(choices)]
         else:
-            slot_backgrounds.append(slot_index % max(1, len(bases)))
+            choices = [i for i in range(len(bases)) if i != previous_background] or [0]
+            chosen = choices[slot_index % len(choices)]
+        slot_backgrounds.append(chosen)
+        previous_background = chosen
     print(f"VISUAL_TIMELINE interval_seconds={interval} slots={slot_count} unique_images={len(bases)}", flush=True)
     safe_offset = max(-max(0.0, duration - 0.1), min(max(0.0, duration - 0.1), caption_offset))
     font = load_font(25, True)
@@ -1433,17 +1465,17 @@ def video_quality_report(job_id: str):
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=60, check=False
             )
             if frame_result.returncode == 0:
-                hashes = []
+                sampled_frames = []
                 for line in frame_result.stdout.decode("utf-8", "replace").splitlines():
                     if line and not line.startswith("#") and "," in line:
-                        hashes.append(line.rsplit(",", 1)[-1].strip())
-                distinct_frames = len(set(hashes))
-                if len(hashes) == 0:
+                        sampled_frames.append(line.rsplit(",", 1)[-1].strip())
+                # Exact frame hashes change with subtitle highlighting and Ken Burns
+                # motion, so they must not be reported as a count of unique scenes.
+                distinct_frames = len(sampled_frames)
+                if not sampled_frames:
                     scene_check = "ভিডিওর দৃশ্য নমুনা পড়া যায়নি।"
-                elif distinct_frames >= 2:
-                    scene_check = f"প্রতি সেকেন্ডে নমুনা নিয়ে {distinct_frames}টি আলাদা দৃশ্যচিত্র পাওয়া গেছে।"
                 else:
-                    scene_check = "নমুনা নেওয়া দৃশ্যচিত্র একই রকম; দৃশ্য পরিবর্তন কম হতে পারে।"
+                    scene_check = f"প্রতি সেকেন্ডে {len(sampled_frames)}টি নমুনা চিত্র পরীক্ষা করা হয়েছে। এটি স্বতন্ত্র দৃশ্যের সংখ্যা নিশ্চিত করে না।"
         except Exception:
             pass
 
