@@ -266,6 +266,9 @@ def wrap_text(draw, text, font, max_width):
 
 
 VISUAL_CONCEPTS = [
+    (("ট্রেন", "রেল", "রেলগাড়ি", "রেলগাড়ি", "রেলওয়ে", "রেলওয়ে", "স্টেশন", "train", "railway", "rail station"), "a real passenger train at a Bangladeshi railway station, with the train and railway tracks clearly visible"),
+    (("বাসস্ট্যান্ড", "বাসস্টপ", "বাস", "যাত্রীবাহী বাস", "bus stop", "city bus"), "a real Bangladeshi passenger bus at a roadside bus stop, bus clearly visible"),
+    (("কৃষক", "ধানচাষ", "ধানক্ষেত", "চাষাবাদ", "কৃষিকাজ", "farmer", "rice field"), "a Bangladeshi farmer working in a green rice field, showing the farmer and crops clearly"),
     (("সাদাছড়ি", "সাদাছড়ি", "দৃষ্টিপ্রতিবন্ধী", "প্রতিবন্ধী", "অন্ধ", "দৃষ্টিহীন"), "a visually impaired person using a white cane in an accessible Bangladeshi setting"),
     (("কর্মসংস্থান", "চাকরি", "নিয়োগ", "নিয়োগ", "কর্মী", "কারখানা", "অফিস"), "Bangladeshi people working in a workplace or factory"),
     (("ব্রেইল", "শিক্ষার্থী", "শিক্ষা", "স্কুল", "কলেজ", "বিশ্ববিদ্যালয়", "বিশ্ববিদ্যালয়", "শিক্ষক", "পড়াশোনা", "পড়াশোনা"), "Bangladeshi students learning in an accessible classroom"),
@@ -920,6 +923,8 @@ def make_background(script: str, folder: Path, model_visual_prompt: Optional[str
         draw = ImageDraw.Draw(image)
         text = (script or "").lower()
         themes = [
+            (("ট্রেন", "রেল", "রেলগাড়ি", "রেলগাড়ি", "রেলওয়ে", "রেলওয়ে", "স্টেশন", "train", "railway", "station"), (44, 77, 110), "rail"),
+            (("বাসস্ট্যান্ড", "বাসস্টপ", "যাত্রীবাহী বাস", "বাস", "bus stop", "city bus"), (45, 91, 126), "bus"),
             (("ক্রিকেট", "ব্যাটসম্যান", "বোলার", "স্টেডিয়াম", "cricket", "football", "ফুটবল"), (22, 91, 65), "sport"),
             (("রান্না", "খাবার", "রেসিপি", "খাদ্য", "cooking", "food"), (150, 76, 31), "food"),
             (("নদী", "সমুদ্র", "ভ্রমণ", "পাহাড়", "পর্যটন", "travel", "river", "sea"), (25, 95, 135), "travel"),
@@ -944,7 +949,28 @@ def make_background(script: str, folder: Path, model_visual_prompt: Optional[str
             color = tuple(max(0, min(255, int(channel * (0.72 + ratio * 0.48)))) for channel in base_color)
             draw.line((0, y, width, y), fill=color)
         # A large, legible subject symbol gives the fallback a scene-specific composition.
-        if theme_name == "sport":
+        if theme_name == "rail":
+            # Simple train body, windows, wheels and tracks; no text or map-like graphics.
+            draw.rectangle((42, 260, 318, 405), fill=(214, 222, 230), outline=(255, 255, 255), width=6)
+            draw.rectangle((60, 285, 112, 340), fill=(49, 108, 153))
+            draw.rectangle((126, 285, 178, 340), fill=(49, 108, 153))
+            draw.rectangle((192, 285, 244, 340), fill=(49, 108, 153))
+            draw.rectangle((258, 285, 298, 340), fill=(49, 108, 153))
+            draw.ellipse((72, 382, 112, 422), fill=(25, 30, 38), outline=(230, 230, 230), width=4)
+            draw.ellipse((238, 382, 278, 422), fill=(25, 30, 38), outline=(230, 230, 230), width=4)
+            draw.line((0, 470, 360, 470), fill=(235, 224, 194), width=8)
+            draw.line((0, 510, 360, 510), fill=(235, 224, 194), width=8)
+            for rail_x in range(10, 360, 42):
+                draw.line((rail_x, 455, rail_x + 20, 525), fill=(190, 167, 132), width=5)
+        elif theme_name == "bus":
+            draw.rounded_rectangle((48, 245, 312, 440), radius=22, fill=(228, 181, 55), outline=(255, 255, 255), width=6)
+            draw.rectangle((68, 270, 292, 340), fill=(61, 128, 164))
+            for window_x in (80, 132, 184, 236):
+                draw.rectangle((window_x, 282, window_x + 42, 325), fill=(181, 221, 235))
+            draw.rectangle((70, 355, 290, 405), fill=(212, 67, 53))
+            draw.ellipse((78, 410, 128, 460), fill=(25, 30, 38), outline=(230, 230, 230), width=5)
+            draw.ellipse((232, 410, 282, 460), fill=(25, 30, 38), outline=(230, 230, 230), width=5)
+        elif theme_name == "sport":
             draw.ellipse((245, 160, 315, 230), fill=(232, 105, 49), outline=(255, 255, 255), width=4)
             draw.polygon([(65, 340), (92, 320), (235, 500), (212, 520)], fill=(225, 191, 125))
             draw.line((75, 350, 220, 505), fill=(255, 255, 255), width=5)
@@ -1088,7 +1114,7 @@ def _scene_images_too_similar(first: Path, second: Path) -> bool:
 
 def make_scene_backgrounds(script: str, folder: Path):
     """Create a bounded set of semantically focused images for reuse across timed scene changes."""
-    scenes = _split_script_into_scenes(script, max_scenes=12, target_words=20)
+    scenes = _split_script_into_scenes(script, max_scenes=12, target_words=14)
     # One language-model request plans all scenes, avoiding a request for every image.
     visual_prompts = _plan_scene_visual_prompts(scenes)
     backgrounds = []
