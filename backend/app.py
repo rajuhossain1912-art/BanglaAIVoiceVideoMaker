@@ -1085,31 +1085,39 @@ def make_caption_frames(script: str, duration: float, background: Path, folder: 
     words_per_slot = max(1, int(math.ceil(len(all_words) / slot_count)))
     slot_texts = [" ".join(all_words[i:i + words_per_slot]) for i in range(0, len(all_words), words_per_slot)]
     scene_texts = list(visual_scene_texts or sentences)
-    scene_concepts = [_matched_visual_concepts(x, limit=3) for x in scene_texts]
+    # Keep the visual sequence aligned with narration order. Keyword-score matching
+    # alone can jump to a later scene when a broad word appears repeatedly.
+    # Map each timed slot to the scene covering the same share of the script.
+    scene_weights = [max(1, len(re.findall(r"\S+", item or ""))) for item in scene_texts]
+    scene_edges = []
+    cumulative = 0
+    for weight in scene_weights:
+        cumulative += weight
+        scene_edges.append(cumulative)
+    total_scene_words = max(1, cumulative)
+    scene_concepts = [_matched_visual_concepts(item, limit=2) for item in scene_texts]
     slot_backgrounds = []
-    previous_background = None
     for slot_index in range(slot_count):
         slot_text = slot_texts[min(slot_index, len(slot_texts) - 1)] if slot_texts else script
-        concepts = _matched_visual_concepts(slot_text, limit=3)
-        scores = [sum(1 for concept in concepts if concept in candidates) for candidates in scene_concepts]
-        if scores and max(scores) > 0:
-            best = max(scores)
-            # Prefer a semantically relevant image, but avoid showing the exact
-            # same background in consecutive timed slots when another near-match exists.
-            choices = [i for i, score in enumerate(scores) if score == best]
-            near_choices = [i for i, score in enumerate(scores) if score >= best - 1]
-            if previous_background in choices and len(choices) > 1:
-                choices = [i for i in choices if i != previous_background]
-            elif previous_background is not None and len(near_choices) > 1:
-                choices = [i for i in near_choices if i != previous_background]
-            if not choices:
-                choices = near_choices or list(range(len(bases)))
-            chosen = choices[slot_index % len(choices)]
+        if len(bases) <= 1 or not scene_edges:
+            chosen = 0
         else:
-            choices = [i for i in range(len(bases)) if i != previous_background] or [0]
-            chosen = choices[slot_index % len(choices)]
+            # Slot center avoids switching early at scene boundaries.
+            slot_center = min(total_scene_words - 1, int((slot_index + 0.5) * total_scene_words / slot_count))
+            chosen = next((i for i, edge in enumerate(scene_edges) if slot_center < edge), len(scene_edges) - 1)
+            chosen = min(chosen, len(bases) - 1)
+        # Preserve chronology, but allow a nearby scene when it clearly matches the slot topic.
+        slot_concepts = _matched_visual_concepts(slot_text, limit=2)
+        if slot_concepts:
+            current = scene_concepts[chosen] if chosen < len(scene_concepts) else []
+            if not any(concept in current for concept in slot_concepts):
+                matching = [i for i, candidates in enumerate(scene_concepts)
+                            if any(concept in candidates for concept in slot_concepts)]
+                if matching:
+                    nearest = min(matching, key=lambda i: abs(i - chosen))
+                    if abs(nearest - chosen) <= 1:
+                        chosen = min(nearest, len(bases) - 1)
         slot_backgrounds.append(chosen)
-        previous_background = chosen
     print(f"VISUAL_TIMELINE interval_seconds={interval} slots={slot_count} unique_images={len(bases)}", flush=True)
     safe_offset = max(-max(0.0, duration - 0.1), min(max(0.0, duration - 0.1), caption_offset))
     font = load_font(25, True)
