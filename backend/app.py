@@ -1581,6 +1581,7 @@ def video_quality_report(job_id: str):
     distinct_frames = None
     scene_check = "দৃশ্য পরিবর্তন আলাদাভাবে পরীক্ষা করা যায়নি।"
     visual_mean_luma = None
+    visual_sample_count = None
     dark_sample_count = None
     if video_stream:
         try:
@@ -1619,10 +1620,11 @@ def video_quality_report(job_id: str):
                     sum(raw[offset:offset + frame_bytes]) / frame_bytes
                     for offset in range(0, len(raw) - frame_bytes + 1, frame_bytes)
                 ]
-                visual_mean_luma = round(sum(means) / len(means), 1) if means else None
+                visual_sample_count = len(means)
+                visual_mean_luma = round(sum(means) / visual_sample_count, 1) if visual_sample_count else None
                 dark_sample_count = sum(value < 22 for value in means)
-                if means and dark_sample_count / len(means) >= 0.5:
-                    scene_check += f" সতর্কতা: {dark_sample_count}টি নমুনার মধ্যে {len(means)}টির {dark_sample_count}টি খুব অন্ধকার; ভিডিওর দৃশ্য কালো বা অস্পষ্ট হতে পারে।"
+                if visual_sample_count and dark_sample_count / visual_sample_count >= 0.5:
+                    scene_check += f" সতর্কতা: {visual_sample_count}টি নমুনা চিত্রের মধ্যে {dark_sample_count}টি খুব অন্ধকার; ভিডিওর দৃশ্য কালো বা অস্পষ্ট হতে পারে।"
                 elif means:
                     scene_check += f" দৃশ্যের গড় উজ্জ্বলতা {visual_mean_luma} / 255; কালো ফ্রেমের স্বয়ংক্রিয় সতর্কতা পাওয়া যায়নি।"
         except Exception:
@@ -1640,6 +1642,7 @@ def video_quality_report(job_id: str):
         "audio_mean_volume_db": audio_level,
         "scene_sample_count": distinct_frames,
         "visual_mean_luminance_0_255": visual_mean_luma,
+        "visual_sample_count": visual_sample_count,
         "very_dark_sample_count": dark_sample_count,
         "scene_count_from_generator": snapshot.get("scene_count"),
         "caption_frame_count": snapshot.get("caption_frame_count"),
@@ -1655,7 +1658,7 @@ def video_quality_report(job_id: str):
     elif duration <= 0:
         summary = "ভিডিওর দৈর্ঘ্য সঠিকভাবে পড়া যায়নি।"
         overall = "problem"
-    elif dark_sample_count is not None and distinct_frames and dark_sample_count / distinct_frames >= 0.5:
+    elif dark_sample_count is not None and visual_sample_count and dark_sample_count / visual_sample_count >= 0.5:
         summary = "সতর্কতা: ভিডিও ও অডিও ট্র্যাক আছে, কিন্তু নমুনা চিত্রের অর্ধেক বা তার বেশি খুব অন্ধকার। ভিডিওর দৃশ্য কালো বা অস্পষ্ট হতে পারে; এই ফলাফল যাচাই না করে ভিডিওকে সম্পূর্ণ সফল বলা যাবে না।"
         overall = "visual_warning"
     else:
