@@ -885,8 +885,31 @@ def make_background(script: str, folder: Path, model_visual_prompt: Optional[str
             overlay = Image.new("RGBA", (width, height), (3, 13, 28, 40))
             image = Image.alpha_composite(image.convert("RGBA"), overlay).convert("RGB")
         except Exception as exc:
-            print(f"IMAGE_PROVIDER rejected_scene reason={type(exc).__name__}: {str(exc)[:100]} fallback=topic_graphic", flush=True)
+            print(f"IMAGE_PROVIDER rejected_scene reason={type(exc).__name__}: {str(exc)[:100]} fallback=licensed_image_then_topic_graphic", flush=True)
             source_image = None
+            # If an AI image is corrupt or nearly black, try a contextual licensed photo
+            # before falling back to a vector illustration. The previous flow skipped this
+            # fallback because the initial provider lookup had already returned a file.
+            if ALLOW_LICENSED_IMAGE_FALLBACK:
+                fallback_image, fallback_credit = find_contextual_image(script, folder)
+                if fallback_image:
+                    try:
+                        with Image.open(fallback_image) as fallback_source:
+                            fallback_render = ImageOps.fit(fallback_source.convert("RGB"), (width, height), method=Image.Resampling.BILINEAR)
+                        fallback_sample = fallback_render.resize((24, 42), Image.Resampling.BILINEAR)
+                        fallback_pixels = list(fallback_sample.getdata())
+                        fallback_luminance = [(r * 299 + g * 587 + b * 114) / 1000 for r, g, b in fallback_pixels]
+                        fallback_mean = sum(fallback_luminance) / max(1, len(fallback_luminance))
+                        fallback_variance = sum((value - fallback_mean) ** 2 for value in fallback_luminance) / max(1, len(fallback_luminance))
+                        if fallback_mean < 18 or (fallback_mean < 32 and fallback_variance < 25):
+                            raise ValueError("licensed fallback image is blank or near-black")
+                        fallback_overlay = Image.new("RGBA", (width, height), (3, 13, 28, 25))
+                        image = Image.alpha_composite(fallback_render.convert("RGBA"), fallback_overlay).convert("RGB")
+                        source_image, credit = fallback_image, fallback_credit
+                        print("IMAGE_PROVIDER selected=licensed_fallback_after_rejected_ai", flush=True)
+                    except Exception as fallback_exc:
+                        print(f"IMAGE_PROVIDER rejected_licensed_fallback error={type(fallback_exc).__name__}: {str(fallback_exc)[:100]}", flush=True)
+                        source_image = None
     if not source_image:
         # Distinct topic-aware vector fallback: never reuse the same generic blue card
         # for every scene when free image-generation providers are unavailable.
