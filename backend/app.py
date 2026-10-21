@@ -581,7 +581,7 @@ def _plan_scene_visual_prompts(scenes):
                         {"role": "system", "content": "Return valid JSON only. Plan scene-matched visuals, not speech."},
                         {"role": "user", "content": prompt},
                     ],
-                    "temperature": 0.15, "max_tokens": 900,
+                    "temperature": 0.15, "max_tokens": 1800,
                 }).encode("utf-8")
                 model_path = urllib.parse.quote(model, safe="@/-")
                 request = urllib.request.Request(
@@ -1034,7 +1034,7 @@ def make_background(script: str, folder: Path, model_visual_prompt: Optional[str
     image.save(target, optimize=True)
     return target
 
-def _split_script_into_scenes(script: str, max_scenes: int = 12, target_words: int = 45):
+def _split_script_into_scenes(script: str, max_scenes: int = 20, target_words: int = 8):
     """Plan topic-sized scenes from sentence/paragraph boundaries, capped for Render Free resources."""
     text = (script or "").strip()
     if not text:
@@ -1114,7 +1114,7 @@ def _scene_images_too_similar(first: Path, second: Path) -> bool:
 
 def make_scene_backgrounds(script: str, folder: Path):
     """Create a bounded set of semantically focused images for reuse across timed scene changes."""
-    scenes = _split_script_into_scenes(script, max_scenes=12, target_words=14)
+    scenes = _split_script_into_scenes(script, max_scenes=20, target_words=8)
     # One language-model request plans all scenes, avoiding a request for every image.
     visual_prompts = _plan_scene_visual_prompts(scenes)
     backgrounds = []
