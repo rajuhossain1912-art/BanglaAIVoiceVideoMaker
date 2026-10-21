@@ -1348,7 +1348,10 @@ def make_caption_frames(script: str, duration: float, background: Path, folder: 
                 if matching:
                     nearest = min(matching, key=lambda i: abs(i - chosen))
                     if abs(nearest - chosen) <= 1:
-                        chosen = min(nearest, len(bases) - 1)
+                        # Keep the full narration-scene index here. Clamping it to the
+                        # sampled-image count before scaling collapses late-script matches
+                        # onto early images whenever there are more scenes than images.
+                        chosen = nearest
         # The chosen scene index maps to a representative image sampled across the full script.
         base_index = min(len(bases) - 1, int(chosen * len(bases) / max(1, len(scene_texts))))
         slot_backgrounds.append(base_index)
