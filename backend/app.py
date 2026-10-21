@@ -1580,6 +1580,8 @@ def video_quality_report(job_id: str):
 
     distinct_frames = None
     scene_check = "দৃশ্য পরিবর্তন আলাদাভাবে পরীক্ষা করা যায়নি।"
+    visual_mean_luma = None
+    dark_sample_count = None
     if video_stream:
         try:
             frame_result = subprocess.run(
@@ -1593,13 +1595,36 @@ def video_quality_report(job_id: str):
                 for line in frame_result.stdout.decode("utf-8", "replace").splitlines():
                     if line and not line.startswith("#") and "," in line:
                         sampled_frames.append(line.rsplit(",", 1)[-1].strip())
-                # Exact frame hashes change with subtitle highlighting and Ken Burns
-                # motion, so they must not be reported as a count of unique scenes.
+                # Hashes change with subtitles and motion; they are not a scene count.
                 distinct_frames = len(sampled_frames)
                 if not sampled_frames:
                     scene_check = "ভিডিওর দৃশ্য নমুনা পড়া যায়নি।"
                 else:
                     scene_check = f"প্রতি সেকেন্ডে {len(sampled_frames)}টি নমুনা চিত্র পরীক্ষা করা হয়েছে। এটি স্বতন্ত্র দৃশ্যের সংখ্যা নিশ্চিত করে না।"
+        except Exception:
+            pass
+        # Independently inspect actual decoded pixels. This catches black/blank videos
+        # even when MP4 streams and subtitle frames exist and the technical report passes.
+        try:
+            pixel_result = subprocess.run(
+                ["ffmpeg", "-v", "error", "-i", str(video_path), "-vf",
+                 "fps=1,scale=24:42:flags=fast_bilinear,format=gray",
+                 "-an", "-f", "rawvideo", "-pix_fmt", "gray", "-"],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=60, check=False
+            )
+            frame_bytes = 24 * 42
+            if pixel_result.returncode == 0 and len(pixel_result.stdout) >= frame_bytes:
+                raw = pixel_result.stdout
+                means = [
+                    sum(raw[offset:offset + frame_bytes]) / frame_bytes
+                    for offset in range(0, len(raw) - frame_bytes + 1, frame_bytes)
+                ]
+                visual_mean_luma = round(sum(means) / len(means), 1) if means else None
+                dark_sample_count = sum(value < 22 for value in means)
+                if means and dark_sample_count / len(means) >= 0.5:
+                    scene_check += f" সতর্কতা: {dark_sample_count}টি নমুনার মধ্যে {len(means)}টির {dark_sample_count}টি খুব অন্ধকার; ভিডিওর দৃশ্য কালো বা অস্পষ্ট হতে পারে।"
+                elif means:
+                    scene_check += f" দৃশ্যের গড় উজ্জ্বলতা {visual_mean_luma} / 255; কালো ফ্রেমের স্বয়ংক্রিয় সতর্কতা পাওয়া যায়নি।"
         except Exception:
             pass
 
@@ -1614,6 +1639,8 @@ def video_quality_report(job_id: str):
         "audio_codec": audio_stream.get("codec_name") if audio_stream else None,
         "audio_mean_volume_db": audio_level,
         "scene_sample_count": distinct_frames,
+        "visual_mean_luminance_0_255": visual_mean_luma,
+        "very_dark_sample_count": dark_sample_count,
         "scene_count_from_generator": snapshot.get("scene_count"),
         "caption_frame_count": snapshot.get("caption_frame_count"),
         "file_size_bytes": size_bytes,
@@ -1628,8 +1655,11 @@ def video_quality_report(job_id: str):
     elif duration <= 0:
         summary = "ভিডিওর দৈর্ঘ্য সঠিকভাবে পড়া যায়নি।"
         overall = "problem"
+    elif dark_sample_count is not None and distinct_frames and dark_sample_count / distinct_frames >= 0.5:
+        summary = "সতর্কতা: ভিডিও ও অডিও ট্র্যাক আছে, কিন্তু নমুনা চিত্রের অর্ধেক বা তার বেশি খুব অন্ধকার। ভিডিওর দৃশ্য কালো বা অস্পষ্ট হতে পারে; এই ফলাফল যাচাই না করে ভিডিওকে সম্পূর্ণ সফল বলা যাবে না।"
+        overall = "visual_warning"
     else:
-        summary = "প্রাথমিক প্রযুক্তিগত পরীক্ষা সফল। ভিডিও ও অডিও ট্র্যাক এবং ফাইলের দৈর্ঘ্য পাওয়া গেছে। দৃশ্য ও সাবটাইটেলের বিষয়বস্তু শতভাগ সঠিক কি না, এই পরীক্ষা তা নিশ্চিত করে না।"
+        summary = "প্রাথমিক প্রযুক্তিগত পরীক্ষা সফল। ভিডিও ও অডিও ট্র্যাক এবং ফাইলের দৈর্ঘ্য পাওয়া গেছে। দৃশ্যের উজ্জ্বলতা পরীক্ষা করা হয়েছে; তবে দৃশ্য ও সাবটাইটেলের বিষয়বস্তু শতভাগ সঠিক কি না, এই পরীক্ষা তা নিশ্চিত করে না।"
         overall = "passed_with_limits"
 
     report_text = "ভিডিও পরীক্ষার প্রতিবেদন। " + summary + " "
