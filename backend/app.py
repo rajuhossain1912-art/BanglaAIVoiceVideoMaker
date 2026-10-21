@@ -27,7 +27,7 @@ AI_IMAGE_PROVIDER_TIMEOUT = max(12, min(45, int(os.getenv("AI_IMAGE_PROVIDER_TIM
 ALLOW_LICENSED_IMAGE_FALLBACK = os.getenv("ALLOW_LICENSED_IMAGE_FALLBACK", "true").lower() in ("1", "true", "yes")
 WORK_DIR = Path(os.getenv("WORK_DIR", "/tmp/bangla-video-jobs"))
 WORK_DIR.mkdir(parents=True, exist_ok=True)
-MAX_SCRIPT_CHARS = int(os.getenv("MAX_SCRIPT_CHARS", "12000"))
+MAX_SCRIPT_CHARS = int(os.getenv("MAX_SCRIPT_CHARS", "50000"))
 MAX_AUDIO_MB = int(os.getenv("MAX_AUDIO_MB", "40"))
 JOBS = {}
 LOCK = threading.Lock()
@@ -51,7 +51,7 @@ def duration_of(path: Path) -> float:
 
 def synthesize_mixed_speech(script: str, folder: Path) -> Path:
     """Prefer clearer online Google Translate TTS for Bangla/English; fall back to local eSpeak."""
-    tokens = re.findall(r"[\u0980-\u09FF]+|[A-Za-z0-9]+|[^A-Za-z0-9\u0980-\u09FF]+", script[:MAX_SCRIPT_CHARS])
+    tokens = re.findall(r"[\u0980-\u09FF]+|[A-Za-z0-9]+|[^A-Za-z0-9\u0980-\u09FF]+", script)
     chunks = []
     current_language = None
     current_text = ""
@@ -72,6 +72,22 @@ def synthesize_mixed_speech(script: str, folder: Path) -> Path:
         chunks.append((current_language or "bn", current_text.strip()))
     if not chunks:
         raise RuntimeError("পড়ার মতো লেখা পাওয়া যায়নি।")
+
+    # Split long language runs into manageable requests for free TTS endpoints.
+    tts_chunks = []
+    for language, text in chunks:
+        remaining = text.strip()
+        while remaining:
+            if len(remaining) <= 2500:
+                piece, remaining = remaining, ""
+            else:
+                cut = remaining.rfind(" ", 0, 2501)
+                if cut < 1000:
+                    cut = 2500
+                piece, remaining = remaining[:cut].strip(), remaining[cut:].strip()
+            if piece:
+                tts_chunks.append((language, piece))
+    chunks = tts_chunks
 
     # Use free online TTS first; the local fallback is more robotic but works without network.
     audio_parts = []
@@ -541,9 +557,17 @@ def _parse_scene_visual_prompts(raw: str, expected_count: int):
 
 
 def _plan_scene_visual_prompts(scenes):
-    """Use best-effort free language-model endpoints to ground image prompts in each scene."""
+    """Plan prompts in small batches to avoid model context limits on long scripts."""
     if not LANGUAGE_MODEL_VISUAL_PLANNER_ENABLED or not scenes:
         return None
+    if len(scenes) > 8:
+        planned = []
+        for start in range(0, len(scenes), 8):
+            batch = _plan_scene_visual_prompts(scenes[start:start + 8])
+            if not batch or len(batch) != len(scenes[start:start + 8]):
+                return None
+            planned.extend(batch)
+        return planned
     cache_key = json.dumps([re.sub(r"\s+", " ", x).strip()[:300] for x in scenes], ensure_ascii=False)
     if cache_key in LANGUAGE_MODEL_VISUAL_CACHE:
         return LANGUAGE_MODEL_VISUAL_CACHE[cache_key]
@@ -1034,8 +1058,8 @@ def make_background(script: str, folder: Path, model_visual_prompt: Optional[str
     image.save(target, optimize=True)
     return target
 
-def _split_script_into_scenes(script: str, max_scenes: int = 20, target_words: int = 8):
-    """Plan topic-sized scenes from sentence/paragraph boundaries, capped for Render Free resources."""
+def _split_script_into_scenes(script: str, max_scenes: Optional[int] = None, target_words: int = 8):
+    """Split the complete script into ordered topic-sized scenes; cap only when explicitly requested."""
     text = (script or "").strip()
     if not text:
         return ["বাংলা ভিডিও"]
@@ -1068,9 +1092,8 @@ def _split_script_into_scenes(script: str, max_scenes: int = 20, target_words: i
 
     if not chunks:
         chunks = [text]
-    if len(chunks) > max_scenes:
-        # Preserve scene order and neighboring context while keeping the number of expensive
-        # image-generation attempts bounded on Render Free.
+    if max_scenes is not None and max_scenes > 0 and len(chunks) > max_scenes:
+        # Optional compatibility path for callers that explicitly request a scene cap.
         all_words = [chunk.split() for chunk in chunks]
         total_words = sum(len(words) for words in all_words)
         target_size = max(1, (total_words + max_scenes - 1) // max_scenes)
@@ -1113,12 +1136,23 @@ def _scene_images_too_similar(first: Path, second: Path) -> bool:
 
 
 def make_scene_backgrounds(script: str, folder: Path):
-    """Create a bounded set of semantically focused images for reuse across timed scene changes."""
-    scenes = _split_script_into_scenes(script, max_scenes=20, target_words=8)
-    # One language-model request plans all scenes, avoiding a request for every image.
-    visual_prompts = _plan_scene_visual_prompts(scenes)
+    """Keep every narration scene while sampling images to respect free-tier resource limits."""
+    scenes = _split_script_into_scenes(script, max_scenes=None, target_words=8)
+    try:
+        max_visual_scenes = max(1, min(48, int(os.getenv("MAX_VISUAL_SCENES", "32"))))
+    except (TypeError, ValueError):
+        max_visual_scenes = 32
+    if len(scenes) <= max_visual_scenes:
+        visual_scenes = scenes
+    elif max_visual_scenes == 1:
+        visual_scenes = [scenes[0]]
+    else:
+        indices = sorted({round(i * (len(scenes) - 1) / (max_visual_scenes - 1)) for i in range(max_visual_scenes)})
+        visual_scenes = [scenes[i] for i in indices]
+    # Prompts are batched in groups of eight; every narration scene is retained for subtitles/timing.
+    visual_prompts = _plan_scene_visual_prompts(visual_scenes)
     backgrounds = []
-    for index, scene_text in enumerate(scenes):
+    for index, scene_text in enumerate(visual_scenes):
         scene_dir = folder / f"scene-{index:02d}"
         scene_dir.mkdir(parents=True, exist_ok=True)
         print(f"IMAGE_SCENE index={index + 1}/{len(scenes)} words={len(scene_text.split())}", flush=True)
@@ -1127,7 +1161,7 @@ def make_scene_backgrounds(script: str, folder: Path):
             print(f"IMAGE_SCENE repeated_image index={index + 1} action=regenerate_topic_graphic", flush=True)
             background = make_background(scene_text, scene_dir, force_topic_graphic=True)
         backgrounds.append(background)
-    print(f"IMAGE_SCENE unique_backgrounds={len(backgrounds)} total_scenes={len(scenes)}", flush=True)
+    print(f"IMAGE_SCENE unique_backgrounds={len(backgrounds)} total_narration_scenes={len(scenes)} visual_budget={max_visual_scenes}", flush=True)
     return backgrounds, scenes
 
 def make_srt(script: str, duration: float, path: Path):
@@ -1272,13 +1306,12 @@ def make_caption_frames(script: str, duration: float, background: Path, folder: 
         with Image.open(background_path) as source:
             bases.append(source.convert("RGB").resize((360, 640), Image.Resampling.LANCZOS))
 
-    sentences = _split_script_into_scenes(script)
+    sentences = _split_script_into_scenes(script, max_scenes=None)
     sentence_words = [re.findall(r"\S+", sentence) for sentence in sentences]
     total_words = max(1, sum(len(words) for words in sentence_words))
     sentence_spans = sentence_timing_spans(audio_path, sentences, duration)
-    # The chosen interval controls visual changes. To stay within Render Free memory/time limits,
-    # generate at most twelve unique semantic images, then choose the closest matching image for
-    # each timed text segment rather than making dozens of expensive remote image requests.
+    # The interval controls scene changes. Long scripts retain all narration segments; representative
+    # backgrounds may be sampled to stay within free-tier time and memory limits.
     interval = scene_interval if scene_interval in (3, 5, 10, 15, 20) else 5
     slot_count = max(1, int(math.ceil(duration / interval)))
     all_words = re.findall(r"\S+", script or "")
@@ -1305,7 +1338,6 @@ def make_caption_frames(script: str, duration: float, background: Path, folder: 
             # Slot center avoids switching early at scene boundaries.
             slot_center = min(total_scene_words - 1, int((slot_index + 0.5) * total_scene_words / slot_count))
             chosen = next((i for i, edge in enumerate(scene_edges) if slot_center < edge), len(scene_edges) - 1)
-            chosen = min(chosen, len(bases) - 1)
         # Preserve chronology, but allow a nearby scene when it clearly matches the slot topic.
         slot_concepts = _matched_visual_concepts(slot_text, limit=2)
         if slot_concepts:
@@ -1317,8 +1349,10 @@ def make_caption_frames(script: str, duration: float, background: Path, folder: 
                     nearest = min(matching, key=lambda i: abs(i - chosen))
                     if abs(nearest - chosen) <= 1:
                         chosen = min(nearest, len(bases) - 1)
-        slot_backgrounds.append(chosen)
-    print(f"VISUAL_TIMELINE interval_seconds={interval} slots={slot_count} unique_images={len(bases)}", flush=True)
+        # The chosen scene index maps to a representative image sampled across the full script.
+        base_index = min(len(bases) - 1, int(chosen * len(bases) / max(1, len(scene_texts))))
+        slot_backgrounds.append(base_index)
+    print(f"VISUAL_TIMELINE interval_seconds={interval} slots={slot_count} unique_images={len(bases)} narration_scenes={len(scene_texts)}", flush=True)
     safe_offset = max(-max(0.0, duration - 0.1), min(max(0.0, duration - 0.1), caption_offset))
     font = load_font(25, True)
     entries = []
@@ -1443,7 +1477,7 @@ def render(job_id: str, script: str, mode: str, audio_path: Optional[Path], capt
                 except Exception:
                     pass
         elif audio_path is None:
-            audio_path = synthesize_mixed_speech(script[:MAX_SCRIPT_CHARS], folder)
+            audio_path = synthesize_mixed_speech(script, folder)
         duration = duration_of(audio_path)
         with LOCK:
             JOBS[job_id]["progress"] = 35
