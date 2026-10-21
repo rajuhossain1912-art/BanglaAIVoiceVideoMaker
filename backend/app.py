@@ -698,6 +698,68 @@ IMAGE_PROVIDER_COOLDOWN_SECONDS = 900
 IMAGE_PROVIDER_COOLDOWN_LOCK = threading.Lock()
 
 
+def find_cloudflare_generated_image(script: str, folder: Path, model_visual_prompt: Optional[str] = None):
+    """Try Cloudflare Workers AI image models on the configured account's free allocation."""
+    account_id = os.getenv("CLOUDFLARE_ACCOUNT_ID", "").strip()
+    api_token = os.getenv("CLOUDFLARE_AI_API_TOKEN", "").strip()
+    if not account_id or not api_token:
+        return None, ""
+    prompt = _english_visual_prompt(script, model_visual_prompt)
+    models = [
+        item.strip() for item in os.getenv(
+            "CLOUDFLARE_IMAGE_MODELS",
+            "@cf/black-forest-labs/flux-1-schnell,@cf/lykon/dreamshaper-8-lcm,@cf/bytedance/stable-diffusion-xl-lightning"
+        ).split(",") if item.strip()
+    ]
+    for model in list(dict.fromkeys(models)):
+        provider_key = "Cloudflare-Image-" + model
+        with IMAGE_PROVIDER_COOLDOWN_LOCK:
+            cooldown_until = IMAGE_PROVIDER_COOLDOWN_UNTIL.get(provider_key, 0)
+        if cooldown_until > time.time():
+            print(f"IMAGE_PROVIDER skipped={provider_key} reason=cooldown remaining_seconds={int(cooldown_until - time.time())}", flush=True)
+            continue
+        try:
+            body = json.dumps({
+                "prompt": prompt,
+                "width": 512,
+                "height": 768,
+                "num_steps": 4,
+            }).encode("utf-8")
+            model_path = urllib.parse.quote(model, safe="@/-")
+            request = urllib.request.Request(
+                f"https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/run/{model_path}",
+                data=body,
+                headers={
+                    "Authorization": "Bearer " + api_token,
+                    "Content-Type": "application/json",
+                    "Accept": "image/png, image/jpeg, application/octet-stream",
+                    "User-Agent": "BanglaAIVoiceVideoMaker/0.8",
+                },
+                method="POST",
+            )
+            with urllib.request.urlopen(request, timeout=24) as response:
+                image_bytes = response.read(8 * 1024 * 1024 + 1)
+                content_type = response.headers.get("Content-Type", "").lower()
+            if not 100 < len(image_bytes) <= 8 * 1024 * 1024:
+                raise ValueError("Cloudflare returned an empty or oversized image")
+            # Some model endpoints return raw image bytes; reject JSON error envelopes.
+            if "json" in content_type or image_bytes.lstrip().startswith(b"{"):
+                raise ValueError("Cloudflare returned JSON instead of image bytes")
+            target = folder / ("cloudflare-" + re.sub(r"[^a-zA-Z0-9]+", "-", model).strip("-") + ".png")
+            target.write_bytes(image_bytes)
+            with Image.open(target) as check:
+                if check.width < 80 or check.height < 80 or check.width * check.height > 4_000_000:
+                    raise ValueError("Cloudflare image dimensions outside safe limits")
+                check.verify()
+            print("IMAGE_PROVIDER selected=" + provider_key, flush=True)
+            return target, "AI-generated with Cloudflare Workers AI model " + model
+        except Exception as exc:
+            with IMAGE_PROVIDER_COOLDOWN_LOCK:
+                IMAGE_PROVIDER_COOLDOWN_UNTIL[provider_key] = time.time() + IMAGE_PROVIDER_COOLDOWN_SECONDS
+            print(f"IMAGE_PROVIDER failed provider={provider_key} cooldown_seconds={IMAGE_PROVIDER_COOLDOWN_SECONDS} error={type(exc).__name__}: {str(exc)[:150]}", flush=True)
+    return None, ""
+
+
 def find_generated_image(script: str, folder: Path, model_visual_prompt: Optional[str] = None):
     """Try free public image-generation Spaces; licensed image search remains a fallback."""
     if not AI_IMAGE_GENERATION_ENABLED:
@@ -715,6 +777,9 @@ def find_generated_image(script: str, folder: Path, model_visual_prompt: Optiona
             print(f"IMAGE_PROVIDER cooldown provider=Pollinations-Flux seconds={IMAGE_PROVIDER_COOLDOWN_SECONDS}", flush=True)
     if pollinations_image:
         return pollinations_image, pollinations_credit
+    cloudflare_image, cloudflare_credit = find_cloudflare_generated_image(script, folder, model_visual_prompt)
+    if cloudflare_image:
+        return cloudflare_image, cloudflare_credit
     from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
     prompt = (
         "Create an original, photorealistic vertical 9:16 image for a short educational video. "
