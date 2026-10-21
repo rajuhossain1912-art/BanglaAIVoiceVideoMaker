@@ -556,38 +556,57 @@ def _plan_scene_visual_prompts(scenes):
         + json.dumps(scene_payload, ensure_ascii=False)
     )
     # Cloudflare Workers AI is the preferred optional external model.
-    # Use only the Free plan within its daily free allocation; failures fall back safely.
+    # Try a small fallback chain of models on the same configured account. This
+    # uses the account's free allocation only; it does not enable paid providers.
     cf_account_id = os.getenv("CLOUDFLARE_ACCOUNT_ID", "").strip()
     cf_api_token = os.getenv("CLOUDFLARE_AI_API_TOKEN", "").strip()
     if cf_account_id and cf_api_token:
-        try:
-            model = os.getenv("CLOUDFLARE_AI_MODEL", "@cf/meta/llama-3.2-3b-instruct").strip()
-            body = json.dumps({
-                "messages": [
-                    {"role": "system", "content": "Return valid JSON only. Plan scene-matched visuals, not speech."},
-                    {"role": "user", "content": prompt},
-                ],
-                "temperature": 0.15, "max_tokens": 900,
-            }).encode("utf-8")
-            model_path = urllib.parse.quote(model, safe="@/-")
-            request = urllib.request.Request(
-                f"https://api.cloudflare.com/client/v4/accounts/{cf_account_id}/ai/run/{model_path}",
-                data=body,
-                headers={"Authorization": "Bearer " + cf_api_token, "Content-Type": "application/json", "User-Agent": "BanglaAIVoiceVideoMaker/0.7"},
-                method="POST",
+        default_models = (
+            "@cf/meta/llama-3.2-3b-instruct,"
+            "@cf/qwen/qwen2.5-7b-instruct,"
+            "@cf/google/gemma-3-12b-it"
+        )
+        configured_models = os.getenv(
+            "CLOUDFLARE_AI_MODELS",
+            os.getenv("CLOUDFLARE_AI_MODEL", default_models.split(",")[0]) + (
+                "," + ",".join(x for x in default_models.split(",")
+                               if x != os.getenv("CLOUDFLARE_AI_MODEL", default_models.split(",")[0]))
+                if os.getenv("CLOUDFLARE_AI_MODEL", "").strip() else
+                "," + ",".join(default_models.split(",")[1:])
             )
-            with urllib.request.urlopen(request, timeout=8) as response:
-                data = json.loads(response.read(250_000).decode("utf-8"))
-            result = data.get("result") or {}
-            raw = result.get("response") or result.get("choices", [{}])[0].get("message", {}).get("content", "")
-            prompts = _parse_scene_visual_prompts(raw, len(scenes))
-            if prompts:
-                LANGUAGE_MODEL_VISUAL_CACHE[cache_key] = prompts
-                print("LANGUAGE_MODEL selected=Cloudflare-Workers-AI model=" + model, flush=True)
-                return prompts
-            print("LANGUAGE_MODEL fallback=next_provider provider=cloudflare reason=invalid_model_response", flush=True)
-        except Exception as exc:
-            print(f"LANGUAGE_MODEL fallback=next_provider provider=cloudflare error={type(exc).__name__}: {str(exc)[:120]}", flush=True)
+        )
+        model_names = list(dict.fromkeys(x.strip() for x in configured_models.split(",") if x.strip()))
+        for model in model_names:
+            try:
+                body = json.dumps({
+                    "messages": [
+                        {"role": "system", "content": "Return valid JSON only. Plan scene-matched visuals, not speech."},
+                        {"role": "user", "content": prompt},
+                    ],
+                    "temperature": 0.15, "max_tokens": 900,
+                }).encode("utf-8")
+                model_path = urllib.parse.quote(model, safe="@/-")
+                request = urllib.request.Request(
+                    f"https://api.cloudflare.com/client/v4/accounts/{cf_account_id}/ai/run/{model_path}",
+                    data=body,
+                    headers={"Authorization": "Bearer " + cf_api_token, "Content-Type": "application/json", "User-Agent": "BanglaAIVoiceVideoMaker/0.8"},
+                    method="POST",
+                )
+                with urllib.request.urlopen(request, timeout=8) as response:
+                    data = json.loads(response.read(250_000).decode("utf-8"))
+                result = data.get("result") or {}
+                raw = result.get("response") or result.get("choices", [{}])[0].get("message", {}).get("content", "")
+                prompts = _parse_scene_visual_prompts(raw, len(scenes))
+                if prompts:
+                    LANGUAGE_MODEL_VISUAL_CACHE[cache_key] = prompts
+                    print("LANGUAGE_MODEL selected=Cloudflare-Workers-AI model=" + model, flush=True)
+                    return prompts
+                print("LANGUAGE_MODEL fallback=next_model provider=cloudflare model=" + model + " reason=invalid_model_response", flush=True)
+            except Exception as exc:
+                print(f"LANGUAGE_MODEL fallback=next_model provider=cloudflare model={model} error={type(exc).__name__}: {str(exc)[:120]}", flush=True)
+    elif not cf_account_id or not cf_api_token:
+        missing = "account_id" if not cf_account_id else "api_token"
+        print(f"LANGUAGE_MODEL fallback=local reason=missing_cloudflare_{missing}", flush=True)
     # No paid or credit-based fallback is enabled; use local keyword planning if Cloudflare is absent.
     return None
 
