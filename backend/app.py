@@ -1088,7 +1088,7 @@ def _scene_images_too_similar(first: Path, second: Path) -> bool:
 
 def make_scene_backgrounds(script: str, folder: Path):
     """Create a bounded set of semantically focused images for reuse across timed scene changes."""
-    scenes = _split_script_into_scenes(script, max_scenes=12, target_words=32)
+    scenes = _split_script_into_scenes(script, max_scenes=12, target_words=20)
     # One language-model request plans all scenes, avoiding a request for every image.
     visual_prompts = _plan_scene_visual_prompts(scenes)
     backgrounds = []
