@@ -31,6 +31,10 @@ jobs:
           done
           cat health.json
           python -c 'import json; d=json.load(open("health.json")); assert d["status"] == "ok", d'
+      - name: Verify sampled scene timeline mapping
+        run: |
+          set -e
+          docker exec bangla-video-api python -c 'from app import _scene_index_to_background_index as m; mapped=[m(i,100,32) for i in range(100)]; assert mapped[0] == 0, mapped; assert mapped[-1] == 31, mapped[-1]; assert mapped == sorted(mapped), mapped; assert len(set(mapped)) == 32, len(set(mapped)); assert m(50,100,32) in range(15,17), m(50,100,32); assert m(0,10,1) == 0; print("Sampled visual timeline mapping passed: 100 narration scenes cover all 32 image slots in order")'
       - name: Verify scene-aware visual planning
         run: |
           set -e
