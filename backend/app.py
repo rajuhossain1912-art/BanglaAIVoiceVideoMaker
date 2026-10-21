@@ -870,10 +870,19 @@ def make_background(script: str, folder: Path, model_visual_prompt: Optional[str
         try:
             with Image.open(source_image) as source:
                 image = ImageOps.fit(source.convert("RGB"), (width, height), method=Image.Resampling.BILINEAR)
+            # Reject technically valid but visually blank/near-black generated images.
+            sample = image.resize((24, 42), Image.Resampling.BILINEAR)
+            pixels = list(sample.getdata())
+            luminance = [(r * 299 + g * 587 + b * 114) / 1000 for r, g, b in pixels]
+            mean_luma = sum(luminance) / max(1, len(luminance))
+            variance = sum((value - mean_luma) ** 2 for value in luminance) / max(1, len(luminance))
+            if mean_luma < 18 or (mean_luma < 32 and variance < 25):
+                raise ValueError("provider returned blank or near-black image")
             # Keep real photos bright enough to recognize behind captions.
-            overlay = Image.new("RGBA", (width, height), (3, 13, 28, 72))
+            overlay = Image.new("RGBA", (width, height), (3, 13, 28, 40))
             image = Image.alpha_composite(image.convert("RGBA"), overlay).convert("RGB")
-        except Exception:
+        except Exception as exc:
+            print(f"IMAGE_PROVIDER rejected_scene reason={type(exc).__name__}: {str(exc)[:100]} fallback=topic_graphic", flush=True)
             source_image = None
     if not source_image:
         # Distinct topic-aware vector fallback: never reuse the same generic blue card
