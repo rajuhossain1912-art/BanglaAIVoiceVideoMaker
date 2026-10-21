@@ -1296,6 +1296,14 @@ def sentence_timing_spans(audio_path: Optional[Path], sentences, duration: float
     return list(zip(expected[:-1], expected[1:]))
 
 
+def _scene_index_to_background_index(scene_index: int, scene_count: int, background_count: int) -> int:
+    """Map a full-script scene index to its representative image without collapsing late scenes."""
+    if background_count <= 1 or scene_count <= 1:
+        return 0
+    scene_index = max(0, min(int(scene_index), scene_count - 1))
+    return min(background_count - 1, int(scene_index * background_count / scene_count))
+
+
 def make_caption_frames(script: str, duration: float, background: Path, folder: Path, caption_offset: float = 0.0, audio_path: Optional[Path] = None, job_id: Optional[str] = None, scene_interval: int = 5, visual_scene_texts=None):
     """Render small Pillow caption cards with per-word highlighting, avoiding FFmpeg's memory-heavy libass filter."""
     frame_dir = folder / "caption-frames"
@@ -1353,7 +1361,7 @@ def make_caption_frames(script: str, duration: float, background: Path, folder: 
                         # onto early images whenever there are more scenes than images.
                         chosen = nearest
         # The chosen scene index maps to a representative image sampled across the full script.
-        base_index = min(len(bases) - 1, int(chosen * len(bases) / max(1, len(scene_texts))))
+        base_index = _scene_index_to_background_index(chosen, len(scene_texts), len(bases))
         slot_backgrounds.append(base_index)
     print(f"VISUAL_TIMELINE interval_seconds={interval} slots={slot_count} unique_images={len(bases)} narration_scenes={len(scene_texts)}", flush=True)
     safe_offset = max(-max(0.0, duration - 0.1), min(max(0.0, duration - 0.1), caption_offset))
