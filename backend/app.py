@@ -672,6 +672,13 @@ def find_pollinations_image(script: str, folder: Path, model_visual_prompt: Opti
         return None, ""
 
 
+# Avoid repeatedly hammering public free image services after quota/payment/rate-limit
+# failures. This cooldown is process-local and never stores credentials or user content.
+IMAGE_PROVIDER_COOLDOWN_UNTIL = {}
+IMAGE_PROVIDER_COOLDOWN_SECONDS = 900
+IMAGE_PROVIDER_COOLDOWN_LOCK = threading.Lock()
+
+
 def find_generated_image(script: str, folder: Path, model_visual_prompt: Optional[str] = None):
     """Try free public image-generation Spaces; licensed image search remains a fallback."""
     if not AI_IMAGE_GENERATION_ENABLED:
@@ -718,6 +725,12 @@ def find_generated_image(script: str, folder: Path, model_visual_prompt: Optiona
         if provider not in ordered_providers:
             ordered_providers.append(provider)
     for provider_name, space_id, call in ordered_providers:
+        with IMAGE_PROVIDER_COOLDOWN_LOCK:
+            cooldown_until = IMAGE_PROVIDER_COOLDOWN_UNTIL.get(provider_name, 0)
+        if cooldown_until > time.time():
+            remaining = int(cooldown_until - time.time())
+            print(f"IMAGE_PROVIDER skipped={provider_name} reason=cooldown remaining_seconds={remaining}", flush=True)
+            continue
         executor = ThreadPoolExecutor(max_workers=1)
         try:
             print(f"IMAGE_PROVIDER trying={provider_name} timeout={AI_IMAGE_PROVIDER_TIMEOUT}s", flush=True)
@@ -743,9 +756,13 @@ def find_generated_image(script: str, folder: Path, model_visual_prompt: Optiona
                     return target, credit
             print(f"IMAGE_PROVIDER no_image provider={provider_name}", flush=True)
         except FutureTimeout:
-            print(f"IMAGE_PROVIDER timeout provider={provider_name}", flush=True)
+            with IMAGE_PROVIDER_COOLDOWN_LOCK:
+                IMAGE_PROVIDER_COOLDOWN_UNTIL[provider_name] = time.time() + IMAGE_PROVIDER_COOLDOWN_SECONDS
+            print(f"IMAGE_PROVIDER timeout provider={provider_name} cooldown_seconds={IMAGE_PROVIDER_COOLDOWN_SECONDS}", flush=True)
         except Exception as exc:
-            print(f"IMAGE_PROVIDER failed provider={provider_name} error={type(exc).__name__}: {str(exc)[:180]}", flush=True)
+            with IMAGE_PROVIDER_COOLDOWN_LOCK:
+                IMAGE_PROVIDER_COOLDOWN_UNTIL[provider_name] = time.time() + IMAGE_PROVIDER_COOLDOWN_SECONDS
+            print(f"IMAGE_PROVIDER failed provider={provider_name} cooldown_seconds={IMAGE_PROVIDER_COOLDOWN_SECONDS} error={type(exc).__name__}: {str(exc)[:180]}", flush=True)
         finally:
             executor.shutdown(wait=False, cancel_futures=True)
     return None, ""
