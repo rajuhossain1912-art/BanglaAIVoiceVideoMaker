@@ -683,7 +683,17 @@ def find_generated_image(script: str, folder: Path, model_visual_prompt: Optiona
     """Try free public image-generation Spaces; licensed image search remains a fallback."""
     if not AI_IMAGE_GENERATION_ENABLED:
         return None, ""
-    pollinations_image, pollinations_credit = find_pollinations_image(script, folder, model_visual_prompt)
+    with IMAGE_PROVIDER_COOLDOWN_LOCK:
+        pollinations_cooldown_until = IMAGE_PROVIDER_COOLDOWN_UNTIL.get("Pollinations-Flux", 0)
+    if pollinations_cooldown_until > time.time():
+        print(f"IMAGE_PROVIDER skipped=Pollinations-Flux reason=cooldown remaining_seconds={int(pollinations_cooldown_until - time.time())}", flush=True)
+        pollinations_image, pollinations_credit = None, ""
+    else:
+        pollinations_image, pollinations_credit = find_pollinations_image(script, folder, model_visual_prompt)
+        if not pollinations_image:
+            with IMAGE_PROVIDER_COOLDOWN_LOCK:
+                IMAGE_PROVIDER_COOLDOWN_UNTIL["Pollinations-Flux"] = time.time() + IMAGE_PROVIDER_COOLDOWN_SECONDS
+            print(f"IMAGE_PROVIDER cooldown provider=Pollinations-Flux seconds={IMAGE_PROVIDER_COOLDOWN_SECONDS}", flush=True)
     if pollinations_image:
         return pollinations_image, pollinations_credit
     from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
