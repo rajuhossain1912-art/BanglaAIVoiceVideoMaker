@@ -859,16 +859,19 @@ def find_generated_image(script: str, folder: Path, model_visual_prompt: Optiona
             executor.shutdown(wait=False, cancel_futures=True)
     return None, ""
 
-def make_background(script: str, folder: Path, model_visual_prompt: Optional[str] = None):
+def make_background(script: str, folder: Path, model_visual_prompt: Optional[str] = None, force_topic_graphic: bool = False):
     # Small canvas is intentional: keep peak memory below Render Free's 512 MiB limit.
     width, height = 360, 640
-    # Use small Wikimedia Commons thumbnails with a strict pixel limit; fall back to graphics if unavailable.
-    # Prefer a scene-matched AI image; use licensed image search only if generation is unavailable.
-    source_image, credit = find_generated_image(script, folder, model_visual_prompt)
-    if not source_image and ALLOW_LICENSED_IMAGE_FALLBACK:
-        source_image, credit = find_contextual_image(script, folder)
-    elif not source_image:
-        print("IMAGE_PROVIDER all_ai_models_failed licensed_fallback=disabled", flush=True)
+    # When a provider repeats an earlier scene, use a topic-aware graphic instead of reusing one still image.
+    if force_topic_graphic:
+        source_image, credit = None, ""
+        print("IMAGE_PROVIDER fallback=topic_graphic reason=duplicate_scene_image", flush=True)
+    else:
+        source_image, credit = find_generated_image(script, folder, model_visual_prompt)
+        if not source_image and ALLOW_LICENSED_IMAGE_FALLBACK:
+            source_image, credit = find_contextual_image(script, folder)
+        elif not source_image:
+            print("IMAGE_PROVIDER all_ai_models_failed licensed_fallback=disabled", flush=True)
     if source_image:
         try:
             with Image.open(source_image) as source:
@@ -987,6 +990,16 @@ def make_background(script: str, folder: Path, model_visual_prompt: Optional[str
         else:
             draw.ellipse((225, 95, 310, 180), fill=(255, 220, 135))
             draw.polygon([(0, 490), (95, 350), (170, 445), (265, 315), (360, 455), (360, 640), (0, 640)], fill=tuple(max(0, c-18) for c in base_color))
+        # Add a deterministic, scene-specific visual accent so fallback scenes from the same
+        # category do not collapse into identical still images.
+        scene_seed = sum((index + 1) * ord(ch) for index, ch in enumerate((script or "")[:240]))
+        accent = (150 + scene_seed % 90, 130 + (scene_seed // 5) % 100, 100 + (scene_seed // 11) % 120)
+        x1 = 28 + scene_seed % 210
+        y1 = 70 + (scene_seed // 7) % 190
+        radius = 18 + (scene_seed // 13) % 34
+        draw.ellipse((x1, y1, x1 + radius * 2, y1 + radius * 2), outline=accent, width=5)
+        x2 = 25 + (scene_seed // 17) % 180
+        draw.line((x2, 565, min(350, x2 + 95), 565 - (scene_seed % 65)), fill=accent, width=6)
         draw.ellipse((18, 25, 42, 49), fill=(255, 255, 255))
         draw.ellipse((315, 550, 342, 577), fill=(255, 255, 255))
     # Keep the visual background clean: narration text belongs only in the timed caption layer.
@@ -1058,6 +1071,21 @@ def _split_script_into_scenes(script: str, max_scenes: int = 12, target_words: i
     return chunks or [text]
 
 
+def _scene_images_too_similar(first: Path, second: Path) -> bool:
+    """Detect repeated provider photos cheaply at thumbnail size."""
+    try:
+        with Image.open(first) as first_image, Image.open(second) as second_image:
+            a = list(first_image.convert("RGB").resize((24, 42), Image.Resampling.BILINEAR).getdata())
+            b = list(second_image.convert("RGB").resize((24, 42), Image.Resampling.BILINEAR).getdata())
+        if len(a) != len(b) or not a:
+            return False
+        difference = sum(abs(ac - bc) for ap, bp in zip(a, b) for ac, bc in zip(ap, bp)) / (len(a) * 3)
+        return difference < 5.0
+    except Exception as exc:
+        print(f"IMAGE_SCENE compare_failed error={type(exc).__name__}", flush=True)
+        return False
+
+
 def make_scene_backgrounds(script: str, folder: Path):
     """Create a bounded set of semantically focused images for reuse across timed scene changes."""
     scenes = _split_script_into_scenes(script, max_scenes=12, target_words=32)
@@ -1068,7 +1096,12 @@ def make_scene_backgrounds(script: str, folder: Path):
         scene_dir = folder / f"scene-{index:02d}"
         scene_dir.mkdir(parents=True, exist_ok=True)
         print(f"IMAGE_SCENE index={index + 1}/{len(scenes)} words={len(scene_text.split())}", flush=True)
-        backgrounds.append(make_background(scene_text, scene_dir, visual_prompts[index] if visual_prompts else None))
+        background = make_background(scene_text, scene_dir, visual_prompts[index] if visual_prompts else None)
+        if any(_scene_images_too_similar(background, prior) for prior in backgrounds):
+            print(f"IMAGE_SCENE repeated_image index={index + 1} action=regenerate_topic_graphic", flush=True)
+            background = make_background(scene_text, scene_dir, force_topic_graphic=True)
+        backgrounds.append(background)
+    print(f"IMAGE_SCENE unique_backgrounds={len(backgrounds)} total_scenes={len(scenes)}", flush=True)
     return backgrounds, scenes
 
 def make_srt(script: str, duration: float, path: Path):
