@@ -759,6 +759,12 @@ def find_generated_image(script: str, folder: Path, model_visual_prompt: Optiona
     """Try free public image-generation Spaces; licensed image search remains a fallback."""
     if not AI_IMAGE_GENERATION_ENABLED:
         return None, ""
+    # Prefer the configured Cloudflare image models first: recent production logs
+    # showed Pollinations frequently returning HTTP 400/402 or timing out. This avoids
+    # wasting the job's visual-generation time on a provider that is already unreliable.
+    cloudflare_image, cloudflare_credit = find_cloudflare_generated_image(script, folder, model_visual_prompt)
+    if cloudflare_image:
+        return cloudflare_image, cloudflare_credit
     with IMAGE_PROVIDER_COOLDOWN_LOCK:
         pollinations_cooldown_until = IMAGE_PROVIDER_COOLDOWN_UNTIL.get("Pollinations-Flux", 0)
     if pollinations_cooldown_until > time.time():
@@ -772,9 +778,6 @@ def find_generated_image(script: str, folder: Path, model_visual_prompt: Optiona
             print(f"IMAGE_PROVIDER cooldown provider=Pollinations-Flux seconds={IMAGE_PROVIDER_COOLDOWN_SECONDS}", flush=True)
     if pollinations_image:
         return pollinations_image, pollinations_credit
-    cloudflare_image, cloudflare_credit = find_cloudflare_generated_image(script, folder, model_visual_prompt)
-    if cloudflare_image:
-        return cloudflare_image, cloudflare_credit
     from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
     prompt = (
         "Create an original, photorealistic vertical 9:16 image for a short educational video. "
