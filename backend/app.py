@@ -561,21 +561,16 @@ def _plan_scene_visual_prompts(scenes):
     cf_account_id = os.getenv("CLOUDFLARE_ACCOUNT_ID", "").strip()
     cf_api_token = os.getenv("CLOUDFLARE_AI_API_TOKEN", "").strip()
     if cf_account_id and cf_api_token:
-        default_models = (
-            "@cf/meta/llama-3.2-3b-instruct,"
-            "@cf/qwen/qwen2.5-7b-instruct,"
-            "@cf/google/gemma-3-12b-it"
-        )
-        configured_models = os.getenv(
-            "CLOUDFLARE_AI_MODELS",
-            os.getenv("CLOUDFLARE_AI_MODEL", default_models.split(",")[0]) + (
-                "," + ",".join(x for x in default_models.split(",")
-                               if x != os.getenv("CLOUDFLARE_AI_MODEL", default_models.split(",")[0]))
-                if os.getenv("CLOUDFLARE_AI_MODEL", "").strip() else
-                "," + ",".join(default_models.split(",")[1:])
-            )
-        )
-        model_names = list(dict.fromkeys(x.strip() for x in configured_models.split(",") if x.strip()))
+        default_models = [
+            os.getenv("CLOUDFLARE_AI_MODEL", "@cf/meta/llama-3.2-3b-instruct").strip(),
+            "@cf/qwen/qwen2.5-7b-instruct",
+            "@cf/google/gemma-3-12b-it",
+        ]
+        configured_models = os.getenv("CLOUDFLARE_AI_MODELS", "").strip()
+        model_names = list(dict.fromkeys(
+            x.strip() for x in (configured_models.split(",") if configured_models else default_models)
+            if x.strip()
+        ))
         for model in model_names:
             try:
                 body = json.dumps({
@@ -1453,6 +1448,7 @@ def capabilities():
                 {"id": "flux", "name": "FLUX.1-schnell", "license": "Apache-2.0 model license; generated output is not guaranteed copyright-free"},
                 {"id": "zimage", "name": "Z-Image-Turbo", "license": "Apache-2.0 model license; generated output is not guaranteed copyright-free"},
                 {"id": "pollinations_flux", "name": "Pollinations Flux (free classic endpoint)", "license": "Hosted image service; free anonymous access and rate limits may change"},
+                {"id": "cloudflare_ai_images", "name": "Cloudflare Workers AI image-model fallback chain", "license": "Uses configured Cloudflare account free allocation; requires account ID and API token"},
             ],
             "order": AI_IMAGE_PROVIDER_ORDER,
             "timeout_seconds": AI_IMAGE_PROVIDER_TIMEOUT,
@@ -1462,8 +1458,8 @@ def capabilities():
         "language_model_visual_planner": {
             "enabled": LANGUAGE_MODEL_VISUAL_PLANNER_ENABLED,
             "default_model": os.getenv("CLOUDFLARE_AI_MODEL", "@cf/meta/llama-3.2-3b-instruct"),
-            "providers": ["Cloudflare Workers AI (when account ID and API token are configured)", "local keyword fallback"],
-            "note": "Only the Cloudflare daily free allocation is used. If credentials are absent, the quota is exhausted, or the service fails, local planning is used. No paid or credit-based fallback is enabled.",
+            "providers": ["Cloudflare Workers AI model fallback chain (Llama, Qwen, Gemma when available)", "local keyword fallback"],
+            "note": "Only the Cloudflare daily free allocation is used. The model chain tries alternatives when one fails. If credentials are absent, the quota is exhausted, or all models fail, local planning is used. No paid or credit-based fallback is enabled.",
         },
         "script_generation": {"available": False, "note": "Video creation uses the user's supplied script; the language model plans visuals and does not invent narration."},
         "free_only": True,
