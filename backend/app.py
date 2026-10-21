@@ -559,7 +559,7 @@ def _plan_scene_visual_prompts(scenes):
     # Try a small fallback chain of models on the same configured account. This
     # uses the account's free allocation only; it does not enable paid providers.
     cf_account_id = os.getenv("CLOUDFLARE_ACCOUNT_ID", "").strip()
-    cf_api_token = os.getenv("CLOUDFLARE_AI_API_TOKEN", "").strip()
+    cf_api_token = os.getenv("CLOUDFLARE_AI_API_TOKEN", os.getenv("CLOUDFLARE_API_TOKEN", "")).strip()
     if cf_account_id and cf_api_token:
         default_models = [
             os.getenv("CLOUDFLARE_AI_MODEL", "@cf/meta/llama-3.2-3b-instruct").strip(),
@@ -696,7 +696,7 @@ IMAGE_PROVIDER_COOLDOWN_LOCK = threading.Lock()
 def find_cloudflare_generated_image(script: str, folder: Path, model_visual_prompt: Optional[str] = None):
     """Try Cloudflare Workers AI image models on the configured account's free allocation."""
     account_id = os.getenv("CLOUDFLARE_ACCOUNT_ID", "").strip()
-    api_token = os.getenv("CLOUDFLARE_AI_API_TOKEN", "").strip()
+    api_token = os.getenv("CLOUDFLARE_AI_API_TOKEN", os.getenv("CLOUDFLARE_API_TOKEN", "")).strip()
     if not account_id or not api_token:
         return None, ""
     prompt = _english_visual_prompt(script, model_visual_prompt)
