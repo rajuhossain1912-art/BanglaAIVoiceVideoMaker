@@ -297,7 +297,7 @@ VISUAL_CONCEPTS = [
     (("বন্যা", "ঘূর্ণিঝড়", "ঘূর্ণিঝড়", "দুর্যোগ", "জলোচ্ছ্বাস"), "a Bangladeshi village responding to monsoon flooding"),
     (("রাস্তা", "গাড়ি", "গাড়ি", "বাস", "পরিবহন", "চালক", "যাত্রী", "পথচারী"), "a realistic Bangladeshi street with safe public transport"),
     (("শিশু", "বাচ্চা", "ছেলে", "মেয়ে", "মেয়ে", "খেলাধুলা"), "children learning or playing safely outdoors"),
-    (("পরিশ্রম", "চেষ্টা", "সাফল্য", "কাজ", "দক্ষতা"), "a person working diligently toward a goal"),
+    (("পরিশ্রম", "চেষ্টা", "সাফল্য", "দক্ষতা"), "a person working diligently toward a goal"),
     (("স্বপ্ন", "আশা", "সাহস", "ভবিষ্যৎ", "ভবিষ্যত"), "an inspiring hopeful sunrise over Bangladesh"),
     (("সকাল", "ভোর", "সূর্যোদয়", "সূর্যোদয়"), "sunrise over a peaceful green landscape"),
     (("গাছপালা", "গাছ", "সবুজ", "বন", "প্রকৃতি"), "lush green trees and natural scenery"),
@@ -322,7 +322,7 @@ VISUAL_CONCEPTS = [
     (("আবহাওয়া", "আবহাওয়া", "তাপমাত্রা", "জলবায়ু", "জলবায়ু", "গরম", "শীত", "ঝড়", "ঝড়"), "a realistic weather scene showing the relevant season and sky"),
     (("বিদ্যুৎ", "সৌরশক্তি", "জ্বালানি", "পরিবেশ", "দূষণ", "পুনর্ব্যবহার"), "renewable energy and environmental sustainability in Bangladesh"),
     (("সঙ্গীত", "গান", "গায়ক", "গায়ক", "বাদ্যযন্ত্র", "নাচ"), "musicians performing on a small stage with instruments"),
-    (("বই", "লাইব্রেরি", "গ্রন্থাগার", "সাহিত্য", "কবিতা", "লেখক", "লেখা"), "a reader exploring books in a welcoming library"),
+    (("বই", "লাইব্রেরি", "গ্রন্থাগার", "সাহিত্য", "কবিতা", "লেখক"), "a reader exploring books in a welcoming library"),
     (("প্রাণী", "পশু", "বিড়াল", "বিড়াল", "কুকুর", "গরু", "ছাগল", "বাঘ", "হাতি"), "animals in a natural or farm setting appropriate to the subject"),
     (("মাছ", "মাছধরা", "জেলে", "মৎস্য", "চিংড়ি", "চিংড়ি"), "Bangladeshi fishers working beside a river with fishing nets"),
     (("বিয়ে", "বিয়ে", "অনুষ্ঠান", "উৎসব", "ঈদ", "পূজা", "মেলা"), "a respectful community celebration in Bangladesh"),
@@ -573,13 +573,15 @@ def _plan_scene_visual_prompts(scenes):
         return LANGUAGE_MODEL_VISUAL_CACHE[cache_key]
     scene_payload = [{"scene": i + 1, "text": re.sub(r"\s+", " ", text).strip()[:300]} for i, text in enumerate(scenes)]
     prompt = (
-        "You are a visual storyboard planner for a Bangladeshi educational video. "
-        "For each input scene, write one specific, photorealistic English image prompt matching only that scene. "
-        "Preserve the actual subject; do not invent unrelated subjects. Prefer Bangladesh-local details when relevant. "
+        "You are a strict visual storyboard planner for a Bangladeshi educational video. "
+        "For EACH input scene, create exactly one concrete, photorealistic image prompt depicting the main subject or action explicitly stated in THAT scene. "
+        "Treat each scene independently. Do not blend topics from neighboring scenes, use generic symbols, flags, globes, maps, abstract gradients, or unrelated stock imagery unless that exact subject is discussed. "
+        "Prefer real, recognizable objects and actions: if the scene says farmer or rice field, show a farmer working in a rice field; if it says city traffic, show actual buses and street traffic; if it says students, show students learning; if it says technology or smartphones, show a person using real digital devices. "
+        "Use Bangladesh-local people and places when relevant. Never replace a specific subject with a vague landscape or symbolic icon. "
         "For smartphone, TalkBack, accessibility or screen-reader scenes show a real person using a phone, never a world map or globe unless geography is explicitly discussed. "
-        "Do not include text, subtitles, letters, logos, or watermarks. "
+        "No text, subtitles, letters, logos, flags, watermarks, or decorative symbols unless the scene explicitly mentions them. "
         "Return ONLY valid JSON as an array of objects with keys scene and visual_prompt, in the same order, exactly one object per input. "
-        "Keep each visual_prompt between 25 and 220 characters. Input scenes: "
+        "Keep each visual_prompt between 40 and 220 characters. Input scenes: "
         + json.dumps(scene_payload, ensure_ascii=False)
     )
     # Cloudflare Workers AI is the preferred optional external model.
