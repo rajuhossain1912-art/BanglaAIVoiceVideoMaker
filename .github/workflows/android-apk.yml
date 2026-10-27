@@ -50,6 +50,7 @@ jobs:
       - name: Publish GitHub Release with latest APK
         uses: softprops/action-gh-release@v2
         with:
+          token: ${{ secrets.GH_RELEASE_TOKEN }}
           tag_name: v${{ env.APP_VERSION_NAME }}
           name: Bangla AI Voice Video Maker v${{ env.APP_VERSION_NAME }}
           target_commitish: ${{ github.sha }}
