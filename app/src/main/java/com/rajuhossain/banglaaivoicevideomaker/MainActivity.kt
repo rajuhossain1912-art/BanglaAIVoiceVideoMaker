@@ -12,6 +12,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.Environment
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -174,6 +175,8 @@ private fun VideoMakerScreen() {
             }
         }
     }
+
+    BackHandler(enabled = showSettings) { showSettings = false }
 
     if (showSettings) {
         SettingsScreen(
@@ -447,36 +450,100 @@ private fun SettingsScreen(
     onDeleteSavedFiles: () -> Unit,
     onBack: () -> Unit
 ) {
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
             Text("সেটিংস", modifier = Modifier.weight(1f), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-            TextButton(onClick = onBack) { Text("মূল স্ক্রিনে ফিরুন") }
+            TextButton(onClick = onBack) { Text("মূল স্ক্রিন") }
         }
-        Text("ভিডিও ও ফাইল ব্যবস্থাপনা", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+
+        Text(
+            "ভিডিও তৈরি ও সংরক্ষণের পছন্দগুলো এখানে পরিবর্তন করুন।",
+            style = MaterialTheme.typography.bodyMedium
+        )
+
         Card(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("ছবি পরিবর্তনের সময়", fontWeight = FontWeight.SemiBold)
-                Text("বক্তব্যের সঙ্গে মানানসই দৃশ্য দেখানোর জন্য কত সেকেন্ড পর ছবি বদলাবে তা নির্বাচন করুন।")
+            Column(
+                Modifier.fillMaxWidth().padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text("১. ভিডিওর দৃশ্য", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text(
+                    "ভিডিও চলার সময় কত সেকেন্ড পরপর ছবি বদলাবে তা বেছে নিন। ছোট সময়ে ছবি বেশি ঘন ঘন বদলাবে।",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                HorizontalDivider()
                 listOf(3, 5, 10, 15, 20).forEach { seconds ->
                     Row(
-                        modifier = Modifier.fillMaxWidth().selectable(selected = sceneInterval == seconds, role = Role.RadioButton, onClick = { onSceneIntervalChange(seconds) }),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .selectable(
+                                selected = sceneInterval == seconds,
+                                role = Role.RadioButton,
+                                onClick = { onSceneIntervalChange(seconds) }
+                            )
+                            .padding(vertical = 5.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         RadioButton(selected = sceneInterval == seconds, onClick = null)
-                        Text("প্রতি $seconds সেকেন্ডে ছবি পরিবর্তন")
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            "প্রতি $seconds সেকেন্ডে ছবি পরিবর্তন",
+                            style = MaterialTheme.typography.bodyLarge
+                        )
                     }
                 }
             }
         }
+
         Card(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("সংরক্ষিত ফাইল মুছুন", fontWeight = FontWeight.SemiBold)
-                Text(if (hasSavedVoiceProfile) "নিজের কণ্ঠের নমুনা ফোনের অ্যাপ-স্টোরেজে সংরক্ষিত আছে।" else "নিজের কণ্ঠের সংরক্ষিত নমুনা পাওয়া যায়নি।")
-                Text("এই বোতাম কণ্ঠের নমুনা ও অস্থায়ী অ্যাপ ফাইল মুছবে। Downloads ফোল্ডারে ডাউনলোড করা ভিডিও মুছবে না।")
-                OutlinedButton(onClick = onDeleteSavedFiles, modifier = Modifier.fillMaxWidth()) { Text("সংরক্ষিত কণ্ঠ ও অস্থায়ী ফাইল মুছুন") }
+            Column(
+                Modifier.fillMaxWidth().padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text("২. সংরক্ষিত ফাইল ও গোপনীয়তা", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text(
+                    if (hasSavedVoiceProfile) {
+                        "নিজের কণ্ঠের নমুনা এই ফোনের অ্যাপ-স্টোরেজে সংরক্ষিত আছে।"
+                    } else {
+                        "নিজের কণ্ঠের কোনো সংরক্ষিত নমুনা পাওয়া যায়নি।"
+                    },
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Text(
+                    "নিচের বোতামটি নিজের কণ্ঠের নমুনা ও অস্থায়ী অ্যাপ ফাইল মুছবে। Downloads ফোল্ডারে ডাউনলোড করা ভিডিও মুছবে না।",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                OutlinedButton(
+                    onClick = onDeleteSavedFiles,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("কণ্ঠের নমুনা ও অস্থায়ী ফাইল মুছুন")
+                }
             }
         }
-        Text("অ্যাপের মূল স্ক্রিনে বিষয়, স্ক্রিপ্ট, ভিডিও তৈরি এবং সার্ভারের বর্তমান অবস্থা থাকবে।", style = MaterialTheme.typography.bodySmall)
+
+        Card(Modifier.fillMaxWidth()) {
+            Column(
+                Modifier.fillMaxWidth().padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text("৩. মূল স্ক্রিনে ফেরা", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text(
+                    "মূল স্ক্রিনে ফিরে বিষয়, স্ক্রিপ্ট, ভিডিও তৈরির বোতাম এবং সার্ভারের অবস্থা দেখতে পারবেন। ফোনের Back বোতাম চাপলেও সেটিংস থেকে মূল স্ক্রিনে ফিরবেন।",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Button(onClick = onBack, modifier = Modifier.fillMaxWidth()) {
+                    Text("মূল স্ক্রিনে ফিরে যান")
+                }
+            }
+        }
     }
 }
 
