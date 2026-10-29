@@ -181,6 +181,16 @@ private fun VideoMakerScreen() {
     if (showSettings) {
         SettingsScreen(
             sceneInterval = sceneInterval,
+            mode = mode,
+            onModeChange = { selectedMode ->
+                mode = selectedMode
+                showSettings = false
+                status = when (selectedMode) {
+                    "auto" -> "স্বয়ংক্রিয় ভয়েস নির্বাচিত হয়েছে। মূল স্ক্রিনে লেখা দিন।"
+                    "audio" -> "অডিও ভয়েস নির্বাচিত হয়েছে। মূল স্ক্রিনে অডিও ফাইল বেছে নিন।"
+                    else -> "নিজের ভয়েস নির্বাচিত হয়েছে। মূল স্ক্রিনে কণ্ঠের ইনপুট দিন।"
+                }
+            },
             onSceneIntervalChange = { seconds ->
                 sceneInterval = seconds
                 context.getSharedPreferences("video_settings", Context.MODE_PRIVATE).edit().putInt("scene_interval", seconds).apply()
@@ -208,27 +218,16 @@ private fun VideoMakerScreen() {
             }
         }
         Text("বাংলা, ইংরেজি বা মিশ্র লেখা থেকে ভিডিও তৈরি করুন। প্রথমে পদ্ধতি বেছে নিন, তারপর সেই পদ্ধতির প্রয়োজনীয় ইনপুট দিন।")
-        Text("ভিডিও তৈরির পদ্ধতি", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-        Row(
-            modifier = Modifier.fillMaxWidth().selectable(selected = mode == "auto", enabled = !running, role = Role.RadioButton, onClick = { mode = "auto" }),
-            verticalAlignment = Alignment.CenterVertically
+        OutlinedButton(
+            onClick = { showSettings = true },
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !running
         ) {
-            RadioButton(selected = mode == "auto", onClick = null, enabled = !running)
-            Text("স্বয়ংক্রিয় ভয়েসে ভিডিও তৈরি করুন")
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth().selectable(selected = mode == "audio", enabled = !running, role = Role.RadioButton, onClick = { mode = "audio" }),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            RadioButton(selected = mode == "audio", onClick = null, enabled = !running)
-            Text("অডিও ভয়েসে ভিডিও তৈরি করুন")
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth().selectable(selected = mode == "clone", enabled = !running, role = Role.RadioButton, onClick = { mode = "clone" }),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            RadioButton(selected = mode == "clone", onClick = null, enabled = !running)
-            Text("নিজের ভয়েসে ভিডিও তৈরি করুন")
+            Text("ভিডিও পদ্ধতি: " + when (mode) {
+                "audio" -> "অডিও ভয়েস"
+                "clone" -> "নিজের ভয়েস"
+                else -> "স্বয়ংক্রিয় ভয়েস"
+            } + " — পরিবর্তন করতে চাপুন")
         }
         if (mode == "clone") {
             Card(Modifier.fillMaxWidth()) {
@@ -445,6 +444,8 @@ private fun VideoMakerScreen() {
 @Composable
 private fun SettingsScreen(
     sceneInterval: Int,
+    mode: String,
+    onModeChange: (String) -> Unit,
     onSceneIntervalChange: (Int) -> Unit,
     hasSavedVoiceProfile: Boolean,
     onDeleteSavedFiles: () -> Unit,
@@ -473,7 +474,34 @@ private fun SettingsScreen(
                 Modifier.fillMaxWidth().padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Text("১. ভিডিওর দৃশ্য", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text("১. ভিডিও তৈরির পদ্ধতি", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text("যে পদ্ধতি বেছে নেবেন, মূল স্ক্রিনে ফিরে সেই পদ্ধতির প্রয়োজনীয় ইনপুট দেখা যাবে।", style = MaterialTheme.typography.bodyMedium)
+                HorizontalDivider()
+                listOf(
+                    "auto" to "স্বয়ংক্রিয় ভয়েস",
+                    "audio" to "অডিও ফাইলের ভয়েস",
+                    "clone" to "নিজের ভয়েস"
+                ).forEach { (value, label) ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth()
+                            .selectable(selected = mode == value, role = Role.RadioButton, onClick = { onModeChange(value) })
+                            .padding(vertical = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(selected = mode == value, onClick = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text(label, style = MaterialTheme.typography.bodyLarge)
+                    }
+                }
+            }
+        }
+
+        Card(Modifier.fillMaxWidth()) {
+            Column(
+                Modifier.fillMaxWidth().padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text("২. ভিডিওর দৃশ্য", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text(
                     "ভিডিও চলার সময় কত সেকেন্ড পরপর ছবি বদলাবে তা বেছে নিন। ছোট সময়ে ছবি বেশি ঘন ঘন বদলাবে।",
                     style = MaterialTheme.typography.bodyMedium
@@ -507,7 +535,7 @@ private fun SettingsScreen(
                 Modifier.fillMaxWidth().padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Text("২. সংরক্ষিত ফাইল ও গোপনীয়তা", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text("৩. সংরক্ষিত ফাইল ও গোপনীয়তা", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text(
                     if (hasSavedVoiceProfile) {
                         "নিজের কণ্ঠের নমুনা এই ফোনের অ্যাপ-স্টোরেজে সংরক্ষিত আছে।"
@@ -534,7 +562,7 @@ private fun SettingsScreen(
                 Modifier.fillMaxWidth().padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text("৩. মূল স্ক্রিনে ফেরা", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text("৪. মূল স্ক্রিনে ফেরা", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text(
                     "মূল স্ক্রিনে ফিরে বিষয়, স্ক্রিপ্ট, ভিডিও তৈরির বোতাম এবং সার্ভারের অবস্থা দেখতে পারবেন। ফোনের Back বোতাম চাপলেও সেটিংস থেকে মূল স্ক্রিনে ফিরবেন।",
                     style = MaterialTheme.typography.bodyMedium
