@@ -18,6 +18,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.material.icons.Icons
@@ -26,6 +27,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -204,16 +206,25 @@ private fun VideoMakerScreen() {
         }
         Text("বাংলা, ইংরেজি বা মিশ্র লেখা থেকে ভিডিও তৈরি করুন। প্রথমে পদ্ধতি বেছে নিন, তারপর সেই পদ্ধতির প্রয়োজনীয় ইনপুট দিন।")
         Text("ভিডিও তৈরির পদ্ধতি", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            RadioButton(selected = mode == "auto", onClick = { mode = "auto" }, enabled = !running)
+        Row(
+            modifier = Modifier.fillMaxWidth().selectable(selected = mode == "auto", enabled = !running, role = Role.RadioButton, onClick = { mode = "auto" }),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            RadioButton(selected = mode == "auto", onClick = null, enabled = !running)
             Text("স্বয়ংক্রিয় ভয়েসে ভিডিও তৈরি করুন")
         }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            RadioButton(selected = mode == "audio", onClick = { mode = "audio" }, enabled = !running)
+        Row(
+            modifier = Modifier.fillMaxWidth().selectable(selected = mode == "audio", enabled = !running, role = Role.RadioButton, onClick = { mode = "audio" }),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            RadioButton(selected = mode == "audio", onClick = null, enabled = !running)
             Text("অডিও ভয়েসে ভিডিও তৈরি করুন")
         }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            RadioButton(selected = mode == "clone", onClick = { mode = "clone" }, enabled = !running)
+        Row(
+            modifier = Modifier.fillMaxWidth().selectable(selected = mode == "clone", enabled = !running, role = Role.RadioButton, onClick = { mode = "clone" }),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            RadioButton(selected = mode == "clone", onClick = null, enabled = !running)
             Text("নিজের ভয়েসে ভিডিও তৈরি করুন")
         }
         if (mode == "clone") {
@@ -447,8 +458,11 @@ private fun SettingsScreen(
                 Text("ছবি পরিবর্তনের সময়", fontWeight = FontWeight.SemiBold)
                 Text("বক্তব্যের সঙ্গে মানানসই দৃশ্য দেখানোর জন্য কত সেকেন্ড পর ছবি বদলাবে তা নির্বাচন করুন।")
                 listOf(3, 5, 10, 15, 20).forEach { seconds ->
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        RadioButton(selected = sceneInterval == seconds, onClick = { onSceneIntervalChange(seconds) })
+                    Row(
+                        modifier = Modifier.fillMaxWidth().selectable(selected = sceneInterval == seconds, role = Role.RadioButton, onClick = { onSceneIntervalChange(seconds) }),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(selected = sceneInterval == seconds, onClick = null)
                         Text("প্রতি $seconds সেকেন্ডে ছবি পরিবর্তন")
                     }
                 }
