@@ -1,3 +1,4 @@
+// PR build validation trigger: keep this comment while CI verifies the UI changes.
 package com.rajuhossain.banglaaivoicevideomaker
 
 import android.Manifest
@@ -17,12 +18,16 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -61,7 +66,10 @@ private fun VideoMakerScreen() {
     var mode by remember { mutableStateOf("auto") }
     var cloneConsent by remember { mutableStateOf(false) }
     var captionOffset by remember { mutableStateOf(0f) }
-    var sceneInterval by remember { mutableStateOf(5) }
+    var sceneInterval by remember { mutableStateOf(context.getSharedPreferences("video_settings", Context.MODE_PRIVATE).getInt("scene_interval", 3)) }
+    var showSettings by remember { mutableStateOf(false) }
+    var serverStatus by remember { mutableStateOf("সার্ভারের সংযোগ এখনো পরীক্ষা করা হয়নি।") }
+    var serverCheckRunning by remember { mutableStateOf(false) }
     var sceneIntervalMenu by remember { mutableStateOf(false) }
     var hasSavedVoiceProfile by remember { mutableStateOf(File(context.filesDir, "voice_profile_sample").exists()) }
     var isRecording by remember { mutableStateOf(false) }
@@ -167,32 +175,57 @@ private fun VideoMakerScreen() {
         }
     }
 
+    if (showSettings) {
+        SettingsScreen(
+            sceneInterval = sceneInterval,
+            onSceneIntervalChange = { seconds ->
+                sceneInterval = seconds
+                context.getSharedPreferences("video_settings", Context.MODE_PRIVATE).edit().putInt("scene_interval", seconds).apply()
+            },
+            hasSavedVoiceProfile = hasSavedVoiceProfile,
+            onDeleteSavedFiles = {
+                val deleted = File(context.filesDir, "voice_profile_sample").delete()
+                context.cacheDir.listFiles()?.forEach { it.deleteRecursively() }
+                hasSavedVoiceProfile = false
+                if (audioUri?.scheme == "file") { audioUri = null; audioName = "" }
+                status = if (deleted) "ফোনে সংরক্ষিত কণ্ঠের নমুনা ও অস্থায়ী অ্যাপ ফাইল মুছে ফেলা হয়েছে। Downloads ফোল্ডারের ভিডিও মুছতে ফোনের ফাইল ব্যবস্থাপক ব্যবহার করুন।"
+                    else "অস্থায়ী অ্যাপ ফাইল মুছে ফেলা হয়েছে। সংরক্ষিত কণ্ঠের নমুনা পাওয়া যায়নি। Downloads ফোল্ডারের ভিডিও অক্ষত আছে।"
+            },
+            onBack = { showSettings = false }
+        )
+    } else {
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        Text("Bangla AI Voice Video Maker", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-        Text("বাংলা, ইংরেজি বা মিশ্র লেখা থেকে স্বয়ংক্রিয় ভিডিও তৈরি করুন। বিষয়ভিত্তিক বিনামূল্যের ছবি, সম্ভব হলে AI-তৈরি দৃশ্য, জুম এবং স্বয়ংক্রিয় শব্দ-হাইলাইট সাবটাইটেল ব্যবহার হবে। কথার বিরতি শনাক্ত করে সাবটাইটেলের সময় ঠিক করার চেষ্টা করা হবে; শব্দের সময়ে সামান্য পার্থক্য থাকতে পারে।")
-        Card(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(if (online) "ইন্টারনেট সংযোগ পাওয়া গেছে" else "ইন্টারনেট সংযোগ পাওয়া যায়নি", fontWeight = FontWeight.SemiBold)
-                OutlinedButton(onClick = { online = isInternetAvailable(context) }, modifier = Modifier.fillMaxWidth()) {
-                    Text("ইন্টারনেট আবার পরীক্ষা করুন")
-                }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Bangla AI Voice Video Maker", modifier = Modifier.weight(1f), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            IconButton(onClick = { showSettings = true }, enabled = !running, modifier = Modifier.semantics { contentDescription = "সেটিংস খুলুন" }) {
+                Icon(Icons.Filled.Settings, contentDescription = "সেটিংস")
             }
         }
+        Text("বাংলা, ইংরেজি বা মিশ্র লেখা থেকে ভিডিও তৈরি করুন। প্রথমে পদ্ধতি বেছে নিন, তারপর সেই পদ্ধতির প্রয়োজনীয় ইনপুট দিন।")
         Text("ভিডিও তৈরির পদ্ধতি", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            RadioButton(selected = mode == "auto", onClick = { mode = "auto" }, enabled = !running)
-            Text("শুধু লেখা: স্বয়ংক্রিয় ভয়েস")
+        Row(
+            modifier = Modifier.fillMaxWidth().selectable(selected = mode == "auto", enabled = !running, role = Role.RadioButton, onClick = { mode = "auto" }),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            RadioButton(selected = mode == "auto", onClick = null, enabled = !running)
+            Text("স্বয়ংক্রিয় ভয়েসে ভিডিও তৈরি করুন")
         }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            RadioButton(selected = mode == "audio", onClick = { mode = "audio" }, enabled = !running)
-            Text("লেখা ও আমার অডিও")
+        Row(
+            modifier = Modifier.fillMaxWidth().selectable(selected = mode == "audio", enabled = !running, role = Role.RadioButton, onClick = { mode = "audio" }),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            RadioButton(selected = mode == "audio", onClick = null, enabled = !running)
+            Text("অডিও ভয়েসে ভিডিও তৈরি করুন")
         }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            RadioButton(selected = mode == "clone", onClick = { mode = "clone" }, enabled = !running)
-            Text("পরীক্ষামূলক: আমার কণ্ঠে লেখা পড়ুন")
+        Row(
+            modifier = Modifier.fillMaxWidth().selectable(selected = mode == "clone", enabled = !running, role = Role.RadioButton, onClick = { mode = "clone" }),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            RadioButton(selected = mode == "clone", onClick = null, enabled = !running)
+            Text("নিজের ভয়েসে ভিডিও তৈরি করুন")
         }
         if (mode == "clone") {
             Card(Modifier.fillMaxWidth()) {
@@ -233,19 +266,13 @@ private fun VideoMakerScreen() {
             minLines = 5, enabled = !running,
             supportingText = { Text("সার্ভার লেখা গ্রহণ করে ভিডিও তৈরি করবে।") }
         )
-        Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("ছবি পরিবর্তনের বিরতি", fontWeight = FontWeight.Bold)
-            Text("প্রতি নির্দিষ্ট সময়ে বক্তব্যের সঙ্গে সবচেয়ে মানানসই উপলব্ধ দৃশ্য দেখানোর চেষ্টা হবে।", style = MaterialTheme.typography.bodySmall)
-            Box {
-                OutlinedButton(onClick = { sceneIntervalMenu = true }, enabled = !running) {
-                    Text("প্রতি $sceneInterval সেকেন্ডে ছবি পরিবর্তন")
-                }
-                DropdownMenu(expanded = sceneIntervalMenu, onDismissRequest = { sceneIntervalMenu = false }) {
-                    listOf(3, 5, 10, 15, 20).forEach { seconds ->
-                        DropdownMenuItem(
-                            text = { Text("প্রতি $seconds সেকেন্ডে") },
-                            onClick = { sceneInterval = seconds; sceneIntervalMenu = false }
-                        )
+        if (mode == "audio") {
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("অডিও ভয়েস ইনপুট", fontWeight = FontWeight.SemiBold)
+                    Text(if (audioName.isBlank()) "ভিডিওর জন্য ফোন থেকে একটি অডিও ফাইল বেছে নিন।" else "নির্বাচিত অডিও: $audioName")
+                    OutlinedButton(onClick = { audioPicker.launch("audio/*") }, modifier = Modifier.fillMaxWidth(), enabled = !running) {
+                        Text(if (audioName.isBlank()) "অডিও ফাইল নির্বাচন করুন" else "অন্য অডিও নির্বাচন করুন")
                     }
                 }
             }
@@ -260,22 +287,12 @@ private fun VideoMakerScreen() {
                 modifier = Modifier.fillMaxWidth(),
                 enabled = !running
             ) {
-                Text(if (isRecording) "রেকর্ড বন্ধ করে কণ্ঠ ফোনে সেভ করুন" else "নিজের কণ্ঠ রেকর্ড করে ফোনে সেভ করুন")
+                Text(if (isRecording) "রেকর্ড বন্ধ করে কণ্ঠ ফোনে সেভ করুন" else "নিজের কণ্ঠ রেকর্ড করুন")
             }
-        }
-        OutlinedButton(onClick = { audioPicker.launch("audio/*") }, modifier = Modifier.fillMaxWidth(), enabled = !running && !isRecording) {
-            Text(if (mode == "clone" && hasSavedVoiceProfile) "রেকর্ড করা কণ্ঠ বদলান বা অডিও বেছে নিন" else if (mode == "clone") "নিজের কণ্ঠের নমুনা নির্বাচন ও ফোনে সংরক্ষণ করুন" else if (audioName.isBlank()) "অডিও ফাইল নির্বাচন করুন" else "অডিও নির্বাচন করা হয়েছে: " + audioName)
-        }
-        if (mode == "clone" && hasSavedVoiceProfile) {
-            OutlinedButton(onClick = {
-                File(context.filesDir, "voice_profile_sample").delete()
-                hasSavedVoiceProfile = false
-                audioUri = null
-                audioName = ""
-                status = "ফোনে সংরক্ষিত কণ্ঠের নমুনা মুছে ফেলা হয়েছে।"
-            }, modifier = Modifier.fillMaxWidth(), enabled = !running) {
-                Text("ফোন থেকে সংরক্ষিত কণ্ঠের নমুনা মুছুন")
+            OutlinedButton(onClick = { audioPicker.launch("audio/*") }, modifier = Modifier.fillMaxWidth(), enabled = !running && !isRecording) {
+                Text(if (hasSavedVoiceProfile) "সংরক্ষিত কণ্ঠ বদলান" else "নিজের কণ্ঠের নমুনা নির্বাচন করুন")
             }
+            if (hasSavedVoiceProfile) Text("নিজের কণ্ঠের নমুনা ফোনে সংরক্ষিত আছে। মুছতে Settings খুলুন।", style = MaterialTheme.typography.bodySmall)
         }
         Button(
             onClick = {
@@ -333,7 +350,7 @@ private fun VideoMakerScreen() {
                 }
             },
             modifier = Modifier.fillMaxWidth(), enabled = !running
-        ) { Text(if (running) "ভিডিও তৈরি হচ্ছে" else "স্বয়ংক্রিয় ভিডিও তৈরি করুন") }
+        ) { Text(if (running) "ভিডিও তৈরি হচ্ছে" else "ভিডিও তৈরি করুন") }
 
         if (running) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -390,13 +407,76 @@ private fun VideoMakerScreen() {
             }
         }
         Card(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(14.dp)) {
+            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("বর্তমান অবস্থা", fontWeight = FontWeight.SemiBold)
-                Spacer(Modifier.height(6.dp))
-                Text(status, modifier = Modifier.semantics { contentDescription = "বর্তমান অবস্থা: " + status })
+                Text(if (online) "ফোনের ইন্টারনেট: সংযুক্ত" else "ফোনের ইন্টারনেট: সংযোগ নেই")
+                Text(serverStatus, modifier = Modifier.semantics { contentDescription = "অনলাইন সার্ভারের অবস্থা: " + serverStatus })
+                OutlinedButton(onClick = {
+                    online = isInternetAvailable(context)
+                    serverCheckRunning = true
+                    serverStatus = "অনলাইন সার্ভারের সংযোগ পরীক্ষা চলছে।"
+                    scope.launch {
+                        serverStatus = withContext(Dispatchers.IO) {
+                            try {
+                                val base = BuildConfig.API_BASE_URL.trim().trimEnd('/')
+                                val conn = (URL(base + "/health").openConnection() as HttpURLConnection).apply { connectTimeout = 10000; readTimeout = 10000; requestMethod = "GET" }
+                                try {
+                                    val code = conn.responseCode
+                                    if (code in 200..299) "সার্ভার অনলাইন। সর্বশেষ পরীক্ষা সফল (HTTP $code)।" else "সার্ভার উত্তর দিয়েছে, তবে সংযোগ সফল নয় (HTTP $code)।"
+                                } finally { conn.disconnect() }
+                            } catch (_: Exception) { "সার্ভারে সংযোগ করা যায়নি। ইন্টারনেট বা সার্ভার সাময়িকভাবে বন্ধ থাকতে পারে।" }
+                        }
+                        serverCheckRunning = false
+                    }
+                }, modifier = Modifier.fillMaxWidth(), enabled = !serverCheckRunning) {
+                    Text(if (serverCheckRunning) "সার্ভার পরীক্ষা চলছে" else "সার্ভার সংযোগ পরীক্ষা ও আপডেট")
+                }
+                Text(status, modifier = Modifier.semantics { contentDescription = "ভিডিও তৈরির বর্তমান অবস্থা: " + status })
             }
         }
-        Text("প্রাথমিক সংস্করণে MP4, গ্রাফিক পটভূমি ও আনুমানিক সাবটাইটেল তৈরি হয়। নিজের কণ্ঠের ক্লোনিং বাহ্যিক ফ্রি ডেমোর ওপর নির্ভরশীল; সব সময় কাজ নাও করতে পারে।", style = MaterialTheme.typography.bodySmall)
+        Text("নিজের কণ্ঠের পরীক্ষামূলক সুবিধা বাহ্যিক ফ্রি ডেমোর ওপর নির্ভরশীল; সব সময় কাজ নাও করতে পারে।", style = MaterialTheme.typography.bodySmall)
+    }
+    }
+}
+
+@Composable
+private fun SettingsScreen(
+    sceneInterval: Int,
+    onSceneIntervalChange: (Int) -> Unit,
+    hasSavedVoiceProfile: Boolean,
+    onDeleteSavedFiles: () -> Unit,
+    onBack: () -> Unit
+) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("সেটিংস", modifier = Modifier.weight(1f), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            TextButton(onClick = onBack) { Text("মূল স্ক্রিনে ফিরুন") }
+        }
+        Text("ভিডিও ও ফাইল ব্যবস্থাপনা", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("ছবি পরিবর্তনের সময়", fontWeight = FontWeight.SemiBold)
+                Text("বক্তব্যের সঙ্গে মানানসই দৃশ্য দেখানোর জন্য কত সেকেন্ড পর ছবি বদলাবে তা নির্বাচন করুন।")
+                listOf(3, 5, 10, 15, 20).forEach { seconds ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth().selectable(selected = sceneInterval == seconds, role = Role.RadioButton, onClick = { onSceneIntervalChange(seconds) }),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(selected = sceneInterval == seconds, onClick = null)
+                        Text("প্রতি $seconds সেকেন্ডে ছবি পরিবর্তন")
+                    }
+                }
+            }
+        }
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("সংরক্ষিত ফাইল মুছুন", fontWeight = FontWeight.SemiBold)
+                Text(if (hasSavedVoiceProfile) "নিজের কণ্ঠের নমুনা ফোনের অ্যাপ-স্টোরেজে সংরক্ষিত আছে।" else "নিজের কণ্ঠের সংরক্ষিত নমুনা পাওয়া যায়নি।")
+                Text("এই বোতাম কণ্ঠের নমুনা ও অস্থায়ী অ্যাপ ফাইল মুছবে। Downloads ফোল্ডারে ডাউনলোড করা ভিডিও মুছবে না।")
+                OutlinedButton(onClick = onDeleteSavedFiles, modifier = Modifier.fillMaxWidth()) { Text("সংরক্ষিত কণ্ঠ ও অস্থায়ী ফাইল মুছুন") }
+            }
+        }
+        Text("অ্যাপের মূল স্ক্রিনে বিষয়, স্ক্রিপ্ট, ভিডিও তৈরি এবং সার্ভারের বর্তমান অবস্থা থাকবে।", style = MaterialTheme.typography.bodySmall)
     }
 }
 
