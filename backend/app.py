@@ -172,7 +172,7 @@ def _write_gradio_audio_result(audio_result, folder: Path, stem: str):
 
 def _clone_with_cosyvoice(script: str, normalized: Path, space: str):
     from gradio_client import Client, handle_file
-    client = Client(space, verbose=False)
+    client = Client(space, verbose=False, httpx_kwargs={"timeout": 120.0})
     result = client.predict(
         script,
         handle_file(str(normalized)),
@@ -185,7 +185,7 @@ def _clone_with_cosyvoice(script: str, normalized: Path, space: str):
 
 def _clone_with_chatterbox(script: str, normalized: Path, space: str):
     from gradio_client import Client, handle_file
-    client = Client(space, verbose=False)
+    client = Client(space, verbose=False, httpx_kwargs={"timeout": 120.0})
     result = client.predict(
         script,
         handle_file(str(normalized)),
@@ -259,9 +259,11 @@ def synthesize_cloned_voice(script: str, reference_audio: Path, folder: Path) ->
         run(["ffmpeg", "-y", "-i", str(reference_audio), "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", str(normalized)], 120)
         output = folder / "cloned_voice.wav"
         chunks = _split_voice_clone_text(script, max_chars=250)
+        print(f"VOICE_CLONE_PLAN chunks={len(chunks)} characters={len(script)}", flush=True)
         audio_parts = []
         selected_providers = []
         for index, text_chunk in enumerate(chunks):
+            print(f"VOICE_CLONE_CHUNK_START part={index + 1}/{len(chunks)} characters={len(text_chunk)}", flush=True)
             if pure_english:
                 try:
                     candidate, provider = _clone_with_provider_fallback(
@@ -282,6 +284,7 @@ def synthesize_cloned_voice(script: str, reference_audio: Path, folder: Path) ->
                     "bn_or_mixed", folder, f"clone-part-{index:03d}"
                 )
             selected_providers.append(provider)
+            print(f"VOICE_CLONE_CHUNK_OK part={index + 1}/{len(chunks)}", flush=True)
             part_wav = folder / f"clone-part-{index:03d}.wav"
             run(["ffmpeg", "-y", "-i", str(candidate), "-ac", "1", "-ar", "24000", "-c:a", "pcm_s16le", str(part_wav)], 120)
             if not part_wav.exists() or part_wav.stat().st_size < 100:
