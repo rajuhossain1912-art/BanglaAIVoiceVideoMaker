@@ -254,7 +254,7 @@ def synthesize_cloned_voice(script: str, reference_audio: Path, folder: Path) ->
     if len(script) > 3000:
         raise RuntimeError("নিজের কণ্ঠে একবারে সর্বোচ্চ ৩০০০ অক্ষর ব্যবহার করুন।")
     normalized = folder / "voice_reference.wav"
-    pure_english = bool(re.search(r"[A-Za-z]", script)) and not bool(re.search(r"[\\u0980-\\u09FF]", script))
+    pure_english = bool(re.search(r"[A-Za-z]", script)) and not bool(re.search(r"[\u0980-\u09FF]", script))
     try:
         run(["ffmpeg", "-y", "-i", str(reference_audio), "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", str(normalized)], 120)
         output = folder / "cloned_voice.wav"
@@ -291,7 +291,7 @@ def synthesize_cloned_voice(script: str, reference_audio: Path, folder: Path) ->
             shutil.copyfile(audio_parts[0], output)
         else:
             listing = folder / "clone-parts.txt"
-            listing.write_text("".join(f"file '{part.as_posix()}'\\n" for part in audio_parts), encoding="utf-8")
+            listing.write_text("".join(f"file '{part.as_posix()}'\n" for part in audio_parts), encoding="utf-8")
             run(["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(listing), "-c:a", "pcm_s16le", str(output)], 180)
         if output.exists() and output.stat().st_size > 100:
             provider_summary = ",".join(dict.fromkeys(selected_providers))
