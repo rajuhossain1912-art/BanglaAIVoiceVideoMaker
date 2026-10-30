@@ -19,7 +19,10 @@ from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 APP_DIR = Path(__file__).resolve().parent
 VOICE_CLONE_SPACE = os.getenv("VOICE_CLONE_SPACE", "kawshikbuet17/bengali-cosyvoice3-tts-demo")
+# Optional comma-separated public Gradio Spaces with the same API contract.
+VOICE_CLONE_BN_SPACES = [x.strip() for x in os.getenv("VOICE_CLONE_BN_SPACES", VOICE_CLONE_SPACE).split(",") if x.strip()]
 VOICE_CLONE_EN_SPACE = os.getenv("VOICE_CLONE_EN_SPACE", "ResembleAI/Chatterbox")
+VOICE_CLONE_EN_SPACES = [x.strip() for x in os.getenv("VOICE_CLONE_EN_SPACES", VOICE_CLONE_EN_SPACE).split(",") if x.strip()]
 VOICE_CLONE_ENABLED = os.getenv("VOICE_CLONE_ENABLED", "true").lower() in ("1", "true", "yes")
 AI_IMAGE_GENERATION_ENABLED = os.getenv("AI_IMAGE_GENERATION_ENABLED", "true").lower() in ("1", "true", "yes")
 AI_IMAGE_PROVIDER_ORDER = [x.strip().lower() for x in os.getenv("AI_IMAGE_PROVIDER_ORDER", "pollinations,flux,zimage").split(",") if x.strip()]
@@ -167,9 +170,9 @@ def _write_gradio_audio_result(audio_result, folder: Path, stem: str):
     return None
 
 
-def _clone_with_cosyvoice(script: str, normalized: Path):
+def _clone_with_cosyvoice(script: str, normalized: Path, space: str):
     from gradio_client import Client, handle_file
-    client = Client(VOICE_CLONE_SPACE, verbose=False)
+    client = Client(space, verbose=False)
     result = client.predict(
         script,
         handle_file(str(normalized)),
@@ -180,10 +183,9 @@ def _clone_with_cosyvoice(script: str, normalized: Path):
     return result[0] if isinstance(result, (list, tuple)) else result
 
 
-def _clone_with_chatterbox(script: str, normalized: Path):
+def _clone_with_chatterbox(script: str, normalized: Path, space: str):
     from gradio_client import Client, handle_file
-    client = Client(VOICE_CLONE_EN_SPACE, verbose=False)
-    # Chatterbox's public demo is English-oriented; do not route Bangla/mixed scripts here.
+    client = Client(space, verbose=False)
     result = client.predict(
         script,
         handle_file(str(normalized)),
@@ -194,6 +196,21 @@ def _clone_with_chatterbox(script: str, normalized: Path):
         api_name="/generate_tts_audio",
     )
     return result
+
+
+def _clone_with_provider_fallback(script: str, normalized: Path, spaces, clone_function, language: str):
+    """Try configured free public Spaces in order; never use a paid API as fallback."""
+    failures = []
+    for space in spaces:
+        try:
+            print(f"VOICE_CLONE_TRY language={language} space={space}", flush=True)
+            result = clone_function(script, normalized, space)
+            print(f"VOICE_CLONE_OK language={language} space={space}", flush=True)
+            return result, space
+        except Exception as exc:
+            failures.append(f"{space}: {type(exc).__name__}: {str(exc)[:120]}")
+            print(f"VOICE_CLONE_FAILED language={language} space={space} error={type(exc).__name__}", flush=True)
+    raise RuntimeError("All configured free voice-clone Spaces failed. " + " | ".join(failures))
 
 
 def _split_voice_clone_text(script: str, max_chars: int = 450):
@@ -242,11 +259,15 @@ def synthesize_cloned_voice(script: str, reference_audio: Path, folder: Path) ->
         if pure_english:
             provider = "Chatterbox"
             try:
-                audio_result = _clone_with_chatterbox(script, normalized)
+                audio_result, provider = _clone_with_provider_fallback(
+                    script, normalized, VOICE_CLONE_EN_SPACES, _clone_with_chatterbox, "en"
+                )
             except Exception as primary_error:
                 provider = "Bengali CosyVoice3 fallback"
                 try:
-                    audio_result = _clone_with_cosyvoice(script, normalized)
+                    audio_result, provider = _clone_with_provider_fallback(
+                        script, normalized, VOICE_CLONE_BN_SPACES, _clone_with_cosyvoice, "en_fallback"
+                    )
                 except Exception:
                     raise primary_error
             candidate = _write_gradio_audio_result(audio_result, folder, "clone-output")
@@ -258,7 +279,9 @@ def synthesize_cloned_voice(script: str, reference_audio: Path, folder: Path) ->
             chunks = _split_voice_clone_text(script)
             audio_parts = []
             for index, text_chunk in enumerate(chunks):
-                audio_result = _clone_with_cosyvoice(text_chunk, normalized)
+                audio_result, provider = _clone_with_provider_fallback(
+                    text_chunk, normalized, VOICE_CLONE_BN_SPACES, _clone_with_cosyvoice, "bn_or_mixed"
+                )
                 candidate = _write_gradio_audio_result(audio_result, folder, f"clone-part-{index:03d}")
                 if candidate is None:
                     raise RuntimeError(f"Voice service returned no usable audio for part {index + 1}")
