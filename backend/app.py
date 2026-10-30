@@ -247,7 +247,7 @@ def _split_voice_clone_text(script: str, max_chars: int = 450):
     return chunks
 
 
-def synthesize_cloned_voice(script: str, reference_audio: Path, folder: Path) -> Path:
+def synthesize_cloned_voice(script: str, reference_audio: Path, folder: Path, progress_callback=None) -> Path:
     """Clone narration in short chunks, with free-provider failover for each chunk."""
     if not VOICE_CLONE_ENABLED:
         raise RuntimeError("নিজের কণ্ঠের পরীক্ষামূলক সুবিধা বর্তমানে বন্ধ আছে।")
@@ -264,6 +264,8 @@ def synthesize_cloned_voice(script: str, reference_audio: Path, folder: Path) ->
         selected_providers = []
         for index, text_chunk in enumerate(chunks):
             print(f"VOICE_CLONE_CHUNK_START part={index + 1}/{len(chunks)} characters={len(text_chunk)}", flush=True)
+            if progress_callback:
+                progress_callback(12 + int(18 * index / max(1, len(chunks))), f"নিজের কণ্ঠ তৈরি হচ্ছে: অংশ {index + 1}/{len(chunks)}। ফ্রি কণ্ঠসেবা থেকে উত্তর আসার অপেক্ষা চলছে।")
             if pure_english:
                 try:
                     candidate, provider = _clone_with_provider_fallback(
@@ -285,6 +287,8 @@ def synthesize_cloned_voice(script: str, reference_audio: Path, folder: Path) ->
                 )
             selected_providers.append(provider)
             print(f"VOICE_CLONE_CHUNK_OK part={index + 1}/{len(chunks)}", flush=True)
+            if progress_callback:
+                progress_callback(12 + int(18 * (index + 1) / max(1, len(chunks))), f"নিজের কণ্ঠ তৈরি হচ্ছে: {index + 1}/{len(chunks)} অংশ সম্পন্ন হয়েছে।")
             part_wav = folder / f"clone-part-{index:03d}.wav"
             run(["ffmpeg", "-y", "-i", str(candidate), "-ac", "1", "-ar", "24000", "-c:a", "pcm_s16le", str(part_wav)], 120)
             if not part_wav.exists() or part_wav.stat().st_size < 100:
@@ -1554,7 +1558,13 @@ def render(job_id: str, script: str, mode: str, audio_path: Optional[Path], capt
             if reference_audio is None:
                 raise RuntimeError("নিজের কণ্ঠের নমুনা অডিও নির্বাচন করুন।")
             try:
-                audio_path = synthesize_cloned_voice(script, reference_audio, folder)
+                def update_voice_progress(progress, message):
+                    with LOCK:
+                        if job_id in JOBS and JOBS[job_id].get("status") == "processing":
+                            JOBS[job_id]["progress"] = progress
+                            JOBS[job_id]["message"] = message
+                update_voice_progress(12, "নিজের কণ্ঠ তৈরি হচ্ছে। ফ্রি কণ্ঠসেবা থেকে উত্তর আসতে কিছুটা সময় লাগতে পারে।")
+                audio_path = synthesize_cloned_voice(script, reference_audio, folder, update_voice_progress)
             finally:
                 try:
                     reference_audio.unlink(missing_ok=True)
