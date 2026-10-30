@@ -217,7 +217,7 @@ def _clone_with_provider_fallback(script: str, normalized: Path, spaces, clone_f
 
 
 def _split_voice_clone_text(script: str, max_chars: int = 450):
-    """Split Bengali narration into sentence-aware chunks below the public Space's 500-char limit."""
+    """Split narration at sentence boundaries into provider-sized chunks."""
     sentences = re.split(r"(?<=[।.!?])\s+|\n+", script.strip())
     chunks = []
     current = ""
@@ -258,7 +258,7 @@ def synthesize_cloned_voice(script: str, reference_audio: Path, folder: Path) ->
     try:
         run(["ffmpeg", "-y", "-i", str(reference_audio), "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", str(normalized)], 120)
         output = folder / "cloned_voice.wav"
-        chunks = _split_voice_clone_text(script, max_chars=400)
+        chunks = _split_voice_clone_text(script, max_chars=250)
         audio_parts = []
         selected_providers = []
         for index, text_chunk in enumerate(chunks):
