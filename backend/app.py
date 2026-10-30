@@ -198,15 +198,18 @@ def _clone_with_chatterbox(script: str, normalized: Path, space: str):
     return result
 
 
-def _clone_with_provider_fallback(script: str, normalized: Path, spaces, clone_function, language: str):
-    """Try configured free public Spaces in order; never use a paid API as fallback."""
+def _clone_with_provider_fallback(script: str, normalized: Path, spaces, clone_function, language: str, folder: Path, stem: str):
+    """Try configured free Spaces in order and validate each returned audio before accepting it."""
     failures = []
     for space in spaces:
         try:
             print(f"VOICE_CLONE_TRY language={language} space={space}", flush=True)
             result = clone_function(script, normalized, space)
+            candidate = _write_gradio_audio_result(result, folder, stem)
+            if candidate is None or not candidate.exists() or candidate.stat().st_size < 100:
+                raise RuntimeError("Space returned no usable audio file")
             print(f"VOICE_CLONE_OK language={language} space={space}", flush=True)
-            return result, space
+            return candidate, space
         except Exception as exc:
             failures.append(f"{space}: {type(exc).__name__}: {str(exc)[:120]}")
             print(f"VOICE_CLONE_FAILED language={language} space={space} error={type(exc).__name__}", flush=True)
@@ -260,19 +263,17 @@ def synthesize_cloned_voice(script: str, reference_audio: Path, folder: Path) ->
             provider = "Chatterbox"
             try:
                 audio_result, provider = _clone_with_provider_fallback(
-                    script, normalized, VOICE_CLONE_EN_SPACES, _clone_with_chatterbox, "en"
+                    script, normalized, VOICE_CLONE_EN_SPACES, _clone_with_chatterbox, "en", folder, "clone-output"
                 )
             except Exception as primary_error:
                 provider = "Bengali CosyVoice3 fallback"
                 try:
                     audio_result, provider = _clone_with_provider_fallback(
-                        script, normalized, VOICE_CLONE_BN_SPACES, _clone_with_cosyvoice, "en_fallback"
+                        script, normalized, VOICE_CLONE_BN_SPACES, _clone_with_cosyvoice, "en_fallback", folder, "clone-output"
                     )
                 except Exception:
                     raise primary_error
-            candidate = _write_gradio_audio_result(audio_result, folder, "clone-output")
-            if candidate is None:
-                raise RuntimeError("The voice service returned no usable audio file")
+            candidate = audio_result
             run(["ffmpeg", "-y", "-i", str(candidate), "-ac", "1", "-ar", "24000", "-c:a", "pcm_s16le", str(output)], 120)
         else:
             provider = "Bengali CosyVoice3"
@@ -280,11 +281,9 @@ def synthesize_cloned_voice(script: str, reference_audio: Path, folder: Path) ->
             audio_parts = []
             for index, text_chunk in enumerate(chunks):
                 audio_result, provider = _clone_with_provider_fallback(
-                    text_chunk, normalized, VOICE_CLONE_BN_SPACES, _clone_with_cosyvoice, "bn_or_mixed"
+                    text_chunk, normalized, VOICE_CLONE_BN_SPACES, _clone_with_cosyvoice, "bn_or_mixed", folder, f"clone-part-{index:03d}"
                 )
-                candidate = _write_gradio_audio_result(audio_result, folder, f"clone-part-{index:03d}")
-                if candidate is None:
-                    raise RuntimeError(f"Voice service returned no usable audio for part {index + 1}")
+                candidate = audio_result
                 part_wav = folder / f"clone-part-{index:03d}.wav"
                 run(["ffmpeg", "-y", "-i", str(candidate), "-ac", "1", "-ar", "24000", "-c:a", "pcm_s16le", str(part_wav)], 120)
                 if not part_wav.exists() or part_wav.stat().st_size < 100:
