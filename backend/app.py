@@ -198,7 +198,7 @@ def _clone_with_chatterbox(script: str, normalized: Path):
 
 def _split_voice_clone_text(script: str, max_chars: int = 450):
     """Split Bengali narration into sentence-aware chunks below the public Space's 500-char limit."""
-    sentences = re.split(r"(?<=[।.!?])\\s+|\\n+", script.strip())
+    sentences = re.split(r"(?<=[।.!?])\s+|\n+", script.strip())
     chunks = []
     current = ""
     for sentence in sentences:
@@ -238,17 +238,6 @@ def synthesize_cloned_voice(script: str, reference_audio: Path, folder: Path) ->
     try:
         from gradio_client import handle_file
         run(["ffmpeg", "-y", "-i", str(reference_audio), "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", str(normalized)], 120)
-        if pure_english:
-            provider = "Chatterbox"
-            try:
-                audio_result = _clone_with_chatterbox(script, normalized)
-            except Exception as primary_error:
-                # One alternate free demo is tried if the English-specific demo is unavailable.
-                provider = "CosyVoice3 fallback"
-                try:
-                    audio_result = _clone_with_cosyvoice(script, normalized)
-                except Exception:
-                    raise primary_error
         output = folder / "cloned_voice.wav"
         if pure_english:
             provider = "Chatterbox"
@@ -282,7 +271,7 @@ def synthesize_cloned_voice(script: str, reference_audio: Path, folder: Path) ->
                 shutil.copyfile(audio_parts[0], output)
             else:
                 listing = folder / "clone-parts.txt"
-                listing.write_text("".join(f"file '{part.as_posix()}'\\n" for part in audio_parts), encoding="utf-8")
+                listing.write_text("".join(f"file '{part.as_posix()}'\n" for part in audio_parts), encoding="utf-8")
                 run(["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(listing), "-c:a", "pcm_s16le", str(output)], 180)
         if output.exists() and output.stat().st_size > 100:
             print(f"VOICE_PROVIDER selected={provider} language={'en' if pure_english else 'bn_or_mixed'} chunks={len(chunks) if not pure_english else 1}", flush=True)
