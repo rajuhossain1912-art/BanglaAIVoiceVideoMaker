@@ -247,7 +247,7 @@ private fun VideoMakerScreen() {
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("গুরুত্বপূর্ণ গোপনীয়তা সতর্কতা", fontWeight = FontWeight.Bold)
-                    Text("আপনার কণ্ঠের নমুনা ফোনের ব্যক্তিগত অ্যাপ স্টোরেজে রাখা হয়। এই ফ্রি ডেমোতে আলাদা ক্লোন মডেল স্থায়ীভাবে সংরক্ষণের ব্যবস্থা নেই, তাই প্রতিটি ভিডিও তৈরির সময় অ্যাপ নমুনাটি স্বয়ংক্রিয়ভাবে Hugging Face-এর বাইরের ডেমো সার্ভারে পাঠাবে। সেই সার্ভারের সংরক্ষণ বা লগিং সম্পর্কে আমরা নিশ্চয়তা দিতে পারি না। ব্যক্তিগত বা গোপন কথা রেকর্ড করবেন না। এই সুবিধা পরীক্ষামূলক, একবারে সর্বোচ্চ ৫০০ অক্ষর এবং ফলাফল নিশ্চিত নয়।")
+                    Text("আপনার কণ্ঠের নমুনা ফোনের ব্যক্তিগত অ্যাপ স্টোরেজে রাখা হয়। এই ফ্রি ডেমোতে আলাদা ক্লোন মডেল স্থায়ীভাবে সংরক্ষণের ব্যবস্থা নেই, তাই প্রতিটি ভিডিও তৈরির সময় অ্যাপ নমুনাটি স্বয়ংক্রিয়ভাবে Hugging Face-এর বাইরের ডেমো সার্ভারে পাঠাবে। সেই সার্ভারের সংরক্ষণ বা লগিং সম্পর্কে আমরা নিশ্চয়তা দিতে পারি না। ব্যক্তিগত বা গোপন কথা রেকর্ড করবেন না। এই সুবিধা পরীক্ষামূলক，একবারে সর্বোচ্চ ৩০০০ অক্ষর এবং ফলাফল নিশ্চিত নয়।")
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(checked = cloneConsent, onCheckedChange = { cloneConsent = it }, enabled = !running)
                         Text("আমি বুঝেছি এবং আমার নিজের কণ্ঠের নমুনা বাহ্যিক সার্ভারে পাঠাতে সম্মতি দিচ্ছি।")
@@ -303,7 +303,7 @@ private fun VideoMakerScreen() {
                 modifier = Modifier.fillMaxWidth(),
                 enabled = !running
             ) {
-                Text(if (isRecording) "রেকর্ড বন্ধ করে কণ্ঠ ফোনে সেভ করুন" else "নিজের কণ্ঠ রেকর্ড করুন")
+                Text(if (isRecording) "রেকর্ডিং বন্ধ করুন" else "নিজের কণ্ঠ রেকর্ড করুন")
             }
             if (previewFile != null && !isRecording) {
                 OutlinedButton(onClick = {
@@ -336,7 +336,7 @@ private fun VideoMakerScreen() {
                         status = "আপনার কণ্ঠ ফোনে সংরক্ষণ করা হয়েছে। এখন নিজের কণ্ঠের পদ্ধতি বেছে ভিডিও তৈরি করতে পারবেন।"
                     } catch (e: Exception) { status = "কণ্ঠ সংরক্ষণ করা যায়নি। আবার চেষ্টা করুন।" }
                 }, modifier = Modifier.fillMaxWidth(), enabled = !running && !previewPlaying) { Text("ভালো হয়েছে, নিজের কণ্ঠ সংরক্ষণ করুন") }
-                OutlinedButton(onClick = { previewFile?.delete(); previewFile = null; status = "রেকর্ড করা কণ্ঠ বাতিল করা হয়েছে। চাইলে আবার রেকর্ড করুন।" }, modifier = Modifier.fillMaxWidth()) { Text("রেকর্ডিং বাতিল করুন") }
+                OutlinedButton(onClick = { runCatching { previewPlayer?.stop() }; runCatching { previewPlayer?.release() }; previewPlayer = null; previewPlaying = false; previewFile?.delete(); previewFile = null; status = "রেকর্ড করা কণ্ঠ বাতিল করা হয়েছে। চাইলে আবার রেকর্ড করুন।" }, modifier = Modifier.fillMaxWidth()) { Text("রেকর্ডিং বাতিল করুন") }
             }
             OutlinedButton(onClick = { audioPicker.launch("audio/*") }, modifier = Modifier.fillMaxWidth(), enabled = !running && !isRecording) {
                 Text(if (hasSavedVoiceProfile) "সংরক্ষিত কণ্ঠ বদলান" else "নিজের কণ্ঠের নমুনা নির্বাচন করুন")
