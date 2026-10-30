@@ -1,5 +1,8 @@
 FROM python:3.11-slim
 
+# Make the web-service listening port explicit to Render's Docker port scanner.
+EXPOSE 10000
+
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     WORK_DIR=/tmp/bangla-video-jobs
