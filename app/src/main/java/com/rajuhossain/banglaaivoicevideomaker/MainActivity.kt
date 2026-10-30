@@ -263,7 +263,7 @@ private fun VideoMakerScreen() {
         OutlinedTextField(
             value = script, onValueChange = { script = it },
             modifier = Modifier.fillMaxWidth().height(210.dp),
-            label = { Text(if (mode == "clone") "নিজের কণ্ঠে পড়ার লেখা (সর্বোচ্চ ৫০০ অক্ষর)" else "বাংলা বা ইংরেজি লেখা") },
+            label = { Text(if (mode == "clone") "নিজের কণ্ঠে পড়ার লেখা (সর্বোচ্চ ৩০০০ অক্ষর)" else "বাংলা বা ইংরেজি লেখা") },
             placeholder = { Text("এখানে সম্পূর্ণ স্ক্রিপ্ট পেস্ট করুন") },
             minLines = 5, enabled = !running,
             supportingText = { Text("সার্ভার লেখা গ্রহণ করে ভিডিও তৈরি করবে।") }
@@ -302,7 +302,7 @@ private fun VideoMakerScreen() {
                 val baseUrl = BuildConfig.API_BASE_URL.trim().trimEnd('/')
                 when {
                     script.isBlank() -> status = "আগে বাংলা বা ইংরেজি লেখা যোগ করুন।"
-                    mode == "clone" && script.trim().length > 500 -> status = "নিজের কণ্ঠের পরীক্ষায় সর্বোচ্চ ৫০০ অক্ষর দিন।"
+                    mode == "clone" && script.trim().length > 3000 -> status = "নিজের কণ্ঠে একবারে সর্বোচ্চ ৩০০০ অক্ষর দিন।"
                     mode == "clone" && !cloneConsent -> status = "আগে বাহ্যিক সার্ভারে কণ্ঠ পাঠানোর সতর্কতা পড়ে সম্মতি দিন।"
                     !online -> status = "ভিডিও তৈরি করতে ইন্টারনেট সংযোগ দিন।"
                     baseUrl.isBlank() -> status = "অনলাইন API ঠিকানা এখনো সেট করা হয়নি। সার্ভার স্থাপন ও API ঠিকানা যুক্ত করার পর ভিডিও তৈরি চালু হবে।"
