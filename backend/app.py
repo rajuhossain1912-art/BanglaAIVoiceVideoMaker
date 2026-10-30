@@ -19,7 +19,10 @@ from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 APP_DIR = Path(__file__).resolve().parent
 VOICE_CLONE_SPACE = os.getenv("VOICE_CLONE_SPACE", "kawshikbuet17/bengali-cosyvoice3-tts-demo")
+# Optional comma-separated public Gradio Spaces with the same API contract.
+VOICE_CLONE_BN_SPACES = [x.strip() for x in os.getenv("VOICE_CLONE_BN_SPACES", VOICE_CLONE_SPACE).split(",") if x.strip()]
 VOICE_CLONE_EN_SPACE = os.getenv("VOICE_CLONE_EN_SPACE", "ResembleAI/Chatterbox")
+VOICE_CLONE_EN_SPACES = [x.strip() for x in os.getenv("VOICE_CLONE_EN_SPACES", VOICE_CLONE_EN_SPACE).split(",") if x.strip()]
 VOICE_CLONE_ENABLED = os.getenv("VOICE_CLONE_ENABLED", "true").lower() in ("1", "true", "yes")
 AI_IMAGE_GENERATION_ENABLED = os.getenv("AI_IMAGE_GENERATION_ENABLED", "true").lower() in ("1", "true", "yes")
 AI_IMAGE_PROVIDER_ORDER = [x.strip().lower() for x in os.getenv("AI_IMAGE_PROVIDER_ORDER", "pollinations,flux,zimage").split(",") if x.strip()]
@@ -167,9 +170,9 @@ def _write_gradio_audio_result(audio_result, folder: Path, stem: str):
     return None
 
 
-def _clone_with_cosyvoice(script: str, normalized: Path):
+def _clone_with_cosyvoice(script: str, normalized: Path, space: str):
     from gradio_client import Client, handle_file
-    client = Client(VOICE_CLONE_SPACE, verbose=False)
+    client = Client(space, verbose=False)
     result = client.predict(
         script,
         handle_file(str(normalized)),
@@ -180,10 +183,9 @@ def _clone_with_cosyvoice(script: str, normalized: Path):
     return result[0] if isinstance(result, (list, tuple)) else result
 
 
-def _clone_with_chatterbox(script: str, normalized: Path):
+def _clone_with_chatterbox(script: str, normalized: Path, space: str):
     from gradio_client import Client, handle_file
-    client = Client(VOICE_CLONE_EN_SPACE, verbose=False)
-    # Chatterbox's public demo is English-oriented; do not route Bangla/mixed scripts here.
+    client = Client(space, verbose=False)
     result = client.predict(
         script,
         handle_file(str(normalized)),
@@ -196,38 +198,104 @@ def _clone_with_chatterbox(script: str, normalized: Path):
     return result
 
 
+def _clone_with_provider_fallback(script: str, normalized: Path, spaces, clone_function, language: str, folder: Path, stem: str):
+    """Try configured free Spaces in order and validate each returned audio before accepting it."""
+    failures = []
+    for space in spaces:
+        try:
+            print(f"VOICE_CLONE_TRY language={language} space={space}", flush=True)
+            result = clone_function(script, normalized, space)
+            candidate = _write_gradio_audio_result(result, folder, stem)
+            if candidate is None or not candidate.exists() or candidate.stat().st_size < 100:
+                raise RuntimeError("Space returned no usable audio file")
+            print(f"VOICE_CLONE_OK language={language} space={space}", flush=True)
+            return candidate, space
+        except Exception as exc:
+            failures.append(f"{space}: {type(exc).__name__}: {str(exc)[:120]}")
+            print(f"VOICE_CLONE_FAILED language={language} space={space} error={type(exc).__name__}", flush=True)
+    raise RuntimeError("All configured free voice-clone Spaces failed. " + " | ".join(failures))
+
+
+def _split_voice_clone_text(script: str, max_chars: int = 450):
+    """Split narration at sentence boundaries into provider-sized chunks."""
+    sentences = re.split(r"(?<=[।.!?])\s+|\n+", script.strip())
+    chunks = []
+    current = ""
+    for sentence in sentences:
+        sentence = sentence.strip()
+        if not sentence:
+            continue
+        while len(sentence) > max_chars:
+            cut = sentence.rfind(" ", 0, max_chars + 1)
+            if cut < max_chars // 2:
+                cut = max_chars
+            piece, sentence = sentence[:cut].strip(), sentence[cut:].strip()
+            if piece:
+                if current:
+                    chunks.append(current)
+                    current = ""
+                chunks.append(piece)
+        candidate = sentence if not current else current + " " + sentence
+        if len(candidate) <= max_chars:
+            current = candidate
+        else:
+            if current:
+                chunks.append(current)
+            current = sentence
+    if current:
+        chunks.append(current)
+    return chunks
+
+
 def synthesize_cloned_voice(script: str, reference_audio: Path, folder: Path) -> Path:
-    """Route pure English to Chatterbox and Bangla/mixed scripts to Bengali CosyVoice3."""
+    """Clone narration in short chunks, with free-provider failover for each chunk."""
     if not VOICE_CLONE_ENABLED:
         raise RuntimeError("নিজের কণ্ঠের পরীক্ষামূলক সুবিধা বর্তমানে বন্ধ আছে।")
-    if len(script) > 500:
-        raise RuntimeError("পরীক্ষামূলক নিজের কণ্ঠে একবারে সর্বোচ্চ ৫০০ অক্ষর ব্যবহার করুন।")
+    if len(script) > 3000:
+        raise RuntimeError("নিজের কণ্ঠে একবারে সর্বোচ্চ ৩০০০ অক্ষর ব্যবহার করুন।")
     normalized = folder / "voice_reference.wav"
     pure_english = bool(re.search(r"[A-Za-z]", script)) and not bool(re.search(r"[\u0980-\u09FF]", script))
     try:
-        from gradio_client import handle_file
         run(["ffmpeg", "-y", "-i", str(reference_audio), "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", str(normalized)], 120)
-        if pure_english:
-            provider = "Chatterbox"
-            try:
-                audio_result = _clone_with_chatterbox(script, normalized)
-            except Exception as primary_error:
-                # One alternate free demo is tried if the English-specific demo is unavailable.
-                provider = "CosyVoice3 fallback"
-                try:
-                    audio_result = _clone_with_cosyvoice(script, normalized)
-                except Exception:
-                    raise primary_error
-        else:
-            provider = "Bengali CosyVoice3"
-            audio_result = _clone_with_cosyvoice(script, normalized)
-        candidate = _write_gradio_audio_result(audio_result, folder, "clone-output")
-        if candidate is None:
-            raise RuntimeError("The voice service returned no usable audio file")
         output = folder / "cloned_voice.wav"
-        run(["ffmpeg", "-y", "-i", str(candidate), "-ac", "1", "-ar", "24000", "-c:a", "pcm_s16le", str(output)], 120)
+        chunks = _split_voice_clone_text(script, max_chars=250)
+        audio_parts = []
+        selected_providers = []
+        for index, text_chunk in enumerate(chunks):
+            if pure_english:
+                try:
+                    candidate, provider = _clone_with_provider_fallback(
+                        text_chunk, normalized, VOICE_CLONE_EN_SPACES, _clone_with_chatterbox,
+                        "en", folder, f"clone-part-{index:03d}"
+                    )
+                except Exception as english_error:
+                    try:
+                        candidate, provider = _clone_with_provider_fallback(
+                            text_chunk, normalized, VOICE_CLONE_BN_SPACES, _clone_with_cosyvoice,
+                            "en_fallback", folder, f"clone-part-{index:03d}"
+                        )
+                    except Exception:
+                        raise english_error
+            else:
+                candidate, provider = _clone_with_provider_fallback(
+                    text_chunk, normalized, VOICE_CLONE_BN_SPACES, _clone_with_cosyvoice,
+                    "bn_or_mixed", folder, f"clone-part-{index:03d}"
+                )
+            selected_providers.append(provider)
+            part_wav = folder / f"clone-part-{index:03d}.wav"
+            run(["ffmpeg", "-y", "-i", str(candidate), "-ac", "1", "-ar", "24000", "-c:a", "pcm_s16le", str(part_wav)], 120)
+            if not part_wav.exists() or part_wav.stat().st_size < 100:
+                raise RuntimeError(f"Voice service returned empty audio for part {index + 1}")
+            audio_parts.append(part_wav)
+        if len(audio_parts) == 1:
+            shutil.copyfile(audio_parts[0], output)
+        else:
+            listing = folder / "clone-parts.txt"
+            listing.write_text("".join(f"file '{part.as_posix()}'\n" for part in audio_parts), encoding="utf-8")
+            run(["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(listing), "-c:a", "pcm_s16le", str(output)], 180)
         if output.exists() and output.stat().st_size > 100:
-            print(f"VOICE_PROVIDER selected={provider} language={'en' if pure_english else 'bn_or_mixed'}", flush=True)
+            provider_summary = ",".join(dict.fromkeys(selected_providers))
+            print(f"VOICE_PROVIDER selected={provider_summary} language={'en' if pure_english else 'bn_or_mixed'} chunks={len(chunks)}", flush=True)
             return output
         raise RuntimeError("The voice service returned an empty audio file")
     except Exception as exc:
@@ -1627,8 +1695,8 @@ async def create_job(script: str = Form(...), mode: str = Form("auto"), audio: O
             raise HTTPException(503, "নিজের কণ্ঠের পরীক্ষামূলক সুবিধা বর্তমানে বন্ধ আছে।")
         if not voice_clone_consent:
             raise HTTPException(400, "বাহ্যিক Hugging Face ডেমোতে কণ্ঠের নমুনা পাঠানোর অনুমতি প্রয়োজন।")
-        if len(script) > 500:
-            raise HTTPException(413, "পরীক্ষামূলক নিজের কণ্ঠে একবারে সর্বোচ্চ ৫০০ অক্ষর ব্যবহার করুন।")
+        if len(script) > 3000:
+            raise HTTPException(413, "নিজের কণ্ঠে একবারে সর্বোচ্চ ৩০০০ অক্ষর ব্যবহার করুন।")
     job_id = uuid.uuid4().hex
     folder = WORK_DIR / job_id
     folder.mkdir(parents=True, exist_ok=True)
