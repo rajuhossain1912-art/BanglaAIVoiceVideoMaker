@@ -196,12 +196,43 @@ def _clone_with_chatterbox(script: str, normalized: Path):
     return result
 
 
+def _split_voice_clone_text(script: str, max_chars: int = 450):
+    """Split Bengali narration into sentence-aware chunks below the public Space's 500-char limit."""
+    sentences = re.split(r"(?<=[।.!?])\\s+|\\n+", script.strip())
+    chunks = []
+    current = ""
+    for sentence in sentences:
+        sentence = sentence.strip()
+        if not sentence:
+            continue
+        while len(sentence) > max_chars:
+            cut = sentence.rfind(" ", 0, max_chars + 1)
+            if cut < max_chars // 2:
+                cut = max_chars
+            piece, sentence = sentence[:cut].strip(), sentence[cut:].strip()
+            if piece:
+                if current:
+                    chunks.append(current)
+                    current = ""
+                chunks.append(piece)
+        candidate = sentence if not current else current + " " + sentence
+        if len(candidate) <= max_chars:
+            current = candidate
+        else:
+            if current:
+                chunks.append(current)
+            current = sentence
+    if current:
+        chunks.append(current)
+    return chunks
+
+
 def synthesize_cloned_voice(script: str, reference_audio: Path, folder: Path) -> Path:
-    """Route pure English to Chatterbox and Bangla/mixed scripts to Bengali CosyVoice3."""
+    """Use the Bengali CosyVoice3 cross-lingual clone in safe chunks; English uses Chatterbox."""
     if not VOICE_CLONE_ENABLED:
         raise RuntimeError("নিজের কণ্ঠের পরীক্ষামূলক সুবিধা বর্তমানে বন্ধ আছে।")
-    if len(script) > 500:
-        raise RuntimeError("পরীক্ষামূলক নিজের কণ্ঠে একবারে সর্বোচ্চ ৫০০ অক্ষর ব্যবহার করুন।")
+    if len(script) > 3000:
+        raise RuntimeError("নিজের কণ্ঠে একবারে সর্বোচ্চ ৩০০০ অক্ষর ব্যবহার করুন।")
     normalized = folder / "voice_reference.wav"
     pure_english = bool(re.search(r"[A-Za-z]", script)) and not bool(re.search(r"[\u0980-\u09FF]", script))
     try:
@@ -218,16 +249,43 @@ def synthesize_cloned_voice(script: str, reference_audio: Path, folder: Path) ->
                     audio_result = _clone_with_cosyvoice(script, normalized)
                 except Exception:
                     raise primary_error
+        output = folder / "cloned_voice.wav"
+        if pure_english:
+            provider = "Chatterbox"
+            try:
+                audio_result = _clone_with_chatterbox(script, normalized)
+            except Exception as primary_error:
+                provider = "Bengali CosyVoice3 fallback"
+                try:
+                    audio_result = _clone_with_cosyvoice(script, normalized)
+                except Exception:
+                    raise primary_error
+            candidate = _write_gradio_audio_result(audio_result, folder, "clone-output")
+            if candidate is None:
+                raise RuntimeError("The voice service returned no usable audio file")
+            run(["ffmpeg", "-y", "-i", str(candidate), "-ac", "1", "-ar", "24000", "-c:a", "pcm_s16le", str(output)], 120)
         else:
             provider = "Bengali CosyVoice3"
-            audio_result = _clone_with_cosyvoice(script, normalized)
-        candidate = _write_gradio_audio_result(audio_result, folder, "clone-output")
-        if candidate is None:
-            raise RuntimeError("The voice service returned no usable audio file")
-        output = folder / "cloned_voice.wav"
-        run(["ffmpeg", "-y", "-i", str(candidate), "-ac", "1", "-ar", "24000", "-c:a", "pcm_s16le", str(output)], 120)
+            chunks = _split_voice_clone_text(script)
+            audio_parts = []
+            for index, text_chunk in enumerate(chunks):
+                audio_result = _clone_with_cosyvoice(text_chunk, normalized)
+                candidate = _write_gradio_audio_result(audio_result, folder, f"clone-part-{index:03d}")
+                if candidate is None:
+                    raise RuntimeError(f"Voice service returned no usable audio for part {index + 1}")
+                part_wav = folder / f"clone-part-{index:03d}.wav"
+                run(["ffmpeg", "-y", "-i", str(candidate), "-ac", "1", "-ar", "24000", "-c:a", "pcm_s16le", str(part_wav)], 120)
+                if not part_wav.exists() or part_wav.stat().st_size < 100:
+                    raise RuntimeError(f"Voice service returned empty audio for part {index + 1}")
+                audio_parts.append(part_wav)
+            if len(audio_parts) == 1:
+                shutil.copyfile(audio_parts[0], output)
+            else:
+                listing = folder / "clone-parts.txt"
+                listing.write_text("".join(f"file '{part.as_posix()}'\\n" for part in audio_parts), encoding="utf-8")
+                run(["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(listing), "-c:a", "pcm_s16le", str(output)], 180)
         if output.exists() and output.stat().st_size > 100:
-            print(f"VOICE_PROVIDER selected={provider} language={'en' if pure_english else 'bn_or_mixed'}", flush=True)
+            print(f"VOICE_PROVIDER selected={provider} language={'en' if pure_english else 'bn_or_mixed'} chunks={len(chunks) if not pure_english else 1}", flush=True)
             return output
         raise RuntimeError("The voice service returned an empty audio file")
     except Exception as exc:
@@ -1627,8 +1685,8 @@ async def create_job(script: str = Form(...), mode: str = Form("auto"), audio: O
             raise HTTPException(503, "নিজের কণ্ঠের পরীক্ষামূলক সুবিধা বর্তমানে বন্ধ আছে।")
         if not voice_clone_consent:
             raise HTTPException(400, "বাহ্যিক Hugging Face ডেমোতে কণ্ঠের নমুনা পাঠানোর অনুমতি প্রয়োজন।")
-        if len(script) > 500:
-            raise HTTPException(413, "পরীক্ষামূলক নিজের কণ্ঠে একবারে সর্বোচ্চ ৫০০ অক্ষর ব্যবহার করুন।")
+        if len(script) > 3000:
+            raise HTTPException(413, "নিজের কণ্ঠে একবারে সর্বোচ্চ ৩০০০ অক্ষর ব্যবহার করুন।")
     job_id = uuid.uuid4().hex
     folder = WORK_DIR / job_id
     folder.mkdir(parents=True, exist_ok=True)
