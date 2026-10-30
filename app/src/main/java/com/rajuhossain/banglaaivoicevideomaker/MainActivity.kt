@@ -6,6 +6,9 @@ import android.app.DownloadManager
 import android.content.Context
 import android.content.pm.PackageManager
 import android.media.MediaRecorder
+import android.media.MediaPlayer
+import android.media.AudioManager
+import android.media.ToneGenerator
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.Uri
@@ -76,6 +79,9 @@ private fun VideoMakerScreen() {
     var isRecording by remember { mutableStateOf(false) }
     var recorder by remember { mutableStateOf<MediaRecorder?>(null) }
     var recordingFile by remember { mutableStateOf<File?>(null) }
+    var previewFile by remember { mutableStateOf<File?>(null) }
+    var previewPlayer by remember { mutableStateOf<MediaPlayer?>(null) }
+    var previewPlaying by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf("অনলাইন সার্ভার যুক্ত হলে এখানে ভিডিও তৈরির অবস্থা দেখা যাবে।") }
     var progress by remember { mutableStateOf(0) }
     var online by remember { mutableStateOf(isInternetAvailable(context)) }
@@ -98,7 +104,8 @@ private fun VideoMakerScreen() {
 
     val startVoiceRecording: () -> Unit = {
         try {
-            val target = File(context.filesDir, "voice_profile_sample")
+            val target = File(context.cacheDir, "voice_recording_preview.m4a")
+            target.delete()
             val newRecorder = MediaRecorder()
             newRecorder.setAudioSource(MediaRecorder.AudioSource.MIC)
             newRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
@@ -111,7 +118,10 @@ private fun VideoMakerScreen() {
             recorder = newRecorder
             recordingFile = target
             isRecording = true
-            status = "নিজের কণ্ঠ রেকর্ড হচ্ছে। স্বাভাবিকভাবে ১০ থেকে ৩০ সেকেন্ড কথা বলুন, তারপর রেকর্ড বন্ধ করুন।"
+            val tone = ToneGenerator(AudioManager.STREAM_MUSIC, 80)
+            tone.startTone(ToneGenerator.TONE_PROP_BEEP, 250)
+            scope.launch { delay(350); tone.release() }
+            status = "রেকর্ডিং শুরু হয়েছে। এখন স্বাভাবিকভাবে ১০ থেকে ৩০ সেকেন্ড কথা বলুন। শেষ হলে রেকর্ড বন্ধ করুন।"
         } catch (e: Exception) {
             runCatching { recorder?.release() }
             recorder = null
@@ -140,14 +150,18 @@ private fun VideoMakerScreen() {
             isRecording = false
         }
         if (saved && target != null) {
-            audioUri = Uri.fromFile(target)
-            audioName = "ফোনে রেকর্ড ও সংরক্ষিত নিজের কণ্ঠ"
-            hasSavedVoiceProfile = true
-            mode = "clone"
-            status = "নিজের কণ্ঠ ফোনে সংরক্ষিত হয়েছে। ভিডিও তৈরির সময় সম্মতি দিলে নমুনাটি স্বয়ংক্রিয়ভাবে ক্লোনিং সেবায় পাঠানো হবে; প্রতিবার ফাইল বেছে নিতে হবে না।"
+            previewFile = target
+            runCatching { previewPlayer?.release() }
+            previewPlayer = null
+            previewPlaying = false
+            val tone = ToneGenerator(AudioManager.STREAM_MUSIC, 80)
+            tone.startTone(ToneGenerator.TONE_PROP_ACK, 250)
+            scope.launch { delay(350); tone.release() }
+            status = "রেকর্ডিং সম্পন্ন হয়েছে। এখন নিজের কণ্ঠ শুনে দেখুন। ভালো লাগলে কণ্ঠ সংরক্ষণ বোতাম চাপুন।"
         } else {
             target?.delete()
-            hasSavedVoiceProfile = false
+            previewFile = null
+            status = "রেকর্ডিং পাওয়া যায়নি বা খুব ছোট হয়েছে। আবার ১০ থেকে ৩০ সেকেন্ড কথা বলে রেকর্ড করুন।"
         }
     }
 
@@ -233,7 +247,7 @@ private fun VideoMakerScreen() {
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("গুরুত্বপূর্ণ গোপনীয়তা সতর্কতা", fontWeight = FontWeight.Bold)
-                    Text("আপনার কণ্ঠের নমুনা ফোনের ব্যক্তিগত অ্যাপ স্টোরেজে রাখা হয়। এই ফ্রি ডেমোতে আলাদা ক্লোন মডেল স্থায়ীভাবে সংরক্ষণের ব্যবস্থা নেই, তাই প্রতিটি ভিডিও তৈরির সময় অ্যাপ নমুনাটি স্বয়ংক্রিয়ভাবে Hugging Face-এর বাইরের ডেমো সার্ভারে পাঠাবে। সেই সার্ভারের সংরক্ষণ বা লগিং সম্পর্কে আমরা নিশ্চয়তা দিতে পারি না। ব্যক্তিগত বা গোপন কথা রেকর্ড করবেন না। এই সুবিধা পরীক্ষামূলক, একবারে সর্বোচ্চ ৫০০ অক্ষর এবং ফলাফল নিশ্চিত নয়।")
+                    Text("আপনার কণ্ঠের নমুনা ফোনের ব্যক্তিগত অ্যাপ স্টোরেজে রাখা হয়। এই ফ্রি ডেমোতে আলাদা ক্লোন মডেল স্থায়ীভাবে সংরক্ষণের ব্যবস্থা নেই, তাই প্রতিটি ভিডিও তৈরির সময় অ্যাপ নমুনাটি স্বয়ংক্রিয়ভাবে Hugging Face-এর বাইরের ডেমো সার্ভারে পাঠাবে। সেই সার্ভারের সংরক্ষণ বা লগিং সম্পর্কে আমরা নিশ্চয়তা দিতে পারি না। ব্যক্তিগত বা গোপন কথা রেকর্ড করবেন না। এই সুবিধা পরীক্ষামূলক，একবারে সর্বোচ্চ ৩০০০ অক্ষর এবং ফলাফল নিশ্চিত নয়।")
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(checked = cloneConsent, onCheckedChange = { cloneConsent = it }, enabled = !running)
                         Text("আমি বুঝেছি এবং আমার নিজের কণ্ঠের নমুনা বাহ্যিক সার্ভারে পাঠাতে সম্মতি দিচ্ছি।")
@@ -289,7 +303,40 @@ private fun VideoMakerScreen() {
                 modifier = Modifier.fillMaxWidth(),
                 enabled = !running
             ) {
-                Text(if (isRecording) "রেকর্ড বন্ধ করে কণ্ঠ ফোনে সেভ করুন" else "নিজের কণ্ঠ রেকর্ড করুন")
+                Text(if (isRecording) "রেকর্ডিং বন্ধ করুন" else "নিজের কণ্ঠ রেকর্ড করুন")
+            }
+            if (previewFile != null && !isRecording) {
+                OutlinedButton(onClick = {
+                    try {
+                        runCatching { previewPlayer?.release() }
+                        val player = MediaPlayer().apply {
+                            setDataSource(previewFile!!.absolutePath)
+                            setOnCompletionListener { it.release(); previewPlayer = null; previewPlaying = false; status = "কণ্ঠ শোনা শেষ হয়েছে। ভালো লাগলে সংরক্ষণ করুন।" }
+                            prepare()
+                            start()
+                        }
+                        previewPlayer = player
+                        previewPlaying = true
+                        status = "আপনার রেকর্ড করা কণ্ঠ বাজছে।"
+                    } catch (e: Exception) { previewPlaying = false; status = "রেকর্ড করা কণ্ঠ বাজানো যাচ্ছে না। আবার রেকর্ড করুন।" }
+                }, modifier = Modifier.fillMaxWidth(), enabled = !previewPlaying) { Text("রেকর্ড করা নিজের কণ্ঠ শুনুন") }
+                OutlinedButton(onClick = { runCatching { previewPlayer?.stop() }; runCatching { previewPlayer?.release() }; previewPlayer = null; previewPlaying = false; status = "কণ্ঠ শোনা বন্ধ হয়েছে।" }, modifier = Modifier.fillMaxWidth(), enabled = previewPlaying) { Text("কণ্ঠ শোনা বন্ধ করুন") }
+                Button(onClick = {
+                    try {
+                        val source = previewFile ?: error("রেকর্ডিং পাওয়া যায়নি")
+                        val profile = File(context.filesDir, "voice_profile_sample")
+                        source.inputStream().use { input -> profile.outputStream().use { output -> input.copyTo(output) } }
+                        require(profile.length() > 1000)
+                        audioUri = Uri.fromFile(profile)
+                        audioName = "ফোনে সংরক্ষিত নিজের কণ্ঠের নমুনা"
+                        hasSavedVoiceProfile = true
+                        mode = "clone"
+                        source.delete()
+                        previewFile = null
+                        status = "আপনার কণ্ঠ ফোনে সংরক্ষণ করা হয়েছে। এখন নিজের কণ্ঠের পদ্ধতি বেছে ভিডিও তৈরি করতে পারবেন।"
+                    } catch (e: Exception) { status = "কণ্ঠ সংরক্ষণ করা যায়নি। আবার চেষ্টা করুন।" }
+                }, modifier = Modifier.fillMaxWidth(), enabled = !running && !previewPlaying) { Text("ভালো হয়েছে, নিজের কণ্ঠ সংরক্ষণ করুন") }
+                OutlinedButton(onClick = { runCatching { previewPlayer?.stop() }; runCatching { previewPlayer?.release() }; previewPlayer = null; previewPlaying = false; previewFile?.delete(); previewFile = null; status = "রেকর্ড করা কণ্ঠ বাতিল করা হয়েছে। চাইলে আবার রেকর্ড করুন।" }, modifier = Modifier.fillMaxWidth()) { Text("রেকর্ডিং বাতিল করুন") }
             }
             OutlinedButton(onClick = { audioPicker.launch("audio/*") }, modifier = Modifier.fillMaxWidth(), enabled = !running && !isRecording) {
                 Text(if (hasSavedVoiceProfile) "সংরক্ষিত কণ্ঠ বদলান" else "নিজের কণ্ঠের নমুনা নির্বাচন করুন")
