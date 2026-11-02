@@ -198,10 +198,21 @@ def _clone_with_chatterbox(script: str, normalized: Path, space: str):
     return result
 
 
-def _clone_with_provider_fallback(script: str, normalized: Path, spaces, clone_function, language: str, folder: Path, stem: str):
-    """Try configured free Spaces in order and validate each returned audio before accepting it."""
+def _clone_with_provider_fallback(
+    script: str, normalized: Path, spaces, clone_function, language: str,
+    folder: Path, stem: str, progress_callback=None, progress_base: int = 14,
+    progress_span: int = 14,
+):
+    """Try free Spaces in order and announce each attempt before waiting on its queue."""
     failures = []
-    for space in spaces:
+    available_spaces = list(spaces)
+    for index, space in enumerate(available_spaces):
+        if progress_callback:
+            percent = min(29, progress_base + int(progress_span * index / max(1, len(available_spaces))))
+            progress_callback(
+                percent,
+                f"ফ্রি কণ্ঠসেবা {index + 1}/{len(available_spaces)} চেষ্টা করা হচ্ছে। উত্তর আসতে কিছুটা সময় লাগতে পারে।"
+            )
         try:
             print(f"VOICE_CLONE_TRY language={language} space={space}", flush=True)
             result = clone_function(script, normalized, space)
@@ -256,7 +267,11 @@ def synthesize_cloned_voice(script: str, reference_audio: Path, folder: Path, pr
     normalized = folder / "voice_reference.wav"
     pure_english = bool(re.search(r"[A-Za-z]", script)) and not bool(re.search(r"[\u0980-\u09FF]", script))
     try:
+        if progress_callback:
+            progress_callback(12, "নিজের কণ্ঠের নমুনা অডিও প্রস্তুত করা হচ্ছে।")
         run(["ffmpeg", "-y", "-i", str(reference_audio), "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", str(normalized)], 120)
+        if progress_callback:
+            progress_callback(13, "ফ্রি কণ্ঠসেবার সঙ্গে সংযোগ করা হচ্ছে।")
         output = folder / "cloned_voice.wav"
         chunks = _split_voice_clone_text(script, max_chars=250)
         print(f"VOICE_CLONE_PLAN chunks={len(chunks)} characters={len(script)}", flush=True)
@@ -270,20 +285,23 @@ def synthesize_cloned_voice(script: str, reference_audio: Path, folder: Path, pr
                 try:
                     candidate, provider = _clone_with_provider_fallback(
                         text_chunk, normalized, VOICE_CLONE_EN_SPACES, _clone_with_chatterbox,
-                        "en", folder, f"clone-part-{index:03d}"
+                        "en", folder, f"clone-part-{index:03d}",
+                        progress_callback=progress_callback, progress_base=14, progress_span=7
                     )
                 except Exception as english_error:
                     try:
                         candidate, provider = _clone_with_provider_fallback(
                             text_chunk, normalized, VOICE_CLONE_BN_SPACES, _clone_with_cosyvoice,
-                            "en_fallback", folder, f"clone-part-{index:03d}"
+                            "en_fallback", folder, f"clone-part-{index:03d}",
+                            progress_callback=progress_callback, progress_base=22, progress_span=6
                         )
                     except Exception:
                         raise english_error
             else:
                 candidate, provider = _clone_with_provider_fallback(
                     text_chunk, normalized, VOICE_CLONE_BN_SPACES, _clone_with_cosyvoice,
-                    "bn_or_mixed", folder, f"clone-part-{index:03d}"
+                    "bn_or_mixed", folder, f"clone-part-{index:03d}",
+                    progress_callback=progress_callback, progress_base=14, progress_span=14
                 )
             selected_providers.append(provider)
             print(f"VOICE_CLONE_CHUNK_OK part={index + 1}/{len(chunks)}", flush=True)
