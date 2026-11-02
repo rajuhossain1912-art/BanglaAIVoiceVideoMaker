@@ -1061,7 +1061,7 @@ def make_background(script: str, folder: Path, model_visual_prompt: Optional[str
         palette_shift = max(0, int(variation_seed))
         if palette_shift:
             base_color = tuple(
-                max(0, min(255, channel + ((palette_shift * 47 + axis * 23) % 61) - 30))
+                max(0, min(255, channel + ((palette_shift * 83 + axis * 71) % 201) - 100))
                 for axis, channel in enumerate(base_color)
             )
         for y in range(height):
