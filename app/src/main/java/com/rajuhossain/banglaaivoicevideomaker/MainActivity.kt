@@ -141,6 +141,10 @@ private fun VideoMakerScreen() {
             newRecorder.setAudioEncodingBitRate(64000)
             newRecorder.setOutputFile(target.absolutePath)
             newRecorder.prepare()
+            ContextCompat.startForegroundService(
+                context,
+                Intent(context, VideoWorkService::class.java).setAction(VideoWorkService.ACTION_START_RECORDING)
+            )
             newRecorder.start()
             recorder = newRecorder
             recordingFile = target
@@ -155,6 +159,7 @@ private fun VideoMakerScreen() {
             runCatching { recorder?.release() }
             recorder = null
             isRecording = false
+            runCatching { context.startService(Intent(context, VideoWorkService::class.java).setAction(VideoWorkService.ACTION_STOP)) }
             status = "রেকর্ডিং শুরু করা যায়নি। মাইক্রোফোনের অনুমতি ও ফোনের স্টোরেজ পরীক্ষা করুন।"
         }
     }
@@ -189,6 +194,7 @@ private fun VideoMakerScreen() {
             recordingFile = null
             isRecording = false
             recordingStartedAt = 0L
+            runCatching { context.startService(Intent(context, VideoWorkService::class.java).setAction(VideoWorkService.ACTION_STOP)) }
         }
         if (saved && target != null) {
             previewFile = target
