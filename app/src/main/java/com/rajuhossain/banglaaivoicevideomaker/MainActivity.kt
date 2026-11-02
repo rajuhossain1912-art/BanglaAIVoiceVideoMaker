@@ -196,9 +196,29 @@ private fun VideoMakerScreen() {
                         "অডিও নমুনা অন্তত ১০ সেকেন্ড হতে হবে। ভালো ফলের জন্য ২০ থেকে ৩০ সেকেন্ডের পরিষ্কার কণ্ঠ নির্বাচন করুন।"
                     }
                     val profile = File(context.filesDir, "voice_profile_sample")
-                    context.contentResolver.openInputStream(uri).use { input ->
-                        requireNotNull(input) { "অডিও ফাইল খোলা যায়নি" }
-                        profile.outputStream().use { output -> input.copyTo(output) }
+                    val pendingProfile = File(context.filesDir, "voice_profile_sample.pending")
+                    pendingProfile.delete()
+                    try {
+                        context.contentResolver.openInputStream(uri).use { input ->
+                            requireNotNull(input) { "অডিও ফাইল খোলা যায়নি" }
+                            pendingProfile.outputStream().use { output -> input.copyTo(output) }
+                        }
+                        require(pendingProfile.exists() && pendingProfile.length() > 1000L) {
+                            "নির্বাচিত অডিও ফাইলটি খালি বা অসম্পূর্ণ। অন্য একটি অডিও নির্বাচন করুন।"
+                        }
+                        val backupProfile = File(context.filesDir, "voice_profile_sample.backup")
+                        backupProfile.delete()
+                        val hadPreviousProfile = profile.exists()
+                        if (hadPreviousProfile && !profile.renameTo(backupProfile)) {
+                            throw IllegalStateException("আগের কণ্ঠের নমুনা নিরাপদ রাখা যায়নি।")
+                        }
+                        if (!pendingProfile.renameTo(profile)) {
+                            if (hadPreviousProfile) backupProfile.renameTo(profile)
+                            throw IllegalStateException("নতুন কণ্ঠের নমুনা সংরক্ষণ করা যায়নি। আগের নমুনা অক্ষত রাখা হয়েছে।")
+                        }
+                        backupProfile.delete()
+                    } finally {
+                        pendingProfile.delete()
                     }
                     audioUri = Uri.fromFile(profile)
                     audioName = "ফোনে সংরক্ষিত নিজের কণ্ঠের নমুনা"
