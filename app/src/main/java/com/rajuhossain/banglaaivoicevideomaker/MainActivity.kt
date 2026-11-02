@@ -498,6 +498,7 @@ private fun SettingsScreen(
     onDeleteSavedFiles: () -> Unit,
     onBack: () -> Unit
 ) {
+    var showDeleteConfirmation by remember { mutableStateOf(false) }
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
@@ -596,12 +597,31 @@ private fun SettingsScreen(
                     style = MaterialTheme.typography.bodyMedium
                 )
                 OutlinedButton(
-                    onClick = onDeleteSavedFiles,
+                    onClick = { showDeleteConfirmation = true },
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text("কণ্ঠের নমুনা ও অস্থায়ী ফাইল মুছুন")
                 }
             }
+        }
+
+        if (showDeleteConfirmation) {
+            AlertDialog(
+                onDismissRequest = { showDeleteConfirmation = false },
+                title = { Text("নিজের কণ্ঠের নমুনা মুছবেন?") },
+                text = {
+                    Text("এই কাজ করলে ফোনে সংরক্ষিত নিজের কণ্ঠের নমুনা এবং অস্থায়ী অ্যাপ ফাইল মুছে যাবে। পরে নিজের কণ্ঠ ব্যবহার করতে চাইলে আবার রেকর্ড করতে হবে। ডাউনলোড করা ভিডিও মুছবে না।")
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        showDeleteConfirmation = false
+                        onDeleteSavedFiles()
+                    }) { Text("হ্যাঁ, মুছে ফেলুন") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDeleteConfirmation = false }) { Text("না, রেখে দিন") }
+                }
+            )
         }
 
         Card(Modifier.fillMaxWidth()) {
