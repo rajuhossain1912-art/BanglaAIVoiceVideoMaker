@@ -28,15 +28,20 @@ class VoiceCloneUnitTests(unittest.TestCase):
                     raise TimeoutError("space is busy")
                 return str(good_audio)
 
+            progress = []
             result, selected = video_app._clone_with_provider_fallback(
                 "পরীক্ষা", folder / "reference.wav",
                 ["first-space", "second-space"], fake_clone,
-                "bn", folder, "unit-test"
+                "bn", folder, "unit-test",
+                progress_callback=lambda percent, message: progress.append((percent, message))
             )
 
             self.assertEqual(calls, ["first-space", "second-space"])
             self.assertEqual(selected, "second-space")
             self.assertEqual(result, good_audio)
+            self.assertEqual([item[0] for item in progress], [14, 21])
+            self.assertIn("কণ্ঠসেবা 1/2", progress[0][1])
+            self.assertIn("কণ্ঠসেবা 2/2", progress[1][1])
 
     def test_clone_reports_start_and_completion_progress(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -53,6 +58,9 @@ class VoiceCloneUnitTests(unittest.TestCase):
                 return b""
 
             def fake_provider(*args, **kwargs):
+                callback = kwargs.get("progress_callback")
+                if callback:
+                    callback(kwargs.get("progress_base", 15), "ফ্রি কণ্ঠসেবা 1/1 চেষ্টা করা হচ্ছে।")
                 return candidate, "test-space"
 
             with patch.object(video_app, "VOICE_CLONE_ENABLED", True), \
@@ -67,9 +75,11 @@ class VoiceCloneUnitTests(unittest.TestCase):
 
             self.assertTrue(output.exists())
             self.assertGreater(output.stat().st_size, 100)
-            self.assertEqual([item[0] for item in progress], [12, 30])
-            self.assertIn("অংশ 1/1", progress[0][1])
-            self.assertIn("1/1 অংশ সম্পন্ন", progress[1][1])
+            self.assertEqual([item[0] for item in progress], [12, 13, 14, 15, 30])
+            self.assertIn("নমুনা অডিও প্রস্তুত", progress[0][1])
+            self.assertIn("অংশ 1/1", progress[2][1])
+            self.assertIn("কণ্ঠসেবা 1/1", progress[3][1])
+            self.assertIn("1/1 অংশ সম্পন্ন", progress[4][1])
 
 
 if __name__ == "__main__":
