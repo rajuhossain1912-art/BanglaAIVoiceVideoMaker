@@ -1578,7 +1578,14 @@ def render(job_id: str, script: str, mode: str, audio_path: Optional[Path], capt
             JOBS[job_id]["message"] = "ভিডিওর পটভূমি ও সাবটাইটেল তৈরি হচ্ছে"
         print(f"VIDEO_STAGE job={job_id} stage=background_start", flush=True)
         backgrounds, visual_scene_texts = make_scene_backgrounds(script, folder)
-        print(f"VIDEO_STAGE job={job_id} stage=background_done scenes={len(backgrounds)} interval={scene_interval}s providers=openverse,wikimedia,graphic_fallback", flush=True)
+        provider_order = ",".join(AI_IMAGE_PROVIDER_ORDER) or "none"
+        licensed_fallback = "enabled" if ALLOW_LICENSED_IMAGE_FALLBACK else "disabled"
+        print(
+            f"VIDEO_STAGE job={job_id} stage=background_done scenes={len(backgrounds)} "
+            f"interval={scene_interval}s ai_providers={provider_order} "
+            f"licensed_image_fallback={licensed_fallback} topic_graphic_fallback=enabled",
+            flush=True,
+        )
         with LOCK:
             JOBS[job_id]["progress"] = 40
             JOBS[job_id]["message"] = "বাক্যভিত্তিক দৃশ্য ও পটভূমি তৈরি হয়েছে"
