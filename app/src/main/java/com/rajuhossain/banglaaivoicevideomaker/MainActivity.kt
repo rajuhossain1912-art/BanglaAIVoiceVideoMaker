@@ -354,7 +354,7 @@ private fun VideoMakerScreen() {
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Bangla AI Voice Video Maker", modifier = Modifier.weight(1f), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            Text("বাংলা এআই ভিডিও মেকার", modifier = Modifier.weight(1f), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
             IconButton(onClick = { showSettings = true }, enabled = !running && !isRecording, modifier = Modifier.semantics { contentDescription = "সেটিংস খুলুন" }) {
                 Icon(Icons.Filled.Settings, contentDescription = "সেটিংস")
             }
