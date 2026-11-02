@@ -81,3 +81,12 @@ Known limitations that must remain visible to users:
 - Job state is held in process memory and files in temporary storage. The free backend accepts one active video job at a time and removes completed/failed job folders after the configured retention window (24 hours by default). Render restarts can still make active jobs or recent downloads unavailable.
 - The free Render service can sleep and has limited CPU/RAM. Long scripts, external image providers and cloning services can be slow or fail.
 - There is no guaranteed unlimited service, no paid provider is enabled, and no external provider's privacy behavior is represented as controlled by this app.
+
+## Professional interface and background execution milestone — 2026-11-02
+
+- Android Material 3 brand palette with a restrained green primary color and light neutral surfaces.
+- Main screen removes redundant explanatory copy while preserving essential input labels, TalkBack announcements, consent warnings, progress, and actionable results.
+- Settings are grouped into expandable categories: video/voice mode, visuals/subtitle timing, saved voice, and screen-off processing.
+- During a user-started render, an Android foreground data-sync service displays an ongoing notification and holds a partial CPU wake lock. It is stopped when the foreground generation flow completes or fails.
+- Screen-off/background operation is supported while Android keeps the app/service alive. Force-stop, device shutdown, aggressive OEM battery controls, network loss, Android foreground-service time limits, or process termination can still interrupt work; this must not be described as an absolute guarantee.
+- The foreground service currently protects the app process while the activity's generation coroutine polls the backend. It does not yet persist and resume a lost polling coroutine after a process death. A future milestone should move the complete job lifecycle and job ID persistence into the service or WorkManager with foreground execution.
