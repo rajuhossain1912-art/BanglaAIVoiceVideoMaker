@@ -81,13 +81,13 @@ class SceneImageSimilarityTests(unittest.TestCase):
                 folder.mkdir(parents=True, exist_ok=True)
                 path = folder / "background.png"
                 index = len(generated)
-                Image.new("RGB", (120, 180), (20 + index * 55, 40 + index * 45, 60 + index * 35)).save(path)
+                Image.new("RGB", (120, 180), (20 + index * 30, 30 + index * 20, 40 + index * 15)).save(path)
                 generated.append(path)
                 return path
 
             script = (
-                "প্রথম দৃশ্যের জন্য একটি আলাদা বিষয় এখানে বিস্তারিতভাবে বলা হয়েছে।\\n\\n"
-                "দ্বিতীয় দৃশ্যে সম্পূর্ণ নতুন আরেকটি বিষয় নিয়ে আলোচনা করা হয়েছে।\\n\\n"
+                "প্রথম দৃশ্যের জন্য একটি আলাদা বিষয় এখানে বিস্তারিতভাবে বলা হয়েছে।  "
+                "দ্বিতীয় দৃশ্যে সম্পূর্ণ নতুন আরেকটি বিষয় নিয়ে আলোচনা করা হয়েছে।  "
                 "তৃতীয় দৃশ্যে আরেকটি গুরুত্বপূর্ণ বিষয় তুলে ধরা হয়েছে।"
             )
             with patch.object(video_app, "_plan_scene_visual_prompts", return_value=None), \\
