@@ -1785,6 +1785,8 @@ def capabilities():
         "video_generation": True,
         "scene_interval_seconds": [3, 5, 10, 15, 20],
         "scene_interval_default_seconds": 3,
+        "max_concurrent_jobs": MAX_ACTIVE_JOBS,
+        "job_retention_hours": round(JOB_RETENTION_SECONDS / 3600, 1),
         "scene_images": {
             "enabled": AI_IMAGE_GENERATION_ENABLED,
             "providers": [
@@ -1831,25 +1833,50 @@ async def create_job(script: str = Form(...), mode: str = Form("auto"), audio: O
             raise HTTPException(400, "বাহ্যিক Hugging Face ডেমোতে কণ্ঠের নমুনা পাঠানোর অনুমতি প্রয়োজন।")
         if len(script) > 3000:
             raise HTTPException(413, "নিজের কণ্ঠে একবারে সর্বোচ্চ ৩০০০ অক্ষর ব্যবহার করুন।")
+    _cleanup_expired_jobs()
     job_id = uuid.uuid4().hex
     folder = WORK_DIR / job_id
-    folder.mkdir(parents=True, exist_ok=True)
-    audio_path = None
-    if audio is not None:
-        audio_path = folder / "input_audio"
-        total = 0
-        with audio.file as source, audio_path.open("wb") as target:
-            while True:
-                chunk = source.read(1024 * 1024)
-                if not chunk:
-                    break
-                total += len(chunk)
-                if total > MAX_AUDIO_MB * 1024 * 1024:
-                    shutil.rmtree(folder, ignore_errors=True)
-                    raise HTTPException(413, f"অডিও ফাইল সর্বোচ্চ {MAX_AUDIO_MB} MB হতে পারবে।")
-                target.write(chunk)
     with LOCK:
-        JOBS[job_id] = {"id": job_id, "status": "queued", "progress": 0, "message": "অনুরোধ গ্রহণ করা হয়েছে", "created_at": time.time()}
+        active_count = sum(
+            1 for job in JOBS.values()
+            if job.get("status") in ("uploading", "queued", "processing")
+        )
+        if active_count >= MAX_ACTIVE_JOBS:
+            raise HTTPException(
+                429,
+                "আগের ভিডিও তৈরির কাজ এখনো চলছে। সেটি সম্পন্ন হলে নতুন ভিডিও তৈরি করুন।"
+            )
+        JOBS[job_id] = {
+            "id": job_id, "status": "uploading", "progress": 0,
+            "message": "অডিও ফাইল গ্রহণ করা হচ্ছে", "created_at": time.time()
+        }
+    audio_path = None
+    try:
+        folder.mkdir(parents=True, exist_ok=True)
+        if audio is not None:
+            audio_path = folder / "input_audio"
+            total = 0
+            with audio.file as source, audio_path.open("wb") as target:
+                while True:
+                    chunk = source.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    total += len(chunk)
+                    if total > MAX_AUDIO_MB * 1024 * 1024:
+                        raise HTTPException(413, f"অডিও ফাইল সর্বোচ্চ {MAX_AUDIO_MB} MB হতে পারবে।")
+                    target.write(chunk)
+    except HTTPException:
+        with LOCK:
+            JOBS.pop(job_id, None)
+        shutil.rmtree(folder, ignore_errors=True)
+        raise
+    except Exception as exc:
+        with LOCK:
+            JOBS.pop(job_id, None)
+        shutil.rmtree(folder, ignore_errors=True)
+        raise HTTPException(400, "অডিও ফাইল পড়া বা সংরক্ষণ করা যায়নি। অন্য একটি ফাইল বেছে নিন।") from exc
+    with LOCK:
+        JOBS[job_id].update(status="queued", progress=0, message="অনুরোধ গ্রহণ করা হয়েছে")
     threading.Thread(target=render, args=(job_id, script, mode, audio_path, caption_offset, scene_interval), daemon=True).start()
     return {"id": job_id, "status": "queued", "status_url": f"/api/jobs/{job_id}", "download_url": f"/api/jobs/{job_id}/download"}
 
