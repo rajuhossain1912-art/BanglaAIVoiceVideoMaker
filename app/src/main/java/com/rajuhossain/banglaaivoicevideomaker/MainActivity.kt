@@ -32,7 +32,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -441,11 +443,22 @@ private fun VideoMakerScreen() {
                                 status = "অনুরোধ গ্রহণ করা হয়েছে। ভিডিও তৈরি চলছে।"
                                 var finished = false
                                 var attempts = 0
+                                var consecutiveStatusErrors = 0
                                 while (!finished && attempts < 1800) {
                                     delay(2500)
                                     attempts++
-                                    val info = withContext(Dispatchers.IO) { getJobStatus(baseUrl, jobId) }
-                                    progress = info.optInt("progress", 0)
+                                    val info = try {
+                                        withContext(Dispatchers.IO) { getJobStatus(baseUrl, jobId) }
+                                    } catch (statusError: Exception) {
+                                        consecutiveStatusErrors++
+                                        if (consecutiveStatusErrors >= 4) {
+                                            throw IllegalStateException("সার্ভারের অগ্রগতি বারবার পাওয়া যায়নি। ইন্টারনেট সংযোগ পরীক্ষা করে পরে আবার চেষ্টা করুন।", statusError)
+                                        }
+                                        status = "সার্ভারের অগ্রগতি সাময়িকভাবে পাওয়া যাচ্ছে না। আবার সংযোগের চেষ্টা করা হচ্ছে।"
+                                        continue
+                                    }
+                                    consecutiveStatusErrors = 0
+                                    progress = maxOf(progress, info.optInt("progress", 0))
                                     status = info.optString("message", "ভিডিও তৈরি চলছে।")
                                     when (info.optString("status")) {
                                         "completed" -> {
@@ -475,7 +488,14 @@ private fun VideoMakerScreen() {
         ) { Text(if (running) "ভিডিও তৈরি হচ্ছে" else "ভিডিও তৈরি করুন") }
 
         if (running) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(
+                modifier = Modifier.semantics {
+                    liveRegion = LiveRegionMode.Polite
+                    contentDescription = "ভিডিও তৈরির অগ্রগতি $progress শতাংশ। $status"
+                },
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
                 CircularProgressIndicator()
                 Text("অগ্রগতি: " + progress + " শতাংশ")
             }
@@ -553,7 +573,10 @@ private fun VideoMakerScreen() {
                 }, modifier = Modifier.fillMaxWidth(), enabled = !serverCheckRunning) {
                     Text(if (serverCheckRunning) "সার্ভার পরীক্ষা চলছে" else "সার্ভার সংযোগ পরীক্ষা ও আপডেট")
                 }
-                Text(status, modifier = Modifier.semantics { contentDescription = "ভিডিও তৈরির বর্তমান অবস্থা: " + status })
+                Text(status, modifier = Modifier.semantics {
+                    liveRegion = LiveRegionMode.Polite
+                    contentDescription = "ভিডিও তৈরির বর্তমান অবস্থা: " + status
+                })
             }
         }
         Text("নিজের কণ্ঠের পরীক্ষামূলক সুবিধা বাহ্যিক ফ্রি ডেমোর ওপর নির্ভরশীল; সব সময় কাজ নাও করতে পারে।", style = MaterialTheme.typography.bodySmall)
