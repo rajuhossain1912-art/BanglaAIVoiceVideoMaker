@@ -96,7 +96,7 @@ private fun VideoMakerScreen() {
     var autoStopTriggered by remember { mutableStateOf(false) }
     var recorder by remember { mutableStateOf<MediaRecorder?>(null) }
     var recordingFile by remember { mutableStateOf<File?>(null) }
-    var previewFile by remember { mutableStateOf<File?>(null) }
+    var previewFile by remember { mutableStateOf(File(context.cacheDir, "voice_recording_preview.m4a").takeIf { it.exists() && it.length() > 1000L }) }
     var previewPlayer by remember { mutableStateOf<MediaPlayer?>(null) }
     var previewPlaying by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf("অনলাইন সার্ভার যুক্ত হলে এখানে ভিডিও তৈরির অবস্থা দেখা যাবে।") }
@@ -185,10 +185,47 @@ private fun VideoMakerScreen() {
             runCatching { previewPlayer?.release() }
             previewPlayer = null
             previewPlaying = false
+
+            // Keep the first completed recording as a private, reusable voice sample.
+            // Never silently replace an already-saved sample.
+            var autoSaved = false
+            var saveFailed = false
+            val profile = File(context.filesDir, "voice_profile_sample")
+            if (!profile.exists()) {
+                val pendingProfile = File(context.filesDir, "voice_profile_sample.pending")
+                try {
+                    pendingProfile.delete()
+                    target.inputStream().use { input ->
+                        pendingProfile.outputStream().use { output -> input.copyTo(output) }
+                    }
+                    require(pendingProfile.exists() && pendingProfile.length() > 1000L) {
+                        "রেকর্ড করা অডিও খালি বা অসম্পূর্ণ।"
+                    }
+                    if (!pendingProfile.renameTo(profile)) {
+                        error("ফোনে কণ্ঠের নমুনা সংরক্ষণ করা যায়নি।")
+                    }
+                    audioUri = Uri.fromFile(profile)
+                    audioName = "ফোনে সংরক্ষিত নিজের কণ্ঠের নমুনা"
+                    hasSavedVoiceProfile = true
+                    autoSaved = true
+                } catch (_: Exception) {
+                    saveFailed = true
+                } finally {
+                    pendingProfile.delete()
+                }
+            }
+
             val tone = ToneGenerator(AudioManager.STREAM_MUSIC, 80)
             tone.startTone(ToneGenerator.TONE_PROP_ACK, 250)
             scope.launch { delay(350); tone.release() }
-            status = if (autoStopTriggered) "নির্ধারিত ২ মিনিট শেষ হওয়ায় রেকর্ডিং স্বয়ংক্রিয়ভাবে বন্ধ হয়েছে। এখন নিজের কণ্ঠ শুনে দেখুন। ভালো লাগলে কণ্ঠ সংরক্ষণ করুন।" else "রেকর্ডিং সম্পন্ন হয়েছে। এখন নিজের কণ্ঠ শুনে দেখুন। ভালো লাগলে কণ্ঠ সংরক্ষণ বোতাম চাপুন।"
+            val completion = when {
+                autoSaved -> "আপনার রেকর্ড করা কণ্ঠ স্বয়ংক্রিয়ভাবে এই ফোনে নিরাপদ অ্যাপ-স্টোরেজে সংরক্ষণ করা হয়েছে।"
+                saveFailed -> "রেকর্ডিং সম্পন্ন হয়েছে, কিন্তু স্বয়ংক্রিয়ভাবে সংরক্ষণ করা যায়নি। শুনে ভালো লাগলে নিচের সংরক্ষণ বোতাম চাপুন।"
+                profile.exists() -> "রেকর্ডিং সম্পন্ন হয়েছে। আগের সংরক্ষিত কণ্ঠ অক্ষত রাখা হয়েছে। নতুন রেকর্ডিংটি ব্যবহার করতে চাইলে নিচের বোতাম চাপুন।"
+                else -> "রেকর্ডিং সম্পন্ন হয়েছে। নিচে সংরক্ষণের অবস্থা দেখুন।"
+            }
+            status = (if (autoStopTriggered) "দুই মিনিট পূর্ণ হওয়ায় রেকর্ডিং স্বয়ংক্রিয়ভাবে বন্ধ হয়েছে। " else "রেকর্ডিং সম্পন্ন হয়েছে। ") +
+                completion + " এখন নিজের কণ্ঠ শুনে দেখুন।"
         } else {
             target?.delete()
             previewFile = null
@@ -444,7 +481,7 @@ private fun VideoMakerScreen() {
                         previewFile = null
                         status = "আপনার কণ্ঠ ফোনে সংরক্ষণ করা হয়েছে। এখন নিজের কণ্ঠের পদ্ধতি বেছে ভিডিও তৈরি করতে পারবেন।"
                     } catch (e: Exception) { status = "কণ্ঠ সংরক্ষণ করা যায়নি। আবার চেষ্টা করুন।" }
-                }, modifier = Modifier.fillMaxWidth(), enabled = !running && !previewPlaying) { Text("ভালো হয়েছে, নিজের কণ্ঠ সংরক্ষণ করুন") }
+                }, modifier = Modifier.fillMaxWidth(), enabled = !running && !previewPlaying) { Text(if (hasSavedVoiceProfile) "এই রেকর্ডিং দিয়ে সংরক্ষিত কণ্ঠ বদলান" else "নিজের কণ্ঠ সংরক্ষণ করুন") }
                 OutlinedButton(onClick = { runCatching { previewPlayer?.stop() }; runCatching { previewPlayer?.release() }; previewPlayer = null; previewPlaying = false; previewFile?.delete(); previewFile = null; status = "রেকর্ড করা কণ্ঠ বাতিল করা হয়েছে। চাইলে আবার রেকর্ড করুন।" }, modifier = Modifier.fillMaxWidth()) { Text("রেকর্ডিং বাতিল করুন") }
             }
             OutlinedButton(onClick = { audioPicker.launch("audio/*") }, modifier = Modifier.fillMaxWidth(), enabled = !running && !isRecording) {
