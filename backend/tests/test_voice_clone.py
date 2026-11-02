@@ -78,7 +78,8 @@ class VoiceCloneUnitTests(unittest.TestCase):
             self.assertEqual([item[0] for item in progress], [12, 13, 14, 15, 30])
             self.assertIn("নমুনা অডিও প্রস্তুত", progress[0][1])
             self.assertIn("অংশ 1/1", progress[2][1])
-            self.assertIn("1/1 অংশ সম্পন্ন", progress[3][1])
+            self.assertIn("কণ্ঠসেবা 1/1", progress[3][1])
+            self.assertIn("1/1 অংশ সম্পন্ন", progress[4][1])
 
 
 if __name__ == "__main__":
