@@ -4,6 +4,7 @@ package com.rajuhossain.banglaaivoicevideomaker
 import android.Manifest
 import android.app.DownloadManager
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.MediaRecorder
 import android.media.MediaMetadataRetriever
@@ -38,6 +39,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
@@ -56,8 +58,15 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            MaterialTheme {
-                Surface(Modifier.fillMaxSize()) { VideoMakerScreen() }
+            MaterialTheme(
+                colorScheme = lightColorScheme(
+                    primary = Color(0xFF176B5B),
+                    secondary = Color(0xFF4C7168),
+                    background = Color(0xFFF5F8F7),
+                    surface = Color(0xFFFFFFFF)
+                )
+            ) {
+                Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) { VideoMakerScreen() }
             }
         }
     }
@@ -501,6 +510,10 @@ private fun VideoMakerScreen() {
                     baseUrl.isBlank() -> status = "অনলাইন API ঠিকানা এখনো সেট করা হয়নি। সার্ভার স্থাপন ও API ঠিকানা যুক্ত করার পর ভিডিও তৈরি চালু হবে।"
                     mode in listOf("audio", "clone") && audioUri == null -> status = "অডিও ফাইল নির্বাচন করুন।"
                     else -> {
+                        ContextCompat.startForegroundService(
+                            context,
+                            Intent(context, VideoWorkService::class.java).setAction(VideoWorkService.ACTION_START)
+                        )
                         running = true
                         progress = 0
                         downloadPath = ""
@@ -550,6 +563,9 @@ private fun VideoMakerScreen() {
                             } finally {
                                 cloneConsent = false
                                 running = false
+                                runCatching {
+                                    context.startService(Intent(context, VideoWorkService::class.java).setAction(VideoWorkService.ACTION_STOP))
+                                }
                             }
                         }
                     }
