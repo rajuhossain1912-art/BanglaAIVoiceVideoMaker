@@ -1,6 +1,7 @@
 import contextlib
 import io
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -70,6 +71,71 @@ class SceneImageSimilarityTests(unittest.TestCase):
                 force_topic_graphic=True, variation_seed=4
             )
             self.assertTrue(video_app._scene_images_too_similar(first, second))
+
+    def test_scene_generation_reports_monotonic_progress(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            progress = []
+            generated = []
+
+            def fake_background(script, folder, model_visual_prompt=None, **kwargs):
+                folder.mkdir(parents=True, exist_ok=True)
+                path = folder / "background.png"
+                index = len(generated)
+                Image.new("RGB", (120, 180), (20 + index * 30, 30 + index * 20, 40 + index * 15)).save(path)
+                generated.append(path)
+                return path
+
+            script = (
+                "প্রথম দৃশ্যের জন্য একটি আলাদা বিষয় এখানে বিস্তারিতভাবে বলা হয়েছে।  "
+                "দ্বিতীয় দৃশ্যে সম্পূর্ণ নতুন আরেকটি বিষয় নিয়ে আলোচনা করা হয়েছে।  "
+                "তৃতীয় দৃশ্যে আরেকটি গুরুত্বপূর্ণ বিষয় তুলে ধরা হয়েছে।"
+            )
+            with patch.object(video_app, "_plan_scene_visual_prompts", return_value=None) as _planner, patch.object(video_app, "make_background", side_effect=fake_background):
+                backgrounds, scenes = video_app.make_scene_backgrounds(
+                    script, root,
+                    progress_callback=lambda percent, message: progress.append((percent, message))
+                )
+
+            self.assertGreaterEqual(len(scenes), 2)
+            self.assertEqual(len(backgrounds), len(generated))
+            values = [item[0] for item in progress]
+            self.assertEqual(values, sorted(values))
+            self.assertEqual(values[-1], 40)
+            self.assertIn("দৃশ্যের ছবি তৈরি হচ্ছে", " ".join(item[1] for item in progress))
+
+    def test_capabilities_match_android_defaults_and_free_service_limits(self):
+        capabilities = video_app.capabilities()
+        self.assertEqual(capabilities["scene_interval_default_seconds"], 3)
+        self.assertEqual(capabilities["max_concurrent_jobs"], 1)
+        self.assertGreaterEqual(capabilities["job_retention_hours"], 1)
+
+    def test_expired_terminal_job_and_folder_are_removed(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            expired_id = "expired-job"
+            expired_folder = root / expired_id
+            expired_folder.mkdir()
+            (expired_folder / "video.mp4").write_bytes(b"old video")
+            now = time.time()
+            previous_jobs = dict(video_app.JOBS)
+            try:
+                with patch.object(video_app, "WORK_DIR", root), patch.object(video_app, "JOB_RETENTION_SECONDS", 3600):
+                    with video_app.LOCK:
+                        video_app.JOBS.clear()
+                        video_app.JOBS[expired_id] = {
+                            "id": expired_id,
+                            "status": "completed",
+                            "created_at": now - 7200,
+                            "completed_at": now - 7200,
+                        }
+                    video_app._cleanup_expired_jobs(now=now)
+                    self.assertNotIn(expired_id, video_app.JOBS)
+                    self.assertFalse(expired_folder.exists())
+            finally:
+                with video_app.LOCK:
+                    video_app.JOBS.clear()
+                    video_app.JOBS.update(previous_jobs)
 
     def test_logs_ai_generated_source_and_provider_for_scene(self):
         with tempfile.TemporaryDirectory() as temp_dir:

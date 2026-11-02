@@ -28,14 +28,15 @@ Allow each Android user to provide a short sample of their own voice, enter Beng
 - Android source/build verification does not prove the online video backend works.
 - Voice-cloning model cards, licenses, source code, demo status, and free-hosting constraints were inspected.
 - Actual audio inference with a Bengali sample and an English sample: NOT YET TESTED in this environment. Network/runtime access did not permit submitting audio to the live demo.
-- Production integration: NOT IMPLEMENTED. No API keys or paid services were added.
+- Application integration: IMPLEMENTED as an experimental free-provider fallback in the backend on 2026-11-02. This does not mean provider inference has been runtime-verified from the user's phone.
+- Real Bangla, English and mixed-language cloning quality, latency, quota behavior and provider privacy remain unverified until a user-approved test is completed. No paid services were added.
 
 ## Recommended next test sequence
 1. Manually verify the public Bengali CosyVoice3 demo with a speaker-consented 5–10 second voice sample and a short Bengali script.
 2. Try an English script with the same reference sample; assess intelligibility, accent, speaker similarity, and latency. Treat it as experimental until verified.
 3. Compare with Chatterbox for English only.
 4. Before production, choose a hosting route with explicit privacy and quota controls; do not route all users' recordings to an unapproved third-party demo.
-5. Add a provider interface and fallback only after model and hosting tests pass. Keep the ordinary TTS and uploaded-audio options available.
+5. The app now contains the experimental provider fallback. Before calling it production-ready, complete real-device Bangla, English and mixed-language tests and review provider privacy/retention. Keep ordinary TTS and uploaded-audio options available.
 
 ## References
 - Bengali model: https://huggingface.co/kawshikbuet17/bengali-cosyvoice3-tts

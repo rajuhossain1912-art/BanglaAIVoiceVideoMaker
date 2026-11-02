@@ -34,7 +34,50 @@ MAX_SCRIPT_CHARS = int(os.getenv("MAX_SCRIPT_CHARS", "50000"))
 MAX_AUDIO_MB = int(os.getenv("MAX_AUDIO_MB", "40"))
 JOBS = {}
 LOCK = threading.Lock()
-app = FastAPI(title="Bangla AI Voice Video Maker API", version="0.2.0")
+try:
+    JOB_RETENTION_SECONDS = max(3600, int(os.getenv("JOB_RETENTION_SECONDS", "86400")))
+except (TypeError, ValueError):
+    JOB_RETENTION_SECONDS = 86400
+try:
+    MAX_ACTIVE_JOBS = max(1, min(4, int(os.getenv("MAX_ACTIVE_JOBS", "1"))))
+except (TypeError, ValueError):
+    MAX_ACTIVE_JOBS = 1
+app = FastAPI(title="Bangla AI Voice Video Maker API", version="0.3.0")
+
+
+def _cleanup_expired_jobs(now=None):
+    """Remove terminal jobs after the retention window and old orphaned job folders."""
+    current_time = time.time() if now is None else float(now)
+    expired_before = current_time - JOB_RETENTION_SECONDS
+    expired_ids = []
+    with LOCK:
+        for job_id, job in list(JOBS.items()):
+            if job.get("status") not in ("completed", "failed"):
+                continue
+            finished_at = job.get("completed_at", job.get("created_at", current_time))
+            try:
+                is_expired = float(finished_at) < expired_before
+            except (TypeError, ValueError):
+                is_expired = False
+            if is_expired:
+                expired_ids.append(job_id)
+                JOBS.pop(job_id, None)
+        active_ids = set(JOBS)
+    for job_id in expired_ids:
+        shutil.rmtree(WORK_DIR / job_id, ignore_errors=True)
+    # A process restart clears in-memory JOBS. Remove only folders older than the
+    # same retention window, never folders belonging to active in-memory jobs.
+    try:
+        for folder in WORK_DIR.iterdir():
+            if not folder.is_dir() or folder.name in active_ids:
+                continue
+            try:
+                if current_time - folder.stat().st_mtime > JOB_RETENTION_SECONDS:
+                    shutil.rmtree(folder, ignore_errors=True)
+            except OSError:
+                continue
+    except OSError:
+        pass
 
 
 def run(cmd, timeout=240):
@@ -1271,7 +1314,7 @@ def _scene_images_too_similar(first: Path, second: Path) -> bool:
         return False
 
 
-def make_scene_backgrounds(script: str, folder: Path):
+def make_scene_backgrounds(script: str, folder: Path, progress_callback=None):
     """Keep every narration scene while sampling images to respect free-tier resource limits."""
     scenes = _split_script_into_scenes(script, max_scenes=None, target_words=8)
     try:
@@ -1286,9 +1329,14 @@ def make_scene_backgrounds(script: str, folder: Path):
         indices = sorted({round(i * (len(scenes) - 1) / (max_visual_scenes - 1)) for i in range(max_visual_scenes)})
         visual_scenes = [scenes[i] for i in indices]
     # Prompts are batched in groups of eight; every narration scene is retained for subtitles/timing.
+    if progress_callback:
+        progress_callback(35, "ভিডিওর প্রতিটি দৃশ্যের জন্য উপযুক্ত ছবি পরিকল্পনা করা হচ্ছে।")
     visual_prompts = _plan_scene_visual_prompts(visual_scenes)
     backgrounds = []
     for index, scene_text in enumerate(visual_scenes):
+        if progress_callback:
+            percent = 36 + int(4 * index / max(1, len(visual_scenes)))
+            progress_callback(percent, f"দৃশ্যের ছবি তৈরি হচ্ছে: {index + 1}/{len(visual_scenes)}। বিনামূল্যের ছবি সেবার উত্তর আসতে সময় লাগতে পারে।")
         scene_dir = folder / f"scene-{index:02d}"
         scene_dir.mkdir(parents=True, exist_ok=True)
         print(f"IMAGE_SCENE index={index + 1}/{len(scenes)} words={len(scene_text.split())}", flush=True)
@@ -1298,6 +1346,8 @@ def make_scene_backgrounds(script: str, folder: Path):
             background = make_background(scene_text, scene_dir, force_topic_graphic=True, variation_seed=index, scene_index=index + 1)
         backgrounds.append(background)
     print(f"IMAGE_SCENE unique_backgrounds={len(backgrounds)} total_narration_scenes={len(scenes)} visual_budget={max_visual_scenes}", flush=True)
+    if progress_callback:
+        progress_callback(40, f"{len(backgrounds)}টি দৃশ্যের ছবি প্রস্তুত হয়েছে।")
     return backgrounds, scenes
 
 def make_srt(script: str, duration: float, path: Path):
@@ -1636,7 +1686,12 @@ def render(job_id: str, script: str, mode: str, audio_path: Optional[Path], capt
             JOBS[job_id]["progress"] = 35
             JOBS[job_id]["message"] = "ভিডিওর পটভূমি ও সাবটাইটেল তৈরি হচ্ছে"
         print(f"VIDEO_STAGE job={job_id} stage=background_start", flush=True)
-        backgrounds, visual_scene_texts = make_scene_backgrounds(script, folder)
+        def update_visual_progress(progress, message):
+            with LOCK:
+                if job_id in JOBS and JOBS[job_id].get("status") == "processing":
+                    JOBS[job_id]["progress"] = max(JOBS[job_id].get("progress", 0), progress)
+                    JOBS[job_id]["message"] = message
+        backgrounds, visual_scene_texts = make_scene_backgrounds(script, folder, update_visual_progress)
         provider_order = ",".join(AI_IMAGE_PROVIDER_ORDER) or "none"
         licensed_fallback = "enabled" if ALLOW_LICENSED_IMAGE_FALLBACK else "disabled"
         print(
@@ -1652,7 +1707,7 @@ def render(job_id: str, script: str, mode: str, audio_path: Optional[Path], capt
         frame_list, frame_count = make_caption_frames(script, duration, backgrounds, folder, caption_offset, audio_path, job_id, scene_interval, visual_scene_texts)
         print(f"VIDEO_STAGE job={job_id} stage=subtitles_done frames={frame_count} method=pillow_word_highlight", flush=True)
         with LOCK:
-            JOBS[job_id]["progress"] = 45
+            JOBS[job_id]["progress"] = 49
             JOBS[job_id]["message"] = "শব্দের সঙ্গে মিলিয়ে সাবটাইটেল তৈরি হয়েছে"
         output = folder / "video.mp4"
         # Pre-rendered caption images avoid FFmpeg/libass memory spikes on Render Free.
@@ -1729,7 +1784,9 @@ def capabilities():
         "language_input": ["বাংলা", "English", "Banglish"],
         "video_generation": True,
         "scene_interval_seconds": [3, 5, 10, 15, 20],
-        "scene_interval_default_seconds": 5,
+        "scene_interval_default_seconds": 3,
+        "max_concurrent_jobs": MAX_ACTIVE_JOBS,
+        "job_retention_hours": round(JOB_RETENTION_SECONDS / 3600, 1),
         "scene_images": {
             "enabled": AI_IMAGE_GENERATION_ENABLED,
             "providers": [
@@ -1755,7 +1812,7 @@ def capabilities():
 
 
 @app.post("/api/jobs", status_code=202)
-async def create_job(script: str = Form(...), mode: str = Form("auto"), audio: Optional[UploadFile] = File(None), voice_clone_consent: bool = Form(False), caption_offset: float = Form(0.0), scene_interval: int = Form(5)):
+async def create_job(script: str = Form(...), mode: str = Form("auto"), audio: Optional[UploadFile] = File(None), voice_clone_consent: bool = Form(False), caption_offset: float = Form(0.0), scene_interval: int = Form(3)):
     script = script.strip()
     if not script:
         raise HTTPException(400, "আগে বাংলা বা ইংরেজি লেখা যোগ করুন।")
@@ -1776,25 +1833,50 @@ async def create_job(script: str = Form(...), mode: str = Form("auto"), audio: O
             raise HTTPException(400, "বাহ্যিক Hugging Face ডেমোতে কণ্ঠের নমুনা পাঠানোর অনুমতি প্রয়োজন।")
         if len(script) > 3000:
             raise HTTPException(413, "নিজের কণ্ঠে একবারে সর্বোচ্চ ৩০০০ অক্ষর ব্যবহার করুন।")
+    _cleanup_expired_jobs()
     job_id = uuid.uuid4().hex
     folder = WORK_DIR / job_id
-    folder.mkdir(parents=True, exist_ok=True)
-    audio_path = None
-    if audio is not None:
-        audio_path = folder / "input_audio"
-        total = 0
-        with audio.file as source, audio_path.open("wb") as target:
-            while True:
-                chunk = source.read(1024 * 1024)
-                if not chunk:
-                    break
-                total += len(chunk)
-                if total > MAX_AUDIO_MB * 1024 * 1024:
-                    shutil.rmtree(folder, ignore_errors=True)
-                    raise HTTPException(413, f"অডিও ফাইল সর্বোচ্চ {MAX_AUDIO_MB} MB হতে পারবে।")
-                target.write(chunk)
     with LOCK:
-        JOBS[job_id] = {"id": job_id, "status": "queued", "progress": 0, "message": "অনুরোধ গ্রহণ করা হয়েছে", "created_at": time.time()}
+        active_count = sum(
+            1 for job in JOBS.values()
+            if job.get("status") in ("uploading", "queued", "processing")
+        )
+        if active_count >= MAX_ACTIVE_JOBS:
+            raise HTTPException(
+                429,
+                "আগের ভিডিও তৈরির কাজ এখনো চলছে। সেটি সম্পন্ন হলে নতুন ভিডিও তৈরি করুন।"
+            )
+        JOBS[job_id] = {
+            "id": job_id, "status": "uploading", "progress": 0,
+            "message": "অডিও ফাইল গ্রহণ করা হচ্ছে", "created_at": time.time()
+        }
+    audio_path = None
+    try:
+        folder.mkdir(parents=True, exist_ok=True)
+        if audio is not None:
+            audio_path = folder / "input_audio"
+            total = 0
+            with audio.file as source, audio_path.open("wb") as target:
+                while True:
+                    chunk = source.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    total += len(chunk)
+                    if total > MAX_AUDIO_MB * 1024 * 1024:
+                        raise HTTPException(413, f"অডিও ফাইল সর্বোচ্চ {MAX_AUDIO_MB} MB হতে পারবে।")
+                    target.write(chunk)
+    except HTTPException:
+        with LOCK:
+            JOBS.pop(job_id, None)
+        shutil.rmtree(folder, ignore_errors=True)
+        raise
+    except Exception as exc:
+        with LOCK:
+            JOBS.pop(job_id, None)
+        shutil.rmtree(folder, ignore_errors=True)
+        raise HTTPException(400, "অডিও ফাইল পড়া বা সংরক্ষণ করা যায়নি। অন্য একটি ফাইল বেছে নিন।") from exc
+    with LOCK:
+        JOBS[job_id].update(status="queued", progress=0, message="অনুরোধ গ্রহণ করা হয়েছে")
     threading.Thread(target=render, args=(job_id, script, mode, audio_path, caption_offset, scene_interval), daemon=True).start()
     return {"id": job_id, "status": "queued", "status_url": f"/api/jobs/{job_id}", "download_url": f"/api/jobs/{job_id}/download"}
 

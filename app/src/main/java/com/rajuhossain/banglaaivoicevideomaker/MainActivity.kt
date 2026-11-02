@@ -32,7 +32,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -70,12 +72,11 @@ private fun VideoMakerScreen() {
     var audioName by remember { mutableStateOf("") }
     var mode by remember { mutableStateOf("auto") }
     var cloneConsent by remember { mutableStateOf(false) }
-    var captionOffset by remember { mutableStateOf(0f) }
+    var captionOffset by remember { mutableStateOf(context.getSharedPreferences("video_settings", Context.MODE_PRIVATE).getFloat("caption_offset", 0f)) }
     var sceneInterval by remember { mutableStateOf(context.getSharedPreferences("video_settings", Context.MODE_PRIVATE).getInt("scene_interval", 3)) }
     var showSettings by remember { mutableStateOf(false) }
     var serverStatus by remember { mutableStateOf("সার্ভারের সংযোগ এখনো পরীক্ষা করা হয়নি।") }
     var serverCheckRunning by remember { mutableStateOf(false) }
-    var sceneIntervalMenu by remember { mutableStateOf(false) }
     var hasSavedVoiceProfile by remember { mutableStateOf(File(context.filesDir, "voice_profile_sample").exists()) }
     var isRecording by remember { mutableStateOf(false) }
     var recorder by remember { mutableStateOf<MediaRecorder?>(null) }
@@ -237,10 +238,16 @@ private fun VideoMakerScreen() {
     }
 
     BackHandler(enabled = showSettings) { showSettings = false }
+    BackHandler(enabled = isRecording && !showSettings) { stopVoiceRecording() }
 
     if (showSettings) {
         SettingsScreen(
             sceneInterval = sceneInterval,
+            captionOffset = captionOffset,
+            onCaptionOffsetChange = { seconds ->
+                captionOffset = seconds
+                context.getSharedPreferences("video_settings", Context.MODE_PRIVATE).edit().putFloat("caption_offset", seconds).apply()
+            },
             mode = mode,
             onModeChange = { selectedMode ->
                 mode = selectedMode
@@ -273,7 +280,7 @@ private fun VideoMakerScreen() {
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Bangla AI Voice Video Maker", modifier = Modifier.weight(1f), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-            IconButton(onClick = { showSettings = true }, enabled = !running, modifier = Modifier.semantics { contentDescription = "সেটিংস খুলুন" }) {
+            IconButton(onClick = { showSettings = true }, enabled = !running && !isRecording, modifier = Modifier.semantics { contentDescription = "সেটিংস খুলুন" }) {
                 Icon(Icons.Filled.Settings, contentDescription = "সেটিংস")
             }
         }
@@ -281,7 +288,7 @@ private fun VideoMakerScreen() {
         OutlinedButton(
             onClick = { showSettings = true },
             modifier = Modifier.fillMaxWidth(),
-            enabled = !running
+            enabled = !running && !isRecording
         ) {
             Text("ভিডিও পদ্ধতি: " + when (mode) {
                 "audio" -> "অডিও ভয়েস"
@@ -306,7 +313,7 @@ private fun VideoMakerScreen() {
             modifier = Modifier.fillMaxWidth(),
             label = { Text("ভিডিওর বিষয়") },
             placeholder = { Text("যেমন: প্রতিবন্ধীদের কর্মসংস্থান") },
-            singleLine = true, enabled = !running,
+            singleLine = true, enabled = !running && !isRecording,
             supportingText = { Text("বিষয় লিখে নিচের বোতামে চাপলে সম্পাদনাযোগ্য খসড়া তৈরি হবে।") }
         )
         OutlinedButton(
@@ -318,14 +325,14 @@ private fun VideoMakerScreen() {
                     status = "বিষয় থেকে প্রাথমিক খসড়া তৈরি হয়েছে। ভিডিও করার আগে পড়ে সম্পাদনা করুন। এটি বিনামূল্যের টেমপ্লেট, সম্পূর্ণ AI-লেখা নয়।"
                 }
             },
-            modifier = Modifier.fillMaxWidth(), enabled = !running
+            modifier = Modifier.fillMaxWidth(), enabled = !running && !isRecording
         ) { Text("বিষয় থেকে খসড়া তৈরি করুন") }
         OutlinedTextField(
             value = script, onValueChange = { script = it },
             modifier = Modifier.fillMaxWidth().height(210.dp),
             label = { Text(if (mode == "clone") "নিজের কণ্ঠে পড়ার লেখা (সর্বোচ্চ ৩০০০ অক্ষর)" else "বাংলা বা ইংরেজি লেখা") },
             placeholder = { Text("এখানে সম্পূর্ণ স্ক্রিপ্ট পেস্ট করুন") },
-            minLines = 5, enabled = !running,
+            minLines = 5, enabled = !running && !isRecording,
             supportingText = { Text("সার্ভার লেখা গ্রহণ করে ভিডিও তৈরি করবে।") }
         )
         if (mode == "audio") {
@@ -441,11 +448,22 @@ private fun VideoMakerScreen() {
                                 status = "অনুরোধ গ্রহণ করা হয়েছে। ভিডিও তৈরি চলছে।"
                                 var finished = false
                                 var attempts = 0
+                                var consecutiveStatusErrors = 0
                                 while (!finished && attempts < 1800) {
                                     delay(2500)
                                     attempts++
-                                    val info = withContext(Dispatchers.IO) { getJobStatus(baseUrl, jobId) }
-                                    progress = info.optInt("progress", 0)
+                                    val info = try {
+                                        withContext(Dispatchers.IO) { getJobStatus(baseUrl, jobId) }
+                                    } catch (statusError: Exception) {
+                                        consecutiveStatusErrors++
+                                        if (consecutiveStatusErrors >= 4) {
+                                            throw IllegalStateException("সার্ভারের অগ্রগতি বারবার পাওয়া যায়নি। ইন্টারনেট সংযোগ পরীক্ষা করে পরে আবার চেষ্টা করুন।", statusError)
+                                        }
+                                        status = "সার্ভারের অগ্রগতি সাময়িকভাবে পাওয়া যাচ্ছে না। আবার সংযোগের চেষ্টা করা হচ্ছে।"
+                                        continue
+                                    }
+                                    consecutiveStatusErrors = 0
+                                    progress = maxOf(progress, info.optInt("progress", 0))
                                     status = info.optString("message", "ভিডিও তৈরি চলছে।")
                                     when (info.optString("status")) {
                                         "completed" -> {
@@ -471,11 +489,18 @@ private fun VideoMakerScreen() {
                     }
                 }
             },
-            modifier = Modifier.fillMaxWidth(), enabled = !running
+            modifier = Modifier.fillMaxWidth(), enabled = !running && !isRecording
         ) { Text(if (running) "ভিডিও তৈরি হচ্ছে" else "ভিডিও তৈরি করুন") }
 
         if (running) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(
+                modifier = Modifier.semantics {
+                    liveRegion = LiveRegionMode.Polite
+                    contentDescription = "ভিডিও তৈরির অগ্রগতি $progress শতাংশ"
+                },
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
                 CircularProgressIndicator()
                 Text("অগ্রগতি: " + progress + " শতাংশ")
             }
@@ -532,7 +557,10 @@ private fun VideoMakerScreen() {
             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("বর্তমান অবস্থা", fontWeight = FontWeight.SemiBold)
                 Text(if (online) "ফোনের ইন্টারনেট: সংযুক্ত" else "ফোনের ইন্টারনেট: সংযোগ নেই")
-                Text(serverStatus, modifier = Modifier.semantics { contentDescription = "অনলাইন সার্ভারের অবস্থা: " + serverStatus })
+                Text(serverStatus, modifier = Modifier.semantics {
+                    liveRegion = LiveRegionMode.Polite
+                    contentDescription = "অনলাইন সার্ভারের অবস্থা: " + serverStatus
+                })
                 OutlinedButton(onClick = {
                     online = isInternetAvailable(context)
                     serverCheckRunning = true
@@ -553,7 +581,10 @@ private fun VideoMakerScreen() {
                 }, modifier = Modifier.fillMaxWidth(), enabled = !serverCheckRunning) {
                     Text(if (serverCheckRunning) "সার্ভার পরীক্ষা চলছে" else "সার্ভার সংযোগ পরীক্ষা ও আপডেট")
                 }
-                Text(status, modifier = Modifier.semantics { contentDescription = "ভিডিও তৈরির বর্তমান অবস্থা: " + status })
+                Text(status, modifier = Modifier.semantics {
+                    liveRegion = LiveRegionMode.Polite
+                    contentDescription = "ভিডিও তৈরির বর্তমান অবস্থা: " + status
+                })
             }
         }
         Text("নিজের কণ্ঠের পরীক্ষামূলক সুবিধা বাহ্যিক ফ্রি ডেমোর ওপর নির্ভরশীল; সব সময় কাজ নাও করতে পারে।", style = MaterialTheme.typography.bodySmall)
@@ -564,6 +595,8 @@ private fun VideoMakerScreen() {
 @Composable
 private fun SettingsScreen(
     sceneInterval: Int,
+    captionOffset: Float,
+    onCaptionOffsetChange: (Float) -> Unit,
     mode: String,
     onModeChange: (String) -> Unit,
     onSceneIntervalChange: (Int) -> Unit,
@@ -656,7 +689,32 @@ private fun SettingsScreen(
                 Modifier.fillMaxWidth().padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Text("৩. সংরক্ষিত ফাইল ও গোপনীয়তা", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text("৩. সাবটাইটেলের সময়", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text(
+                    "অডিওর তুলনায় সাবটাইটেল একটু আগে বা পরে দেখাতে চাইলে এই মান পরিবর্তন করুন। শূন্য মানে কোনো পরিবর্তন নয়।",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Text("বর্তমান সমন্বয়: " + String.format(java.util.Locale.US, "%.1f", captionOffset) + " সেকেন্ড")
+                Slider(
+                    value = captionOffset,
+                    onValueChange = onCaptionOffsetChange,
+                    valueRange = -1.5f..1.5f,
+                    steps = 29,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("১.৫ সেকেন্ড আগে")
+                    Text("১.৫ সেকেন্ড পরে")
+                }
+            }
+        }
+
+        Card(Modifier.fillMaxWidth()) {
+            Column(
+                Modifier.fillMaxWidth().padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text("৪. সংরক্ষিত ফাইল ও গোপনীয়তা", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text(
                     if (hasSavedVoiceProfile) {
                         "নিজের কণ্ঠের নমুনা এই ফোনের অ্যাপ-স্টোরেজে সংরক্ষিত আছে।"
@@ -702,7 +760,7 @@ private fun SettingsScreen(
                 Modifier.fillMaxWidth().padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text("৪. মূল স্ক্রিনে ফেরা", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text("৫. মূল স্ক্রিনে ফেরা", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text(
                     "মূল স্ক্রিনে ফিরে বিষয়, স্ক্রিপ্ট, ভিডিও তৈরির বোতাম এবং সার্ভারের অবস্থা দেখতে পারবেন। ফোনের Back বোতাম চাপলেও সেটিংস থেকে মূল স্ক্রিনে ফিরবেন।",
                     style = MaterialTheme.typography.bodyMedium
