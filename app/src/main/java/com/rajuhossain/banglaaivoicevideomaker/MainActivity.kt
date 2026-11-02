@@ -489,7 +489,7 @@ private fun VideoMakerScreen() {
                     }
                 }
             },
-            modifier = Modifier.fillMaxWidth(), enabled = !running
+            modifier = Modifier.fillMaxWidth(), enabled = !running && !isRecording
         ) { Text(if (running) "ভিডিও তৈরি হচ্ছে" else "ভিডিও তৈরি করুন") }
 
         if (running) {
