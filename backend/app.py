@@ -278,22 +278,26 @@ def synthesize_cloned_voice(script: str, reference_audio: Path, folder: Path, pr
         audio_parts = []
         selected_providers = []
         for index, text_chunk in enumerate(chunks):
+            chunk_start_progress = 14 + int(16 * index / max(1, len(chunks)))
+            chunk_end_progress = 14 + int(16 * (index + 1) / max(1, len(chunks)))
+            provider_progress_base = min(chunk_end_progress - 1, chunk_start_progress + 1)
+            provider_progress_span = max(1, chunk_end_progress - provider_progress_base)
             print(f"VOICE_CLONE_CHUNK_START part={index + 1}/{len(chunks)} characters={len(text_chunk)}", flush=True)
             if progress_callback:
-                progress_callback(14 + int(13 * index / max(1, len(chunks))), f"নিজের কণ্ঠ তৈরি হচ্ছে: অংশ {index + 1}/{len(chunks)}।")
+                progress_callback(chunk_start_progress, f"নিজের কণ্ঠ তৈরি হচ্ছে: অংশ {index + 1}/{len(chunks)}।")
             if pure_english:
                 try:
                     candidate, provider = _clone_with_provider_fallback(
                         text_chunk, normalized, VOICE_CLONE_EN_SPACES, _clone_with_chatterbox,
                         "en", folder, f"clone-part-{index:03d}",
-                        progress_callback=progress_callback, progress_base=15, progress_span=6
+                        progress_callback=progress_callback, progress_base=provider_progress_base, progress_span=max(1, provider_progress_span // 2)
                     )
                 except Exception as english_error:
                     try:
                         candidate, provider = _clone_with_provider_fallback(
                             text_chunk, normalized, VOICE_CLONE_BN_SPACES, _clone_with_cosyvoice,
                             "en_fallback", folder, f"clone-part-{index:03d}",
-                            progress_callback=progress_callback, progress_base=22, progress_span=6
+                            progress_callback=progress_callback, progress_base=min(chunk_end_progress - 1, provider_progress_base + max(1, provider_progress_span // 2)), progress_span=max(1, provider_progress_span // 2)
                         )
                     except Exception:
                         raise english_error
@@ -301,12 +305,12 @@ def synthesize_cloned_voice(script: str, reference_audio: Path, folder: Path, pr
                 candidate, provider = _clone_with_provider_fallback(
                     text_chunk, normalized, VOICE_CLONE_BN_SPACES, _clone_with_cosyvoice,
                     "bn_or_mixed", folder, f"clone-part-{index:03d}",
-                    progress_callback=progress_callback, progress_base=15, progress_span=13
+                    progress_callback=progress_callback, progress_base=provider_progress_base, progress_span=provider_progress_span
                 )
             selected_providers.append(provider)
             print(f"VOICE_CLONE_CHUNK_OK part={index + 1}/{len(chunks)}", flush=True)
             if progress_callback:
-                progress_callback(12 + int(18 * (index + 1) / max(1, len(chunks))), f"নিজের কণ্ঠ তৈরি হচ্ছে: {index + 1}/{len(chunks)} অংশ সম্পন্ন হয়েছে।")
+                progress_callback(chunk_end_progress, f"নিজের কণ্ঠ তৈরি হচ্ছে: {index + 1}/{len(chunks)} অংশ সম্পন্ন হয়েছে।")
             part_wav = folder / f"clone-part-{index:03d}.wav"
             run(["ffmpeg", "-y", "-i", str(candidate), "-ac", "1", "-ar", "24000", "-c:a", "pcm_s16le", str(part_wav)], 120)
             if not part_wav.exists() or part_wav.stat().st_size < 100:
