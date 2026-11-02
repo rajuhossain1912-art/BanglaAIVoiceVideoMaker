@@ -359,7 +359,7 @@ private fun VideoMakerScreen() {
                 Icon(Icons.Filled.Settings, contentDescription = "সেটিংস")
             }
         }
-        Text("বাংলা, ইংরেজি বা মিশ্র লেখা থেকে ভিডিও তৈরি করুন। প্রথমে পদ্ধতি বেছে নিন, তারপর সেই পদ্ধতির প্রয়োজনীয় ইনপুট দিন।")
+
         OutlinedButton(
             onClick = { showSettings = true },
             modifier = Modifier.fillMaxWidth(),
@@ -389,7 +389,6 @@ private fun VideoMakerScreen() {
             label = { Text("ভিডিওর বিষয়") },
             placeholder = { Text("যেমন: প্রতিবন্ধীদের কর্মসংস্থান") },
             singleLine = true, enabled = !running && !isRecording,
-            supportingText = { Text("বিষয় লিখে নিচের বোতামে চাপলে সম্পাদনাযোগ্য খসড়া তৈরি হবে।") }
         )
         OutlinedButton(
             onClick = {
@@ -408,7 +407,6 @@ private fun VideoMakerScreen() {
             label = { Text(if (mode == "clone") "নিজের কণ্ঠে পড়ার লেখা (সর্বোচ্চ ৩০০০ অক্ষর)" else "বাংলা বা ইংরেজি লেখা") },
             placeholder = { Text("এখানে সম্পূর্ণ স্ক্রিপ্ট পেস্ট করুন") },
             minLines = 5, enabled = !running && !isRecording,
-            supportingText = { Text("সার্ভার লেখা গ্রহণ করে ভিডিও তৈরি করবে।") }
         )
         if (mode == "audio") {
             Card(Modifier.fillMaxWidth()) {
@@ -669,7 +667,6 @@ private fun VideoMakerScreen() {
                 })
             }
         }
-        Text("নিজের কণ্ঠের পরীক্ষামূলক সুবিধা বাহ্যিক ফ্রি ডেমোর ওপর নির্ভরশীল; সব সময় কাজ নাও করতে পারে।", style = MaterialTheme.typography.bodySmall)
     }
     }
 }
