@@ -280,13 +280,13 @@ def synthesize_cloned_voice(script: str, reference_audio: Path, folder: Path, pr
         for index, text_chunk in enumerate(chunks):
             print(f"VOICE_CLONE_CHUNK_START part={index + 1}/{len(chunks)} characters={len(text_chunk)}", flush=True)
             if progress_callback:
-                progress_callback(12 + int(18 * index / max(1, len(chunks))), f"নিজের কণ্ঠ তৈরি হচ্ছে: অংশ {index + 1}/{len(chunks)}। ফ্রি কণ্ঠসেবা থেকে উত্তর আসার অপেক্ষা চলছে।")
+                progress_callback(14 + int(13 * index / max(1, len(chunks))), f"নিজের কণ্ঠ তৈরি হচ্ছে: অংশ {index + 1}/{len(chunks)}।")
             if pure_english:
                 try:
                     candidate, provider = _clone_with_provider_fallback(
                         text_chunk, normalized, VOICE_CLONE_EN_SPACES, _clone_with_chatterbox,
                         "en", folder, f"clone-part-{index:03d}",
-                        progress_callback=progress_callback, progress_base=14, progress_span=7
+                        progress_callback=progress_callback, progress_base=15, progress_span=6
                     )
                 except Exception as english_error:
                     try:
@@ -301,7 +301,7 @@ def synthesize_cloned_voice(script: str, reference_audio: Path, folder: Path, pr
                 candidate, provider = _clone_with_provider_fallback(
                     text_chunk, normalized, VOICE_CLONE_BN_SPACES, _clone_with_cosyvoice,
                     "bn_or_mixed", folder, f"clone-part-{index:03d}",
-                    progress_callback=progress_callback, progress_base=14, progress_span=14
+                    progress_callback=progress_callback, progress_base=15, progress_span=13
                 )
             selected_providers.append(provider)
             print(f"VOICE_CLONE_CHUNK_OK part={index + 1}/{len(chunks)}", flush=True)
