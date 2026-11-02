@@ -138,6 +138,7 @@ private fun VideoMakerScreen() {
         val currentRecorder = recorder
         val target = recordingFile
         var saved = false
+        var tooShort = false
         try {
             currentRecorder?.stop()
             if (target != null && target.exists() && target.length() > 1000) {
@@ -149,9 +150,7 @@ private fun VideoMakerScreen() {
                     metadata.release()
                 }
                 saved = durationMs >= 10_000L
-                if (!saved) {
-                    status = "রেকর্ডিং অন্তত ১০ সেকেন্ড হতে হবে। ভালো ফলের জন্য ২০ থেকে ৩০ সেকেন্ড স্বাভাবিক স্বরে কথা বলুন।"
-                }
+                tooShort = !saved
             }
         } catch (_: Exception) {
             status = "রেকর্ডিং খুব ছোট হয়েছে বা সংরক্ষণ করা যায়নি। আবার ২০ থেকে ৩০ সেকেন্ড রেকর্ড করুন।"
@@ -174,7 +173,11 @@ private fun VideoMakerScreen() {
         } else {
             target?.delete()
             previewFile = null
-            status = "রেকর্ডিং পাওয়া যায়নি বা খুব ছোট হয়েছে। আবার ২০ থেকে ৩০ সেকেন্ড কথা বলে রেকর্ড করুন।"
+            status = if (tooShort) {
+                "রেকর্ডিং অন্তত ১০ সেকেন্ড হতে হবে। ভালো ফলের জন্য ২০ থেকে ৩০ সেকেন্ড স্বাভাবিক স্বরে কথা বলুন।"
+            } else {
+                "রেকর্ডিং পাওয়া যায়নি বা সংরক্ষণ করা যায়নি। আবার ২০ থেকে ৩০ সেকেন্ড কথা বলে রেকর্ড করুন।"
+            }
         }
     }
 
@@ -182,6 +185,16 @@ private fun VideoMakerScreen() {
         if (uri != null) {
             if (mode == "clone") {
                 try {
+                    val metadata = MediaMetadataRetriever()
+                    val durationMs = try {
+                        metadata.setDataSource(context, uri)
+                        metadata.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
+                    } finally {
+                        metadata.release()
+                    }
+                    require(durationMs >= 10_000L) {
+                        "অডিও নমুনা অন্তত ১০ সেকেন্ড হতে হবে। ভালো ফলের জন্য ২০ থেকে ৩০ সেকেন্ডের পরিষ্কার কণ্ঠ নির্বাচন করুন।"
+                    }
                     val profile = File(context.filesDir, "voice_profile_sample")
                     context.contentResolver.openInputStream(uri).use { input ->
                         requireNotNull(input) { "অডিও ফাইল খোলা যায়নি" }
@@ -192,7 +205,7 @@ private fun VideoMakerScreen() {
                     hasSavedVoiceProfile = true
                     status = "কণ্ঠের নমুনা শুধু এই ফোনের অ্যাপের ব্যক্তিগত স্টোরেজে সংরক্ষিত হয়েছে। ক্লোনিং চালালে সম্মতি দেওয়ার পর বাহ্যিক সার্ভারে পাঠানো হবে।"
                 } catch (e: Exception) {
-                    status = "কণ্ঠের নমুনা ফোনে সংরক্ষণ করা যায়নি।"
+                    status = e.message ?: "কণ্ঠের নমুনা ফোনে সংরক্ষণ করা যায়নি।"
                 }
             } else {
                 audioUri = uri
