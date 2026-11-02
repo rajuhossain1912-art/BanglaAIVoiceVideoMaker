@@ -860,9 +860,19 @@ def find_cloudflare_generated_image(script: str, folder: Path, model_visual_prom
 
 
 def find_generated_image(script: str, folder: Path, model_visual_prompt: Optional[str] = None):
-    """Try free public image-generation Spaces; licensed image search remains a fallback."""
+    """Try free public image-generation providers in the actual production order."""
     if not AI_IMAGE_GENERATION_ENABLED:
+        print("IMAGE_PROVIDER disabled=true", flush=True)
         return None, ""
+    # The first two stages are intentionally fixed: Cloudflare account allocation,
+    # then the no-account Pollinations endpoint. AI_IMAGE_PROVIDER_ORDER configures
+    # only the subsequent Hugging Face Spaces; it does not reorder these stages.
+    hf_order = ",".join(AI_IMAGE_PROVIDER_ORDER) or "default"
+    print(
+        "IMAGE_PROVIDER order=Cloudflare-Workers-AI-image-models>Pollinations-Flux>"
+        f"Hugging-Face-Spaces[{hf_order}]",
+        flush=True,
+    )
     # Prefer the configured Cloudflare image models first: recent production logs
     # showed Pollinations frequently returning HTTP 400/402 or timing out. This avoids
     # wasting the job's visual-generation time on a provider that is already unreliable.
