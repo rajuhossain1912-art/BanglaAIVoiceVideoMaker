@@ -72,12 +72,11 @@ private fun VideoMakerScreen() {
     var audioName by remember { mutableStateOf("") }
     var mode by remember { mutableStateOf("auto") }
     var cloneConsent by remember { mutableStateOf(false) }
-    var captionOffset by remember { mutableStateOf(0f) }
+    var captionOffset by remember { mutableStateOf(context.getSharedPreferences("video_settings", Context.MODE_PRIVATE).getFloat("caption_offset", 0f)) }
     var sceneInterval by remember { mutableStateOf(context.getSharedPreferences("video_settings", Context.MODE_PRIVATE).getInt("scene_interval", 3)) }
     var showSettings by remember { mutableStateOf(false) }
     var serverStatus by remember { mutableStateOf("সার্ভারের সংযোগ এখনো পরীক্ষা করা হয়নি।") }
     var serverCheckRunning by remember { mutableStateOf(false) }
-    var sceneIntervalMenu by remember { mutableStateOf(false) }
     var hasSavedVoiceProfile by remember { mutableStateOf(File(context.filesDir, "voice_profile_sample").exists()) }
     var isRecording by remember { mutableStateOf(false) }
     var recorder by remember { mutableStateOf<MediaRecorder?>(null) }
@@ -243,6 +242,11 @@ private fun VideoMakerScreen() {
     if (showSettings) {
         SettingsScreen(
             sceneInterval = sceneInterval,
+            captionOffset = captionOffset,
+            onCaptionOffsetChange = { seconds ->
+                captionOffset = seconds
+                context.getSharedPreferences("video_settings", Context.MODE_PRIVATE).edit().putFloat("caption_offset", seconds).apply()
+            },
             mode = mode,
             onModeChange = { selectedMode ->
                 mode = selectedMode
@@ -587,6 +591,8 @@ private fun VideoMakerScreen() {
 @Composable
 private fun SettingsScreen(
     sceneInterval: Int,
+    captionOffset: Float,
+    onCaptionOffsetChange: (Float) -> Unit,
     mode: String,
     onModeChange: (String) -> Unit,
     onSceneIntervalChange: (Int) -> Unit,
@@ -679,7 +685,32 @@ private fun SettingsScreen(
                 Modifier.fillMaxWidth().padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Text("৩. সংরক্ষিত ফাইল ও গোপনীয়তা", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text("৩. সাবটাইটেলের সময়", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text(
+                    "অডিওর তুলনায় সাবটাইটেল একটু আগে বা পরে দেখাতে চাইলে এই মান পরিবর্তন করুন। শূন্য মানে কোনো পরিবর্তন নয়।",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Text("বর্তমান সমন্বয়: " + String.format(java.util.Locale.US, "%.1f", captionOffset) + " সেকেন্ড")
+                Slider(
+                    value = captionOffset,
+                    onValueChange = onCaptionOffsetChange,
+                    valueRange = -1.5f..1.5f,
+                    steps = 29,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("১.৫ সেকেন্ড আগে")
+                    Text("১.৫ সেকেন্ড পরে")
+                }
+            }
+        }
+
+        Card(Modifier.fillMaxWidth()) {
+            Column(
+                Modifier.fillMaxWidth().padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text("৪. সংরক্ষিত ফাইল ও গোপনীয়তা", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text(
                     if (hasSavedVoiceProfile) {
                         "নিজের কণ্ঠের নমুনা এই ফোনের অ্যাপ-স্টোরেজে সংরক্ষিত আছে।"
@@ -725,7 +756,7 @@ private fun SettingsScreen(
                 Modifier.fillMaxWidth().padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text("৪. মূল স্ক্রিনে ফেরা", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text("৫. মূল স্ক্রিনে ফেরা", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text(
                     "মূল স্ক্রিনে ফিরে বিষয়, স্ক্রিপ্ট, ভিডিও তৈরির বোতাম এবং সার্ভারের অবস্থা দেখতে পারবেন। ফোনের Back বোতাম চাপলেও সেটিংস থেকে মূল স্ক্রিনে ফিরবেন।",
                     style = MaterialTheme.typography.bodyMedium
