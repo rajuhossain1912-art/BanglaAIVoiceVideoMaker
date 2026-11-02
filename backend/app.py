@@ -1271,7 +1271,7 @@ def _scene_images_too_similar(first: Path, second: Path) -> bool:
         return False
 
 
-def make_scene_backgrounds(script: str, folder: Path):
+def make_scene_backgrounds(script: str, folder: Path, progress_callback=None):
     """Keep every narration scene while sampling images to respect free-tier resource limits."""
     scenes = _split_script_into_scenes(script, max_scenes=None, target_words=8)
     try:
@@ -1286,9 +1286,14 @@ def make_scene_backgrounds(script: str, folder: Path):
         indices = sorted({round(i * (len(scenes) - 1) / (max_visual_scenes - 1)) for i in range(max_visual_scenes)})
         visual_scenes = [scenes[i] for i in indices]
     # Prompts are batched in groups of eight; every narration scene is retained for subtitles/timing.
+    if progress_callback:
+        progress_callback(35, "ভিডিওর প্রতিটি দৃশ্যের জন্য উপযুক্ত ছবি পরিকল্পনা করা হচ্ছে।")
     visual_prompts = _plan_scene_visual_prompts(visual_scenes)
     backgrounds = []
     for index, scene_text in enumerate(visual_scenes):
+        if progress_callback:
+            percent = 36 + int(4 * index / max(1, len(visual_scenes)))
+            progress_callback(percent, f"দৃশ্যের ছবি তৈরি হচ্ছে: {index + 1}/{len(visual_scenes)}। বিনামূল্যের ছবি সেবার উত্তর আসতে সময় লাগতে পারে।")
         scene_dir = folder / f"scene-{index:02d}"
         scene_dir.mkdir(parents=True, exist_ok=True)
         print(f"IMAGE_SCENE index={index + 1}/{len(scenes)} words={len(scene_text.split())}", flush=True)
@@ -1298,6 +1303,8 @@ def make_scene_backgrounds(script: str, folder: Path):
             background = make_background(scene_text, scene_dir, force_topic_graphic=True, variation_seed=index, scene_index=index + 1)
         backgrounds.append(background)
     print(f"IMAGE_SCENE unique_backgrounds={len(backgrounds)} total_narration_scenes={len(scenes)} visual_budget={max_visual_scenes}", flush=True)
+    if progress_callback:
+        progress_callback(40, f"{len(backgrounds)}টি দৃশ্যের ছবি প্রস্তুত হয়েছে।")
     return backgrounds, scenes
 
 def make_srt(script: str, duration: float, path: Path):
@@ -1636,7 +1643,12 @@ def render(job_id: str, script: str, mode: str, audio_path: Optional[Path], capt
             JOBS[job_id]["progress"] = 35
             JOBS[job_id]["message"] = "ভিডিওর পটভূমি ও সাবটাইটেল তৈরি হচ্ছে"
         print(f"VIDEO_STAGE job={job_id} stage=background_start", flush=True)
-        backgrounds, visual_scene_texts = make_scene_backgrounds(script, folder)
+        def update_visual_progress(progress, message):
+            with LOCK:
+                if job_id in JOBS and JOBS[job_id].get("status") == "processing":
+                    JOBS[job_id]["progress"] = max(JOBS[job_id].get("progress", 0), progress)
+                    JOBS[job_id]["message"] = message
+        backgrounds, visual_scene_texts = make_scene_backgrounds(script, folder, update_visual_progress)
         provider_order = ",".join(AI_IMAGE_PROVIDER_ORDER) or "none"
         licensed_fallback = "enabled" if ALLOW_LICENSED_IMAGE_FALLBACK else "disabled"
         print(
@@ -1652,7 +1664,7 @@ def render(job_id: str, script: str, mode: str, audio_path: Optional[Path], capt
         frame_list, frame_count = make_caption_frames(script, duration, backgrounds, folder, caption_offset, audio_path, job_id, scene_interval, visual_scene_texts)
         print(f"VIDEO_STAGE job={job_id} stage=subtitles_done frames={frame_count} method=pillow_word_highlight", flush=True)
         with LOCK:
-            JOBS[job_id]["progress"] = 45
+            JOBS[job_id]["progress"] = 49
             JOBS[job_id]["message"] = "শব্দের সঙ্গে মিলিয়ে সাবটাইটেল তৈরি হয়েছে"
         output = folder / "video.mp4"
         # Pre-rendered caption images avoid FFmpeg/libass memory spikes on Render Free.
@@ -1729,7 +1741,7 @@ def capabilities():
         "language_input": ["বাংলা", "English", "Banglish"],
         "video_generation": True,
         "scene_interval_seconds": [3, 5, 10, 15, 20],
-        "scene_interval_default_seconds": 5,
+        "scene_interval_default_seconds": 3,
         "scene_images": {
             "enabled": AI_IMAGE_GENERATION_ENABLED,
             "providers": [
@@ -1755,7 +1767,7 @@ def capabilities():
 
 
 @app.post("/api/jobs", status_code=202)
-async def create_job(script: str = Form(...), mode: str = Form("auto"), audio: Optional[UploadFile] = File(None), voice_clone_consent: bool = Form(False), caption_offset: float = Form(0.0), scene_interval: int = Form(5)):
+async def create_job(script: str = Form(...), mode: str = Form("auto"), audio: Optional[UploadFile] = File(None), voice_clone_consent: bool = Form(False), caption_offset: float = Form(0.0), scene_interval: int = Form(3)):
     script = script.strip()
     if not script:
         raise HTTPException(400, "আগে বাংলা বা ইংরেজি লেখা যোগ করুন।")
