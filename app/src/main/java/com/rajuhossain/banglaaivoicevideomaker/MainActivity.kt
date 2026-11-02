@@ -238,6 +238,7 @@ private fun VideoMakerScreen() {
     }
 
     BackHandler(enabled = showSettings) { showSettings = false }
+    BackHandler(enabled = isRecording && !showSettings) { stopVoiceRecording() }
 
     if (showSettings) {
         SettingsScreen(
@@ -279,7 +280,7 @@ private fun VideoMakerScreen() {
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Bangla AI Voice Video Maker", modifier = Modifier.weight(1f), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-            IconButton(onClick = { showSettings = true }, enabled = !running, modifier = Modifier.semantics { contentDescription = "সেটিংস খুলুন" }) {
+            IconButton(onClick = { showSettings = true }, enabled = !running, modifier = Modifier.semantics { contentDescription = "সেটিংস খুলুন" }, enabled = !running && !isRecording) {
                 Icon(Icons.Filled.Settings, contentDescription = "সেটিংস")
             }
         }
@@ -287,7 +288,7 @@ private fun VideoMakerScreen() {
         OutlinedButton(
             onClick = { showSettings = true },
             modifier = Modifier.fillMaxWidth(),
-            enabled = !running
+            enabled = !running && !isRecording
         ) {
             Text("ভিডিও পদ্ধতি: " + when (mode) {
                 "audio" -> "অডিও ভয়েস"
@@ -312,7 +313,7 @@ private fun VideoMakerScreen() {
             modifier = Modifier.fillMaxWidth(),
             label = { Text("ভিডিওর বিষয়") },
             placeholder = { Text("যেমন: প্রতিবন্ধীদের কর্মসংস্থান") },
-            singleLine = true, enabled = !running,
+            singleLine = true, enabled = !running && !isRecording,
             supportingText = { Text("বিষয় লিখে নিচের বোতামে চাপলে সম্পাদনাযোগ্য খসড়া তৈরি হবে।") }
         )
         OutlinedButton(
@@ -324,14 +325,14 @@ private fun VideoMakerScreen() {
                     status = "বিষয় থেকে প্রাথমিক খসড়া তৈরি হয়েছে। ভিডিও করার আগে পড়ে সম্পাদনা করুন। এটি বিনামূল্যের টেমপ্লেট, সম্পূর্ণ AI-লেখা নয়।"
                 }
             },
-            modifier = Modifier.fillMaxWidth(), enabled = !running
+            modifier = Modifier.fillMaxWidth(), enabled = !running && !isRecording
         ) { Text("বিষয় থেকে খসড়া তৈরি করুন") }
         OutlinedTextField(
             value = script, onValueChange = { script = it },
             modifier = Modifier.fillMaxWidth().height(210.dp),
             label = { Text(if (mode == "clone") "নিজের কণ্ঠে পড়ার লেখা (সর্বোচ্চ ৩০০০ অক্ষর)" else "বাংলা বা ইংরেজি লেখা") },
             placeholder = { Text("এখানে সম্পূর্ণ স্ক্রিপ্ট পেস্ট করুন") },
-            minLines = 5, enabled = !running,
+            minLines = 5, enabled = !running && !isRecording,
             supportingText = { Text("সার্ভার লেখা গ্রহণ করে ভিডিও তৈরি করবে।") }
         )
         if (mode == "audio") {
