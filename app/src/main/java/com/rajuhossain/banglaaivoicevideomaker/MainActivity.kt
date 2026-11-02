@@ -96,7 +96,7 @@ private fun VideoMakerScreen() {
     var autoStopTriggered by remember { mutableStateOf(false) }
     var recorder by remember { mutableStateOf<MediaRecorder?>(null) }
     var recordingFile by remember { mutableStateOf<File?>(null) }
-    var previewFile by remember { mutableStateOf<File?>(null) }
+    var previewFile by remember { mutableStateOf(File(context.cacheDir, "voice_recording_preview.m4a").takeIf { it.exists() && it.length() > 1000L }) }
     var previewPlayer by remember { mutableStateOf<MediaPlayer?>(null) }
     var previewPlaying by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf("অনলাইন সার্ভার যুক্ত হলে এখানে ভিডিও তৈরির অবস্থা দেখা যাবে।") }
