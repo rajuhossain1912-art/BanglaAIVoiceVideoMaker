@@ -15,6 +15,7 @@ import android.net.NetworkCapabilities
 import android.net.Uri
 import android.os.Bundle
 import android.os.Environment
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -79,6 +80,20 @@ private fun VideoMakerScreen() {
     var serverCheckRunning by remember { mutableStateOf(false) }
     var hasSavedVoiceProfile by remember { mutableStateOf(File(context.filesDir, "voice_profile_sample").exists()) }
     var isRecording by remember { mutableStateOf(false) }
+    DisposableEffect(isRecording) {
+        val window = (context as? ComponentActivity)?.window
+        if (isRecording) {
+            window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        } else {
+            window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+        onDispose {
+            window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+    }
+
+    var recordingStartedAt by remember { mutableLongStateOf(0L) }
+    var autoStopTriggered by remember { mutableStateOf(false) }
     var recorder by remember { mutableStateOf<MediaRecorder?>(null) }
     var recordingFile by remember { mutableStateOf<File?>(null) }
     var previewFile by remember { mutableStateOf<File?>(null) }
@@ -120,10 +135,12 @@ private fun VideoMakerScreen() {
             recorder = newRecorder
             recordingFile = target
             isRecording = true
+            recordingStartedAt = System.currentTimeMillis()
+            autoStopTriggered = false
             val tone = ToneGenerator(AudioManager.STREAM_MUSIC, 80)
             tone.startTone(ToneGenerator.TONE_PROP_BEEP, 250)
             scope.launch { delay(350); tone.release() }
-            status = "রেকর্ডিং শুরু হয়েছে। এখন শান্ত ঘরে স্বাভাবিক স্বরে ২০ থেকে ৩০ সেকেন্ড কথা বলুন। শেষ হলে রেকর্ড বন্ধ করুন।"
+            status = "রেকর্ডিং শুরু হয়েছে। শান্ত ঘরে স্বাভাবিক স্বরে কথা বলুন। সর্বোচ্চ ২ মিনিট পর অ্যাপ নিজে থেকেই রেকর্ড বন্ধ করবে। বন্ধ করার জন্য স্ক্রিনে চাপ দিতে হবে না।"
         } catch (e: Exception) {
             runCatching { recorder?.release() }
             recorder = null
@@ -161,6 +178,7 @@ private fun VideoMakerScreen() {
             recorder = null
             recordingFile = null
             isRecording = false
+            recordingStartedAt = 0L
         }
         if (saved && target != null) {
             previewFile = target
@@ -170,7 +188,7 @@ private fun VideoMakerScreen() {
             val tone = ToneGenerator(AudioManager.STREAM_MUSIC, 80)
             tone.startTone(ToneGenerator.TONE_PROP_ACK, 250)
             scope.launch { delay(350); tone.release() }
-            status = "রেকর্ডিং সম্পন্ন হয়েছে। এখন নিজের কণ্ঠ শুনে দেখুন। ভালো লাগলে কণ্ঠ সংরক্ষণ বোতাম চাপুন।"
+            status = if (autoStopTriggered) "নির্ধারিত ২ মিনিট শেষ হওয়ায় রেকর্ডিং স্বয়ংক্রিয়ভাবে বন্ধ হয়েছে। এখন নিজের কণ্ঠ শুনে দেখুন। ভালো লাগলে কণ্ঠ সংরক্ষণ করুন।" else "রেকর্ডিং সম্পন্ন হয়েছে। এখন নিজের কণ্ঠ শুনে দেখুন। ভালো লাগলে কণ্ঠ সংরক্ষণ বোতাম চাপুন।"
         } else {
             target?.delete()
             previewFile = null
@@ -178,6 +196,17 @@ private fun VideoMakerScreen() {
                 "রেকর্ডিং অন্তত ১০ সেকেন্ড হতে হবে। ভালো ফলের জন্য ২০ থেকে ৩০ সেকেন্ড স্বাভাবিক স্বরে কথা বলুন।"
             } else {
                 "রেকর্ডিং পাওয়া যায়নি বা সংরক্ষণ করা যায়নি। আবার ২০ থেকে ৩০ সেকেন্ড কথা বলে রেকর্ড করুন।"
+            }
+        }
+    }
+
+    LaunchedEffect(recordingStartedAt) {
+        val startedAt = recordingStartedAt
+        if (startedAt > 0L) {
+            delay(120_000L)
+            if (isRecording && recordingStartedAt == startedAt) {
+                autoStopTriggered = true
+                stopVoiceRecording()
             }
         }
     }
@@ -360,7 +389,7 @@ private fun VideoMakerScreen() {
             }
             if (previewFile == null && !isRecording) {
                 Text(
-                    "ভালো কণ্ঠের নমুনার জন্য শান্ত ঘরে ২০ থেকে ৩০ সেকেন্ড স্বাভাবিক স্বরে কথা বলুন। ফোন মুখ থেকে প্রায় এক হাত দূরে রাখুন। ফ্যান, গান বা অন্য মানুষের কথা যেন পেছনে না থাকে। নিজের স্বাভাবিক উচ্চারণ ও কথার গতি বজায় রাখুন; ফিসফিস বা চিৎকার করবেন না।",
+                    "ভালো কণ্ঠের নমুনার জন্য শান্ত ঘরে ২০ থেকে ১২০ সেকেন্ড স্বাভাবিক স্বরে কথা বলুন। সর্বোচ্চ ২ মিনিট হলে অ্যাপ নিজে থেকে রেকর্ড বন্ধ করবে। ফোন মুখ থেকে প্রায় এক হাত দূরে রাখুন। ফ্যান, গান বা অন্য মানুষের কথা যেন পেছনে না থাকে। নিজের স্বাভাবিক উচ্চারণ ও কথার গতি বজায় রাখুন; ফিসফিস বা চিৎকার করবেন না।",
                     style = MaterialTheme.typography.bodyMedium
                 )
             }
