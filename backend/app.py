@@ -42,7 +42,7 @@ try:
     MAX_ACTIVE_JOBS = max(1, min(4, int(os.getenv("MAX_ACTIVE_JOBS", "1"))))
 except (TypeError, ValueError):
     MAX_ACTIVE_JOBS = 1
-app = FastAPI(title="Bangla AI Voice Video Maker API", version="0.2.0")
+app = FastAPI(title="Bangla AI Voice Video Maker API", version="0.3.0")
 
 
 def _cleanup_expired_jobs(now=None):
