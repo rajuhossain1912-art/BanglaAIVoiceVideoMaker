@@ -58,6 +58,9 @@ class VoiceCloneUnitTests(unittest.TestCase):
                 return b""
 
             def fake_provider(*args, **kwargs):
+                callback = kwargs.get("progress_callback")
+                if callback:
+                    callback(kwargs.get("progress_base", 15), "ফ্রি কণ্ঠসেবা 1/1 চেষ্টা করা হচ্ছে।")
                 return candidate, "test-space"
 
             with patch.object(video_app, "VOICE_CLONE_ENABLED", True), \
