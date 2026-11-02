@@ -973,7 +973,7 @@ def find_generated_image(script: str, folder: Path, model_visual_prompt: Optiona
             executor.shutdown(wait=False, cancel_futures=True)
     return None, ""
 
-def make_background(script: str, folder: Path, model_visual_prompt: Optional[str] = None, force_topic_graphic: bool = False):
+def make_background(script: str, folder: Path, model_visual_prompt: Optional[str] = None, force_topic_graphic: bool = False, variation_seed: int = 0, scene_index: Optional[int] = None):
     # Small canvas is intentional: keep peak memory below Render Free's 512 MiB limit.
     width, height = 360, 640
     # When a provider repeats an earlier scene, use a topic-aware graphic instead of reusing one still image.
@@ -1028,6 +1028,7 @@ def make_background(script: str, folder: Path, model_visual_prompt: Optional[str
                         print(f"IMAGE_PROVIDER rejected_licensed_fallback error={type(fallback_exc).__name__}: {str(fallback_exc)[:100]}", flush=True)
                         source_image = None
     if not source_image:
+        print(f"IMAGE_SCENE_SOURCE index={scene_index if scene_index is not None else 'unknown'} source=topic_graphic" + (" reason=duplicate_image" if force_topic_graphic else " reason=provider_unavailable"), flush=True)
         # Distinct topic-aware vector fallback: never reuse the same generic blue card
         # for every scene when free image-generation providers are unavailable.
         image = Image.new("RGB", (width, height))
@@ -1055,6 +1056,14 @@ def make_background(script: str, folder: Path, model_visual_prompt: Optional[str
             seed = sum(ord(ch) for ch in text[:180])
             base_color = (35 + seed % 75, 45 + (seed // 3) % 75, 70 + (seed // 7) % 90)
             theme_name = "general"
+        # Shift the scene palette enough to remain visibly distinct while preserving
+        # the recognizable subject drawing for the selected topic.
+        palette_shift = max(0, int(variation_seed))
+        if palette_shift:
+            base_color = tuple(
+                max(0, min(255, channel + ((palette_shift * 83 + axis * 71) % 201) - 100))
+                for axis, channel in enumerate(base_color)
+            )
         for y in range(height):
             ratio = y / max(1, height - 1)
             color = tuple(max(0, min(255, int(channel * (0.72 + ratio * 0.48)))) for channel in base_color)
@@ -1129,7 +1138,7 @@ def make_background(script: str, folder: Path, model_visual_prompt: Optional[str
             draw.polygon([(0, 490), (95, 350), (170, 445), (265, 315), (360, 455), (360, 640), (0, 640)], fill=tuple(max(0, c-18) for c in base_color))
         # Add a deterministic, scene-specific visual accent so fallback scenes from the same
         # category do not collapse into identical still images.
-        scene_seed = sum((index + 1) * ord(ch) for index, ch in enumerate((script or "")[:240]))
+        scene_seed = sum((index + 1) * ord(ch) for index, ch in enumerate((script or "")[:240])) + (max(0, int(variation_seed)) * 7919)
         accent = (150 + scene_seed % 90, 130 + (scene_seed // 5) % 100, 100 + (scene_seed // 11) % 120)
         x1 = 28 + scene_seed % 210
         y1 = 70 + (scene_seed // 7) % 190
@@ -1243,10 +1252,10 @@ def make_scene_backgrounds(script: str, folder: Path):
         scene_dir = folder / f"scene-{index:02d}"
         scene_dir.mkdir(parents=True, exist_ok=True)
         print(f"IMAGE_SCENE index={index + 1}/{len(scenes)} words={len(scene_text.split())}", flush=True)
-        background = make_background(scene_text, scene_dir, visual_prompts[index] if visual_prompts else None)
+        background = make_background(scene_text, scene_dir, visual_prompts[index] if visual_prompts else None, variation_seed=index, scene_index=index + 1)
         if any(_scene_images_too_similar(background, prior) for prior in backgrounds):
             print(f"IMAGE_SCENE repeated_image index={index + 1} action=regenerate_topic_graphic", flush=True)
-            background = make_background(scene_text, scene_dir, force_topic_graphic=True)
+            background = make_background(scene_text, scene_dir, force_topic_graphic=True, variation_seed=index, scene_index=index + 1)
         backgrounds.append(background)
     print(f"IMAGE_SCENE unique_backgrounds={len(backgrounds)} total_narration_scenes={len(scenes)} visual_budget={max_visual_scenes}", flush=True)
     return backgrounds, scenes
