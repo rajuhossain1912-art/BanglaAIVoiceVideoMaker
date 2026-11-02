@@ -1216,7 +1216,7 @@ def _scene_images_too_similar(first: Path, second: Path) -> bool:
         if len(a) != len(b) or not a:
             return False
         difference = sum(abs(ac - bc) for ap, bp in zip(a, b) for ac, bc in zip(ap, bp)) / (len(a) * 3)
-        return difference < 5.0
+        return difference < 12.0
     except Exception as exc:
         print(f"IMAGE_SCENE compare_failed error={type(exc).__name__}", flush=True)
         return False
