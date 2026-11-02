@@ -90,8 +90,7 @@ class SceneImageSimilarityTests(unittest.TestCase):
                 "দ্বিতীয় দৃশ্যে সম্পূর্ণ নতুন আরেকটি বিষয় নিয়ে আলোচনা করা হয়েছে।  "
                 "তৃতীয় দৃশ্যে আরেকটি গুরুত্বপূর্ণ বিষয় তুলে ধরা হয়েছে।"
             )
-            with patch.object(video_app, "_plan_scene_visual_prompts", return_value=None), \\
-                 patch.object(video_app, "make_background", side_effect=fake_background):
+            with patch.object(video_app, "_plan_scene_visual_prompts", return_value=None) as _planner, patch.object(video_app, "make_background", side_effect=fake_background):
                 backgrounds, scenes = video_app.make_scene_backgrounds(
                     script, root,
                     progress_callback=lambda percent, message: progress.append((percent, message))
