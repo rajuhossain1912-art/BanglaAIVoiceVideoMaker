@@ -686,170 +686,152 @@ private fun SettingsScreen(
     onDeleteSavedFiles: () -> Unit,
     onBack: () -> Unit
 ) {
+    var expandedSection by remember { mutableStateOf("video") }
     var showDeleteConfirmation by remember { mutableStateOf(false) }
+
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Text("সেটিংস", modifier = Modifier.weight(1f), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-            TextButton(onClick = onBack) { Text("মূল স্ক্রিন") }
+            Text("সেটিংস", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            TextButton(onClick = onBack) { Text("ফিরে যান") }
         }
 
-        Text(
-            "ভিডিও তৈরি ও সংরক্ষণের পছন্দগুলো এখানে পরিবর্তন করুন।",
-            style = MaterialTheme.typography.bodyMedium
-        )
-
-        Card(Modifier.fillMaxWidth()) {
-            Column(
-                Modifier.fillMaxWidth().padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Text("১. ভিডিও তৈরির পদ্ধতি", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Text("যে পদ্ধতি বেছে নেবেন, মূল স্ক্রিনে ফিরে সেই পদ্ধতির প্রয়োজনীয় ইনপুট দেখা যাবে।", style = MaterialTheme.typography.bodyMedium)
-                HorizontalDivider()
-                listOf(
-                    "auto" to "স্বয়ংক্রিয় ভয়েস",
-                    "audio" to "অডিও ফাইলের ভয়েস",
-                    "clone" to "নিজের ভয়েস"
-                ).forEach { (value, label) ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth()
-                            .selectable(selected = mode == value, role = Role.RadioButton, onClick = { onModeChange(value) })
-                            .padding(vertical = 5.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        RadioButton(selected = mode == value, onClick = null)
-                        Spacer(Modifier.width(8.dp))
-                        Text(label, style = MaterialTheme.typography.bodyLarge)
-                    }
-                }
-            }
-        }
-
-        Card(Modifier.fillMaxWidth()) {
-            Column(
-                Modifier.fillMaxWidth().padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Text("২. ভিডিওর দৃশ্য", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Text(
-                    "ভিডিও চলার সময় কত সেকেন্ড পরপর ছবি বদলাবে তা বেছে নিন। ছোট সময়ে ছবি বেশি ঘন ঘন বদলাবে।",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-                HorizontalDivider()
-                listOf(3, 5, 10, 15, 20).forEach { seconds ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .selectable(
-                                selected = sceneInterval == seconds,
-                                role = Role.RadioButton,
-                                onClick = { onSceneIntervalChange(seconds) }
-                            )
-                            .padding(vertical = 5.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        RadioButton(selected = sceneInterval == seconds, onClick = null)
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            "প্রতি $seconds সেকেন্ডে ছবি পরিবর্তন",
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-                    }
-                }
-            }
-        }
-
-        Card(Modifier.fillMaxWidth()) {
-            Column(
-                Modifier.fillMaxWidth().padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Text("৩. সাবটাইটেলের সময়", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Text(
-                    "অডিওর তুলনায় সাবটাইটেল একটু আগে বা পরে দেখাতে চাইলে এই মান পরিবর্তন করুন। শূন্য মানে কোনো পরিবর্তন নয়।",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-                Text("বর্তমান সমন্বয়: " + String.format(java.util.Locale.US, "%.1f", captionOffset) + " সেকেন্ড")
-                Slider(
-                    value = captionOffset,
-                    onValueChange = onCaptionOffsetChange,
-                    valueRange = -1.5f..1.5f,
-                    steps = 29,
+        SettingsGroup(
+            title = "ভিডিও ও ভয়েস",
+            summary = "ভিডিও তৈরির পদ্ধতি নির্বাচন",
+            expanded = expandedSection == "video",
+            onToggle = { expandedSection = if (expandedSection == "video") "" else "video" }
+        ) {
+            listOf(
+                "auto" to "স্বয়ংক্রিয় ভয়েস",
+                "audio" to "নিজের অডিও",
+                "clone" to "নিজের কণ্ঠ"
+            ).forEach { (value, label) ->
+                Row(
                     modifier = Modifier.fillMaxWidth()
-                )
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("১.৫ সেকেন্ড আগে")
-                    Text("১.৫ সেকেন্ড পরে")
-                }
-            }
-        }
-
-        Card(Modifier.fillMaxWidth()) {
-            Column(
-                Modifier.fillMaxWidth().padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Text("৪. সংরক্ষিত ফাইল ও গোপনীয়তা", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Text(
-                    if (hasSavedVoiceProfile) {
-                        "নিজের কণ্ঠের নমুনা এই ফোনের অ্যাপ-স্টোরেজে সংরক্ষিত আছে।"
-                    } else {
-                        "নিজের কণ্ঠের কোনো সংরক্ষিত নমুনা পাওয়া যায়নি।"
-                    },
-                    style = MaterialTheme.typography.bodyMedium
-                )
-                Text(
-                    "নিচের বোতামটি নিজের কণ্ঠের নমুনা ও অস্থায়ী অ্যাপ ফাইল মুছবে। Downloads ফোল্ডারে ডাউনলোড করা ভিডিও মুছবে না।",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-                OutlinedButton(
-                    onClick = { showDeleteConfirmation = true },
-                    modifier = Modifier.fillMaxWidth()
+                        .selectable(selected = mode == value, role = Role.RadioButton, onClick = { onModeChange(value) })
+                        .padding(vertical = 7.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("কণ্ঠের নমুনা ও অস্থায়ী ফাইল মুছুন")
+                    RadioButton(selected = mode == value, onClick = null)
+                    Spacer(Modifier.width(10.dp))
+                    Text(label, style = MaterialTheme.typography.bodyLarge)
                 }
             }
+        }
+
+        SettingsGroup(
+            title = "ছবি ও সাবটাইটেল",
+            summary = "দৃশ্য পরিবর্তন ও লেখার সময়",
+            expanded = expandedSection == "visual",
+            onToggle = { expandedSection = if (expandedSection == "visual") "" else "visual" }
+        ) {
+            Text("কত সেকেন্ড পরপর ছবি বদলাবে")
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                listOf(3, 5, 10, 15, 20).forEach { seconds ->
+                    FilterChip(
+                        selected = sceneInterval == seconds,
+                        onClick = { onSceneIntervalChange(seconds) },
+                        label = { Text("${seconds}s") }
+                    )
+                }
+            }
+            HorizontalDivider()
+            Text("সাবটাইটেলের সময়: " + String.format(java.util.Locale.US, "%.1f", captionOffset) + " সেকেন্ড")
+            Slider(
+                value = captionOffset,
+                onValueChange = onCaptionOffsetChange,
+                valueRange = -1.5f..1.5f,
+                steps = 29,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("১.৫ সেকেন্ড আগে")
+                Text("১.৫ সেকেন্ড পরে")
+            }
+            TextButton(onClick = { onCaptionOffsetChange(0f) }) { Text("সময় আগের অবস্থায় ফেরান") }
+        }
+
+        SettingsGroup(
+            title = "সংরক্ষিত কণ্ঠ",
+            summary = if (hasSavedVoiceProfile) "কণ্ঠ ফোনে সংরক্ষিত আছে" else "কোনো কণ্ঠ সংরক্ষিত নেই",
+            expanded = expandedSection == "voice",
+            onToggle = { expandedSection = if (expandedSection == "voice") "" else "voice" }
+        ) {
+            Text(
+                if (hasSavedVoiceProfile) "আপনার কণ্ঠের নমুনা এই ফোনের ব্যক্তিগত অ্যাপ-স্টোরেজে আছে।"
+                else "রেকর্ড করা কণ্ঠ সংরক্ষণ করলে এখানে দেখা যাবে।"
+            )
+            OutlinedButton(
+                onClick = { showDeleteConfirmation = true },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = hasSavedVoiceProfile
+            ) { Text("সংরক্ষিত কণ্ঠ মুছুন") }
+        }
+
+        SettingsGroup(
+            title = "স্ক্রিন বন্ধ থাকলেও কাজ",
+            summary = "ভিডিও তৈরি চলাকালে ব্যাকগ্রাউন্ডে কাজ চালু থাকবে",
+            expanded = expandedSection == "background",
+            onToggle = { expandedSection = if (expandedSection == "background") "" else "background" }
+        ) {
+            Text("ভিডিও তৈরি শুরু হলে চলমান বিজ্ঞপ্তি ও CPU চালু রাখার ব্যবস্থা ব্যবহার হবে। তাই স্ক্রিন বন্ধ করলেও ভিডিও তৈরির কাজ চলতে থাকবে।")
+            Text("ফোনের ব্যাটারি সেভার বা নির্মাতার ব্যাকগ্রাউন্ড সীমাবদ্ধতা অতিরিক্ত বাধা দিতে পারে।")
         }
 
         if (showDeleteConfirmation) {
             AlertDialog(
                 onDismissRequest = { showDeleteConfirmation = false },
-                title = { Text("নিজের কণ্ঠের নমুনা মুছবেন?") },
-                text = {
-                    Text("এই কাজ করলে ফোনে সংরক্ষিত নিজের কণ্ঠের নমুনা এবং অস্থায়ী অ্যাপ ফাইল মুছে যাবে। পরে নিজের কণ্ঠ ব্যবহার করতে চাইলে আবার রেকর্ড করতে হবে। ডাউনলোড করা ভিডিও মুছবে না।")
-                },
+                title = { Text("সংরক্ষিত কণ্ঠ মুছবেন?") },
+                text = { Text("এই ফোনে রাখা নিজের কণ্ঠের নমুনা মুছে যাবে। ডাউনলোড করা ভিডিও মুছবে না।") },
                 confirmButton = {
                     TextButton(onClick = {
                         showDeleteConfirmation = false
                         onDeleteSavedFiles()
-                    }) { Text("হ্যাঁ, মুছে ফেলুন") }
+                    }) { Text("মুছে ফেলুন") }
                 },
                 dismissButton = {
-                    TextButton(onClick = { showDeleteConfirmation = false }) { Text("না, রেখে দিন") }
+                    TextButton(onClick = { showDeleteConfirmation = false }) { Text("বাতিল") }
                 }
             )
         }
+    }
+}
 
-        Card(Modifier.fillMaxWidth()) {
-            Column(
-                Modifier.fillMaxWidth().padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Text("৫. মূল স্ক্রিনে ফেরা", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Text(
-                    "মূল স্ক্রিনে ফিরে বিষয়, স্ক্রিপ্ট, ভিডিও তৈরির বোতাম এবং সার্ভারের অবস্থা দেখতে পারবেন। ফোনের Back বোতাম চাপলেও সেটিংস থেকে মূল স্ক্রিনে ফিরবেন।",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-                Button(onClick = onBack, modifier = Modifier.fillMaxWidth()) {
-                    Text("মূল স্ক্রিনে ফিরে যান")
+@Composable
+private fun SettingsGroup(
+    title: String,
+    summary: String,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.fillMaxWidth().padding(14.dp)) {
+            TextButton(onClick = onToggle, modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    Text(if (expanded) "বন্ধ করতে চাপুন" else summary, style = MaterialTheme.typography.bodySmall)
                 }
+            }
+            if (expanded) {
+                HorizontalDivider()
+                Spacer(Modifier.height(10.dp))
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    content = content
+                )
             }
         }
     }
