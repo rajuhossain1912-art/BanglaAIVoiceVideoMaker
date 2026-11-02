@@ -1,6 +1,7 @@
 import contextlib
 import io
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -103,8 +104,38 @@ class SceneImageSimilarityTests(unittest.TestCase):
             self.assertEqual(values[-1], 40)
             self.assertIn("দৃশ্যের ছবি তৈরি হচ্ছে", " ".join(item[1] for item in progress))
 
-    def test_capabilities_scene_interval_default_matches_android_default(self):
-        self.assertEqual(video_app.capabilities()["scene_interval_default_seconds"], 3)
+    def test_capabilities_match_android_defaults_and_free_service_limits(self):
+        capabilities = video_app.capabilities()
+        self.assertEqual(capabilities["scene_interval_default_seconds"], 3)
+        self.assertEqual(capabilities["max_concurrent_jobs"], 1)
+        self.assertGreaterEqual(capabilities["job_retention_hours"], 1)
+
+    def test_expired_terminal_job_and_folder_are_removed(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            expired_id = "expired-job"
+            expired_folder = root / expired_id
+            expired_folder.mkdir()
+            (expired_folder / "video.mp4").write_bytes(b"old video")
+            now = time.time()
+            previous_jobs = dict(video_app.JOBS)
+            try:
+                with patch.object(video_app, "WORK_DIR", root), patch.object(video_app, "JOB_RETENTION_SECONDS", 3600):
+                    with video_app.LOCK:
+                        video_app.JOBS.clear()
+                        video_app.JOBS[expired_id] = {
+                            "id": expired_id,
+                            "status": "completed",
+                            "created_at": now - 7200,
+                            "completed_at": now - 7200,
+                        }
+                    video_app._cleanup_expired_jobs(now=now)
+                    self.assertNotIn(expired_id, video_app.JOBS)
+                    self.assertFalse(expired_folder.exists())
+            finally:
+                with video_app.LOCK:
+                    video_app.JOBS.clear()
+                    video_app.JOBS.update(previous_jobs)
 
     def test_logs_ai_generated_source_and_provider_for_scene(self):
         with tempfile.TemporaryDirectory() as temp_dir:
