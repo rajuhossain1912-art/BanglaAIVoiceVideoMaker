@@ -121,7 +121,7 @@ private fun VideoMakerScreen() {
             val tone = ToneGenerator(AudioManager.STREAM_MUSIC, 80)
             tone.startTone(ToneGenerator.TONE_PROP_BEEP, 250)
             scope.launch { delay(350); tone.release() }
-            status = "রেকর্ডিং শুরু হয়েছে। এখন স্বাভাবিকভাবে ১০ থেকে ৩০ সেকেন্ড কথা বলুন। শেষ হলে রেকর্ড বন্ধ করুন।"
+            status = "রেকর্ডিং শুরু হয়েছে। এখন শান্ত ঘরে স্বাভাবিক স্বরে ২০ থেকে ৩০ সেকেন্ড কথা বলুন। শেষ হলে রেকর্ড বন্ধ করুন।"
         } catch (e: Exception) {
             runCatching { recorder?.release() }
             recorder = null
@@ -141,7 +141,7 @@ private fun VideoMakerScreen() {
             currentRecorder?.stop()
             saved = target != null && target.exists() && target.length() > 1000
         } catch (_: Exception) {
-            status = "রেকর্ডিং খুব ছোট হয়েছে বা সংরক্ষণ করা যায়নি। আবার ১০ থেকে ৩০ সেকেন্ড রেকর্ড করুন।"
+            status = "রেকর্ডিং খুব ছোট হয়েছে বা সংরক্ষণ করা যায়নি। আবার ২০ থেকে ৩০ সেকেন্ড রেকর্ড করুন।"
         } finally {
             runCatching { currentRecorder?.reset() }
             runCatching { currentRecorder?.release() }
@@ -161,7 +161,7 @@ private fun VideoMakerScreen() {
         } else {
             target?.delete()
             previewFile = null
-            status = "রেকর্ডিং পাওয়া যায়নি বা খুব ছোট হয়েছে। আবার ১০ থেকে ৩০ সেকেন্ড কথা বলে রেকর্ড করুন।"
+            status = "রেকর্ডিং পাওয়া যায়নি বা খুব ছোট হয়েছে। আবার ২০ থেকে ৩০ সেকেন্ড কথা বলে রেকর্ড করুন।"
         }
     }
 
@@ -304,6 +304,12 @@ private fun VideoMakerScreen() {
                 enabled = !running
             ) {
                 Text(if (isRecording) "রেকর্ডিং বন্ধ করুন" else "নিজের কণ্ঠ রেকর্ড করুন")
+            }
+            if (previewFile == null && !isRecording) {
+                Text(
+                    "ভালো কণ্ঠের নমুনার জন্য শান্ত ঘরে ২০ থেকে ৩০ সেকেন্ড স্বাভাবিক স্বরে কথা বলুন। ফোন মুখ থেকে প্রায় এক হাত দূরে রাখুন। ফ্যান, গান বা অন্য মানুষের কথা যেন পেছনে না থাকে। নিজের স্বাভাবিক উচ্চারণ ও কথার গতি বজায় রাখুন; ফিসফিস বা চিৎকার করবেন না।",
+                    style = MaterialTheme.typography.bodyMedium
+                )
             }
             if (previewFile != null && !isRecording) {
                 OutlinedButton(onClick = {
