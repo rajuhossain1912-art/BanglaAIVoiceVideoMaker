@@ -77,6 +77,7 @@ Known limitations that must remain visible to users:
 - Word highlight timing is estimated from sentence duration and silence detection, not a true forced-alignment model. Technical reports do not verify spoken words or caption spelling.
 - AI images may be irrelevant or repetitive despite prompt planning and similarity checks. Topic graphics are a fallback, not photographic images.
 - A separate title-card builder, animated scene transitions and a dedicated in-app social sharing flow are not yet implemented; the completed MP4 can be saved through Android's Downloads manager.
+- The GitHub Releases APK is a debug build for direct device testing, not a production-signed Play Store package.
 - Job state is held in process memory and files in temporary storage. The free backend accepts one active video job at a time and removes completed/failed job folders after the configured retention window (24 hours by default). Render restarts can still make active jobs or recent downloads unavailable.
 - The free Render service can sleep and has limited CPU/RAM. Long scripts, external image providers and cloning services can be slow or fail.
 - There is no guaranteed unlimited service, no paid provider is enabled, and no external provider's privacy behavior is represented as controlled by this app.
