@@ -84,6 +84,7 @@ private fun VideoMakerScreen() {
     var cloneConsent by remember { mutableStateOf(false) }
     var captionOffset by remember { mutableStateOf(context.getSharedPreferences("video_settings", Context.MODE_PRIVATE).getFloat("caption_offset", 0f)) }
     var sceneInterval by remember { mutableStateOf(context.getSharedPreferences("video_settings", Context.MODE_PRIVATE).getInt("scene_interval", 3)) }
+    var announceProgress by remember { mutableStateOf(context.getSharedPreferences("video_settings", Context.MODE_PRIVATE).getBoolean("announce_progress", true)) }
     var showSettings by remember { mutableStateOf(false) }
     var serverStatus by remember { mutableStateOf("সার্ভারের সংযোগ এখনো পরীক্ষা করা হয়নি।") }
     var serverCheckRunning by remember { mutableStateOf(false) }
@@ -319,6 +320,11 @@ private fun VideoMakerScreen() {
         SettingsScreen(
             sceneInterval = sceneInterval,
             captionOffset = captionOffset,
+            announceProgress = announceProgress,
+            onAnnounceProgressChange = { enabled ->
+                announceProgress = enabled
+                context.getSharedPreferences("video_settings", Context.MODE_PRIVATE).edit().putBoolean("announce_progress", enabled).apply()
+            },
             onCaptionOffsetChange = { seconds ->
                 captionOffset = seconds
                 context.getSharedPreferences("video_settings", Context.MODE_PRIVATE).edit().putFloat("caption_offset", seconds).apply()
@@ -575,7 +581,7 @@ private fun VideoMakerScreen() {
         if (running) {
             Row(
                 modifier = Modifier.semantics {
-                    liveRegion = LiveRegionMode.Polite
+                    if (announceProgress) liveRegion = LiveRegionMode.Polite
                     contentDescription = "ভিডিও তৈরির অগ্রগতি $progress শতাংশ"
                 },
                 verticalAlignment = Alignment.CenterVertically,
@@ -662,7 +668,7 @@ private fun VideoMakerScreen() {
                     Text(if (serverCheckRunning) "সার্ভার পরীক্ষা চলছে" else "সার্ভার সংযোগ পরীক্ষা ও আপডেট")
                 }
                 Text(status, modifier = Modifier.semantics {
-                    liveRegion = LiveRegionMode.Polite
+                    if (announceProgress) liveRegion = LiveRegionMode.Polite
                     contentDescription = "ভিডিও তৈরির বর্তমান অবস্থা: " + status
                 })
             }
@@ -675,6 +681,8 @@ private fun VideoMakerScreen() {
 private fun SettingsScreen(
     sceneInterval: Int,
     captionOffset: Float,
+    announceProgress: Boolean,
+    onAnnounceProgressChange: (Boolean) -> Unit,
     onCaptionOffsetChange: (Float) -> Unit,
     mode: String,
     onModeChange: (String) -> Unit,
@@ -774,6 +782,25 @@ private fun SettingsScreen(
                 modifier = Modifier.fillMaxWidth(),
                 enabled = hasSavedVoiceProfile
             ) { Text("সংরক্ষিত কণ্ঠ মুছুন") }
+        }
+
+        SettingsGroup(
+            title = "অ্যাক্সেসিবিলিটি",
+            summary = if (announceProgress) "TalkBack-এ কাজের অগ্রগতি জানানো চালু" else "কাজের অগ্রগতি ঘোষণা বন্ধ",
+            expanded = expandedSection == "accessibility",
+            onToggle = { expandedSection = if (expandedSection == "accessibility") "" else "accessibility" }
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text("TalkBack-এ অগ্রগতি জানানো")
+                    Text("ভিডিও তৈরি ও শেষ হওয়ার খবর কণ্ঠে শোনাবে।", style = MaterialTheme.typography.bodySmall)
+                }
+                Switch(checked = announceProgress, onCheckedChange = onAnnounceProgressChange)
+            }
         }
 
         SettingsGroup(
