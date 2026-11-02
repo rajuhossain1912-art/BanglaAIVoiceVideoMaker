@@ -66,7 +66,7 @@ Implemented and covered by automated checks:
 - Text-only Bangla, English and mixed-language video generation; supplied-audio video generation; experimental own-voice recording, local sample storage, preview, explicit consent and remote voice-clone attempts.
 - Free-provider voice-clone fallback: Bengali CosyVoice3 for Bangla/mixed text and Chatterbox first for English, with CosyVoice3 fallback. Provider runtime success and voice similarity are not guaranteed.
 - Scene-level visual planning through optional Cloudflare Workers AI, AI-image provider fallback, licensed-image fallback and topic-graphic fallback. Up to 32 representative visual backgrounds are generated for long scripts.
-- 3, 5, 10, 15 and 20-second scene intervals; vertical MP4 rendering; automatic pan/zoom; per-word caption highlighting with estimated word timing.
+- 3, 5, 10, 15 and 20-second scene intervals; persistent subtitle timing adjustment from -1.5 to +1.5 seconds; vertical MP4 rendering; automatic pan/zoom; per-word caption highlighting with estimated word timing.
 - Technical MP4 report, download endpoint, Bangla status messages and TalkBack progress announcements.
 - Main-screen/settings navigation, including Android Back handling, and local deletion of the saved voice sample.
 - GitHub Actions backend end-to-end smoke checks and Android APK build/release.
@@ -76,6 +76,7 @@ Known limitations that must remain visible to users:
 - Mixed-language cloned speech uses the Bengali provider whenever Bengali characters occur; consistent pronunciation and same-speaker similarity across Bangla and English are not guaranteed.
 - Word highlight timing is estimated from sentence duration and silence detection, not a true forced-alignment model. Technical reports do not verify spoken words or caption spelling.
 - AI images may be irrelevant or repetitive despite prompt planning and similarity checks. Topic graphics are a fallback, not photographic images.
+- A separate title-card builder, animated scene transitions and a dedicated in-app social sharing flow are not yet implemented; the completed MP4 can be saved through Android's Downloads manager.
 - Job state is held in process memory and files in temporary storage. The free backend accepts one active video job at a time and removes completed/failed job folders after the configured retention window (24 hours by default). Render restarts can still make active jobs or recent downloads unavailable.
 - The free Render service can sleep and has limited CPU/RAM. Long scripts, external image providers and cloning services can be slow or fail.
 - There is no guaranteed unlimited service, no paid provider is enabled, and no external provider's privacy behavior is represented as controlled by this app.
