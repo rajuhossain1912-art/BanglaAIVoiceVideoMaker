@@ -377,8 +377,29 @@ private fun VideoMakerScreen() {
                     try {
                         val source = previewFile ?: error("রেকর্ডিং পাওয়া যায়নি")
                         val profile = File(context.filesDir, "voice_profile_sample")
-                        source.inputStream().use { input -> profile.outputStream().use { output -> input.copyTo(output) } }
-                        require(profile.length() > 1000)
+                        val pendingProfile = File(context.filesDir, "voice_profile_sample.pending")
+                        val backupProfile = File(context.filesDir, "voice_profile_sample.backup")
+                        pendingProfile.delete()
+                        backupProfile.delete()
+                        try {
+                            source.inputStream().use { input ->
+                                pendingProfile.outputStream().use { output -> input.copyTo(output) }
+                            }
+                            require(pendingProfile.exists() && pendingProfile.length() > 1000L) {
+                                "রেকর্ড করা অডিও খালি বা অসম্পূর্ণ। আবার রেকর্ড করুন।"
+                            }
+                            val hadPreviousProfile = profile.exists()
+                            if (hadPreviousProfile && !profile.renameTo(backupProfile)) {
+                                error("আগের কণ্ঠের নমুনা নিরাপদ রাখা যায়নি।")
+                            }
+                            if (!pendingProfile.renameTo(profile)) {
+                                if (hadPreviousProfile) backupProfile.renameTo(profile)
+                                error("নতুন কণ্ঠের নমুনা সংরক্ষণ করা যায়নি। আগের নমুনা অক্ষত রাখা হয়েছে।")
+                            }
+                            backupProfile.delete()
+                        } finally {
+                            pendingProfile.delete()
+                        }
                         audioUri = Uri.fromFile(profile)
                         audioName = "ফোনে সংরক্ষিত নিজের কণ্ঠের নমুনা"
                         hasSavedVoiceProfile = true
