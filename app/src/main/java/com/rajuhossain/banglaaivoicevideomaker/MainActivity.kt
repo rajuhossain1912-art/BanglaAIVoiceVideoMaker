@@ -495,7 +495,7 @@ private fun VideoMakerScreen() {
             Row(
                 modifier = Modifier.semantics {
                     liveRegion = LiveRegionMode.Polite
-                    contentDescription = "ভিডিও তৈরির অগ্রগতি $progress শতাংশ। $status"
+                    contentDescription = "ভিডিও তৈরির অগ্রগতি $progress শতাংশ"
                 },
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -556,7 +556,10 @@ private fun VideoMakerScreen() {
             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("বর্তমান অবস্থা", fontWeight = FontWeight.SemiBold)
                 Text(if (online) "ফোনের ইন্টারনেট: সংযুক্ত" else "ফোনের ইন্টারনেট: সংযোগ নেই")
-                Text(serverStatus, modifier = Modifier.semantics { contentDescription = "অনলাইন সার্ভারের অবস্থা: " + serverStatus })
+                Text(serverStatus, modifier = Modifier.semantics {
+                    liveRegion = LiveRegionMode.Polite
+                    contentDescription = "অনলাইন সার্ভারের অবস্থা: " + serverStatus
+                })
                 OutlinedButton(onClick = {
                     online = isInternetAvailable(context)
                     serverCheckRunning = true
