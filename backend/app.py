@@ -34,7 +34,50 @@ MAX_SCRIPT_CHARS = int(os.getenv("MAX_SCRIPT_CHARS", "50000"))
 MAX_AUDIO_MB = int(os.getenv("MAX_AUDIO_MB", "40"))
 JOBS = {}
 LOCK = threading.Lock()
+try:
+    JOB_RETENTION_SECONDS = max(3600, int(os.getenv("JOB_RETENTION_SECONDS", "86400")))
+except (TypeError, ValueError):
+    JOB_RETENTION_SECONDS = 86400
+try:
+    MAX_ACTIVE_JOBS = max(1, min(4, int(os.getenv("MAX_ACTIVE_JOBS", "1"))))
+except (TypeError, ValueError):
+    MAX_ACTIVE_JOBS = 1
 app = FastAPI(title="Bangla AI Voice Video Maker API", version="0.2.0")
+
+
+def _cleanup_expired_jobs(now=None):
+    """Remove terminal jobs after the retention window and old orphaned job folders."""
+    current_time = time.time() if now is None else float(now)
+    expired_before = current_time - JOB_RETENTION_SECONDS
+    expired_ids = []
+    with LOCK:
+        for job_id, job in list(JOBS.items()):
+            if job.get("status") not in ("completed", "failed"):
+                continue
+            finished_at = job.get("completed_at", job.get("created_at", current_time))
+            try:
+                is_expired = float(finished_at) < expired_before
+            except (TypeError, ValueError):
+                is_expired = False
+            if is_expired:
+                expired_ids.append(job_id)
+                JOBS.pop(job_id, None)
+        active_ids = set(JOBS)
+    for job_id in expired_ids:
+        shutil.rmtree(WORK_DIR / job_id, ignore_errors=True)
+    # A process restart clears in-memory JOBS. Remove only folders older than the
+    # same retention window, never folders belonging to active in-memory jobs.
+    try:
+        for folder in WORK_DIR.iterdir():
+            if not folder.is_dir() or folder.name in active_ids:
+                continue
+            try:
+                if current_time - folder.stat().st_mtime > JOB_RETENTION_SECONDS:
+                    shutil.rmtree(folder, ignore_errors=True)
+            except OSError:
+                continue
+    except OSError:
+        pass
 
 
 def run(cmd, timeout=240):
