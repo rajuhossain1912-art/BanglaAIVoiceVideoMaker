@@ -1,6 +1,9 @@
+import contextlib
+import io
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from PIL import Image
 
@@ -67,6 +70,54 @@ class SceneImageSimilarityTests(unittest.TestCase):
                 force_topic_graphic=True, variation_seed=4
             )
             self.assertTrue(video_app._scene_images_too_similar(first, second))
+
+    def test_logs_ai_generated_source_and_provider_for_scene(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            folder = Path(temp_dir)
+            generated = self._image(folder, "generated.png", (120, 150, 180))
+            output = io.StringIO()
+            with patch.object(video_app, "find_generated_image", return_value=(
+                generated, "AI-generated with test-provider"
+            )), contextlib.redirect_stdout(output):
+                video_app.make_background(
+                    "বাংলাদেশের ট্রেন", folder, scene_index=3
+                )
+            self.assertIn(
+                "IMAGE_SCENE_SOURCE index=3 source=ai_generated provider=test-provider",
+                output.getvalue()
+            )
+
+    def test_logs_licensed_contextual_source_when_ai_unavailable(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            folder = Path(temp_dir)
+            licensed = self._image(folder, "licensed.png", (130, 160, 190))
+            output = io.StringIO()
+            with patch.object(video_app, "find_generated_image", return_value=(None, "")), \
+                 patch.object(video_app, "ALLOW_LICENSED_IMAGE_FALLBACK", True), \
+                 patch.object(video_app, "find_contextual_image", return_value=(
+                     licensed, "CC BY contextual image"
+                 )), contextlib.redirect_stdout(output):
+                video_app.make_background(
+                    "বাংলাদেশের ট্রেন", folder, scene_index=4
+                )
+            self.assertIn(
+                "IMAGE_SCENE_SOURCE index=4 source=licensed_contextual provider=openverse_or_wikimedia",
+                output.getvalue()
+            )
+
+    def test_logs_topic_graphic_source_for_duplicate_scene(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            folder = Path(temp_dir)
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                video_app.make_background(
+                    "বাংলাদেশের ট্রেন", folder,
+                    force_topic_graphic=True, scene_index=5
+                )
+            self.assertIn(
+                "IMAGE_SCENE_SOURCE index=5 source=topic_graphic reason=duplicate_image",
+                output.getvalue()
+            )
 
 
 if __name__ == "__main__":
