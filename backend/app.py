@@ -976,14 +976,24 @@ def find_generated_image(script: str, folder: Path, model_visual_prompt: Optiona
 def make_background(script: str, folder: Path, model_visual_prompt: Optional[str] = None, force_topic_graphic: bool = False, variation_seed: int = 0, scene_index: Optional[int] = None):
     # Small canvas is intentional: keep peak memory below Render Free's 512 MiB limit.
     width, height = 360, 640
+    # Track the final source for this scene separately from provider-level attempt logs.
+    scene_source = "topic_graphic" if force_topic_graphic else "unknown"
+    scene_provider = ""
     # When a provider repeats an earlier scene, use a topic-aware graphic instead of reusing one still image.
     if force_topic_graphic:
         source_image, credit = None, ""
         print("IMAGE_PROVIDER fallback=topic_graphic reason=duplicate_scene_image", flush=True)
     else:
         source_image, credit = find_generated_image(script, folder, model_visual_prompt)
+        if source_image:
+            scene_source = "ai_generated"
+            match = re.search(r"AI-generated with ([A-Za-z0-9_.-]+)", str(credit or ""))
+            scene_provider = match.group(1)[:48] if match else "provider_unspecified"
         if not source_image and ALLOW_LICENSED_IMAGE_FALLBACK:
             source_image, credit = find_contextual_image(script, folder)
+            if source_image:
+                scene_source = "licensed_contextual"
+                scene_provider = "openverse_or_wikimedia"
         elif not source_image:
             print("IMAGE_PROVIDER all_ai_models_failed licensed_fallback=disabled", flush=True)
     if source_image:
@@ -1023,12 +1033,19 @@ def make_background(script: str, folder: Path, model_visual_prompt: Optional[str
                         fallback_overlay = Image.new("RGBA", (width, height), (3, 13, 28, 25))
                         image = Image.alpha_composite(fallback_render.convert("RGBA"), fallback_overlay).convert("RGB")
                         source_image, credit = fallback_image, fallback_credit
+                        scene_source = "licensed_contextual_after_rejected_ai"
+                        scene_provider = "openverse_or_wikimedia"
                         print("IMAGE_PROVIDER selected=licensed_fallback_after_rejected_ai", flush=True)
                     except Exception as fallback_exc:
                         print(f"IMAGE_PROVIDER rejected_licensed_fallback error={type(fallback_exc).__name__}: {str(fallback_exc)[:100]}", flush=True)
                         source_image = None
     if not source_image:
+        scene_source = "topic_graphic"
+        scene_provider = ""
         print(f"IMAGE_SCENE_SOURCE index={scene_index if scene_index is not None else 'unknown'} source=topic_graphic" + (" reason=duplicate_image" if force_topic_graphic else " reason=provider_unavailable"), flush=True)
+    else:
+        provider_field = f" provider={scene_provider}" if scene_provider else ""
+        print(f"IMAGE_SCENE_SOURCE index={scene_index if scene_index is not None else 'unknown'} source={scene_source}{provider_field}", flush=True)
         # Distinct topic-aware vector fallback: never reuse the same generic blue card
         # for every scene when free image-generation providers are unavailable.
         image = Image.new("RGB", (width, height))
