@@ -206,12 +206,17 @@ private fun VideoMakerScreen() {
                         require(pendingProfile.exists() && pendingProfile.length() > 1000L) {
                             "নির্বাচিত অডিও ফাইলটি খালি বা অসম্পূর্ণ। অন্য একটি অডিও নির্বাচন করুন।"
                         }
-                        if (profile.exists() && !profile.delete()) {
-                            throw IllegalStateException("আগের কণ্ঠের নমুনা প্রতিস্থাপন করা যায়নি।")
+                        val backupProfile = File(context.filesDir, "voice_profile_sample.backup")
+                        backupProfile.delete()
+                        val hadPreviousProfile = profile.exists()
+                        if (hadPreviousProfile && !profile.renameTo(backupProfile)) {
+                            throw IllegalStateException("আগের কণ্ঠের নমুনা নিরাপদ রাখা যায়নি।")
                         }
                         if (!pendingProfile.renameTo(profile)) {
-                            throw IllegalStateException("নতুন কণ্ঠের নমুনা সংরক্ষণ করা যায়নি।")
+                            if (hadPreviousProfile) backupProfile.renameTo(profile)
+                            throw IllegalStateException("নতুন কণ্ঠের নমুনা সংরক্ষণ করা যায়নি। আগের নমুনা অক্ষত রাখা হয়েছে।")
                         }
+                        backupProfile.delete()
                     } finally {
                         pendingProfile.delete()
                     }
