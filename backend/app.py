@@ -1056,6 +1056,14 @@ def make_background(script: str, folder: Path, model_visual_prompt: Optional[str
             seed = sum(ord(ch) for ch in text[:180])
             base_color = (35 + seed % 75, 45 + (seed // 3) % 75, 70 + (seed // 7) % 90)
             theme_name = "general"
+        # Shift the scene palette enough to remain visibly distinct while preserving
+        # the recognizable subject drawing for the selected topic.
+        palette_shift = max(0, int(variation_seed))
+        if palette_shift:
+            base_color = tuple(
+                max(0, min(255, channel + ((palette_shift * 47 + axis * 23) % 61) - 30))
+                for axis, channel in enumerate(base_color)
+            )
         for y in range(height):
             ratio = y / max(1, height - 1)
             color = tuple(max(0, min(255, int(channel * (0.72 + ratio * 0.48)))) for channel in base_color)
