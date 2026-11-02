@@ -6,6 +6,7 @@ import android.app.DownloadManager
 import android.content.Context
 import android.content.pm.PackageManager
 import android.media.MediaRecorder
+import android.media.MediaMetadataRetriever
 import android.media.MediaPlayer
 import android.media.AudioManager
 import android.media.ToneGenerator
@@ -139,7 +140,19 @@ private fun VideoMakerScreen() {
         var saved = false
         try {
             currentRecorder?.stop()
-            saved = target != null && target.exists() && target.length() > 1000
+            if (target != null && target.exists() && target.length() > 1000) {
+                val metadata = MediaMetadataRetriever()
+                val durationMs = try {
+                    metadata.setDataSource(target.absolutePath)
+                    metadata.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
+                } finally {
+                    metadata.release()
+                }
+                saved = durationMs >= 10_000L
+                if (!saved) {
+                    status = "রেকর্ডিং অন্তত ১০ সেকেন্ড হতে হবে। ভালো ফলের জন্য ২০ থেকে ৩০ সেকেন্ড স্বাভাবিক স্বরে কথা বলুন।"
+                }
+            }
         } catch (_: Exception) {
             status = "রেকর্ডিং খুব ছোট হয়েছে বা সংরক্ষণ করা যায়নি। আবার ২০ থেকে ৩০ সেকেন্ড রেকর্ড করুন।"
         } finally {
