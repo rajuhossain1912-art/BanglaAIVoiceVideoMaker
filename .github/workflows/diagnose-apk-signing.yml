@@ -1,0 +1,55 @@
+name: Diagnose APK signing continuity
+on:
+  workflow_dispatch:
+    inputs:
+      previous_tag:
+        description: Previous installed release tag to compare
+        required: true
+        default: v0.3.100
+      latest_tag:
+        description: Latest release tag to compare
+        required: true
+        default: v0.3.104
+permissions:
+  contents: read
+jobs:
+  compare-signatures:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: build-tools;35.0.0
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+      - name: Build a fresh APK using the current workflow signing behavior
+        env:
+          APP_VERSION_CODE: "9999"
+          APP_VERSION_NAME: "signing-diagnostic"
+        run: gradle --no-daemon assembleDebug
+      - name: Download installed and latest release APKs
+        env:
+          PREVIOUS_TAG: ${{ inputs.previous_tag }}
+          LATEST_TAG: ${{ inputs.latest_tag }}
+        run: |
+          set -euo pipefail
+          curl -fL "https://github.com/${GITHUB_REPOSITORY}/releases/download/${PREVIOUS_TAG}/BanglaAIVoiceVideoMaker-${PREVIOUS_TAG}.apk" -o previous.apk
+          curl -fL "https://github.com/${GITHUB_REPOSITORY}/releases/download/${LATEST_TAG}/BanglaAIVoiceVideoMaker-${LATEST_TAG}.apk" -o latest.apk
+      - name: Print signing certificate fingerprints
+        run: |
+          set -euo pipefail
+          APKSIGNER="${ANDROID_HOME}/build-tools/35.0.0/apksigner"
+          for apk in previous.apk latest.apk app/build/outputs/apk/debug/app-debug.apk; do
+            echo "===== ${apk} ====="
+            "${APKSIGNER}" verify --print-certs "${apk}"
+          done
