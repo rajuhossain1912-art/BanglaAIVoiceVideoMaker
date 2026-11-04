@@ -24,6 +24,10 @@ jobs:
       API_BASE_URL: https://bangla-ai-voice-video-maker-api.onrender.com
       APP_VERSION_CODE: ${{ github.run_number }}
       APP_VERSION_NAME: 0.3.${{ github.run_number }}
+      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
@@ -36,13 +40,42 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.9"
-      - name: Build debug APK
-        run: gradle --no-daemon assembleDebug -PAPI_BASE_URL="$API_BASE_URL"
+      - name: Prepare persistent APK signing key
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "$ANDROID_KEYSTORE_BASE64" ]]; then
+            if [[ -n "$ANDROID_KEYSTORE_PASSWORD" || -n "$ANDROID_KEY_ALIAS" || -n "$ANDROID_KEY_PASSWORD" ]]; then
+              echo "Signing secrets are incomplete: ANDROID_KEYSTORE_BASE64 is missing." >&2
+              exit 1
+            fi
+            echo "Persistent signing key is not configured; using temporary debug signing for this build."
+          else
+            for name in ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+              if [[ -z "${!name}" ]]; then
+                echo "Signing secret $name is missing." >&2
+                exit 1
+              fi
+            done
+            KEYSTORE_PATH="$RUNNER_TEMP/bangla-ai-release.jks"
+            printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH"
+            chmod 600 "$KEYSTORE_PATH"
+            echo "ANDROID_KEYSTORE_PATH=$KEYSTORE_PATH" >> "$GITHUB_ENV"
+            echo "Persistent APK signing key loaded."
+          fi
+      - name: Build release APK
+        run: gradle --no-daemon assembleRelease -PAPI_BASE_URL="$API_BASE_URL"
       - name: Prepare release APKs
         run: |
-          cp app/build/outputs/apk/debug/app-debug.apk BanglaAIVoiceVideoMaker-v${{ env.APP_VERSION_NAME }}.apk
-          cp app/build/outputs/apk/debug/app-debug.apk BanglaAIVoiceVideoMaker-latest.apk
-      - name: Upload debug APK artifact
+          cp app/build/outputs/apk/release/app-release.apk BanglaAIVoiceVideoMaker-v${{ env.APP_VERSION_NAME }}.apk
+          cp app/build/outputs/apk/release/app-release.apk BanglaAIVoiceVideoMaker-latest.apk
+      - name: Verify APK signature
+        run: |
+          set -euo pipefail
+          APKSIGNER="${ANDROID_HOME}/build-tools/35.0.0/apksigner"
+          "$APKSIGNER" verify --verbose BanglaAIVoiceVideoMaker-latest.apk
+          "$APKSIGNER" verify --print-certs BanglaAIVoiceVideoMaker-latest.apk
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: BanglaAIVoiceVideoMaker-v${{ env.APP_VERSION_NAME }}-apk
