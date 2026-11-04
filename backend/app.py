@@ -269,7 +269,8 @@ def _write_gradio_audio_result(audio_result, folder: Path, stem: str, base_url: 
                 )
                 with urllib.request.urlopen(request, timeout=45) as response:
                     data = response.read(50 * 1024 * 1024 + 1)
-                    content_type = response.headers.get("Content-Type", "")
+                    response_headers = getattr(response, "headers", None)
+                    content_type = response_headers.get("Content-Type", "") if hasattr(response_headers, "get") else ""
                 if 100 < len(data) <= 50 * 1024 * 1024 and "text/html" not in content_type.lower():
                     remote_audio.write_bytes(data)
                     print(f"VOICE_CLONE_AUDIO_DOWNLOADED bytes={len(data)} content_type={content_type[:80]}", flush=True)
