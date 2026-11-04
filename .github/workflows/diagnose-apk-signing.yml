@@ -1,5 +1,9 @@
 name: Diagnose APK signing continuity
 on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/diagnose-apk-signing.yml
   workflow_dispatch:
     inputs:
       previous_tag:
@@ -39,8 +43,8 @@ jobs:
         run: gradle --no-daemon assembleDebug
       - name: Download installed and latest release APKs
         env:
-          PREVIOUS_TAG: ${{ inputs.previous_tag }}
-          LATEST_TAG: ${{ inputs.latest_tag }}
+          PREVIOUS_TAG: ${{ inputs.previous_tag || 'v0.3.100' }}
+          LATEST_TAG: ${{ inputs.latest_tag || 'v0.3.104' }}
         run: |
           set -euo pipefail
           curl -fL "https://github.com/${GITHUB_REPOSITORY}/releases/download/${PREVIOUS_TAG}/BanglaAIVoiceVideoMaker-${PREVIOUS_TAG}.apk" -o previous.apk
