@@ -13,7 +13,7 @@ on:
       latest_tag:
         description: Latest release tag to compare
         required: true
-        default: v0.3.104
+        default: v0.3.105
 permissions:
   contents: read
 jobs:
@@ -44,7 +44,7 @@ jobs:
       - name: Download installed and latest release APKs
         env:
           PREVIOUS_TAG: ${{ inputs.previous_tag || 'v0.3.100' }}
-          LATEST_TAG: ${{ inputs.latest_tag || 'v0.3.104' }}
+          LATEST_TAG: ${{ inputs.latest_tag || 'v0.3.105' }}
         run: |
           set -euo pipefail
           curl -fL "https://github.com/${GITHUB_REPOSITORY}/releases/download/${PREVIOUS_TAG}/BanglaAIVoiceVideoMaker-${PREVIOUS_TAG}.apk" -o previous.apk
