@@ -277,8 +277,7 @@ private fun VideoMakerScreen() {
                     }
                     require(durationMs >= 10_000L) {
                         "অডিও নমুনা অন্তত ১০ সেকেন্ড হতে হবে। ভালো ফলের জন্য ২০ থেকে ৩০ সেকেন্ডের পরিষ্কার কণ্ঠ নির্বাচন করুন।"
-                    }
-                    val profile = File(context.filesDir, "voice_profile_sample")
+                    }                    val profile = File(context.filesDir, "voice_profile_sample")
                     val pendingProfile = File(context.filesDir, "voice_profile_sample.pending")
                     pendingProfile.delete()
                     try {
@@ -557,8 +556,7 @@ private fun VideoMakerScreen() {
         Button(
             onClick = {
                 online = isInternetAvailable(context)
-                val baseUrl = BuildConfig.API_BASE_URL.trim().trimEnd('/')
-                when {
+                val baseUrl = BuildConfig.API_BASE_URL.trim().trimEnd('/')                when {
                     script.isBlank() -> status = "আগে বাংলা বা ইংরেজি লেখা যোগ করুন।"
                     mode == "clone" && script.trim().length > 3000 -> status = "নিজের কণ্ঠে একবারে সর্বোচ্চ ৩০০০ অক্ষর দিন।"
                     mode == "clone" && !cloneConsent -> status = "আগে বাহ্যিক সার্ভারে কণ্ঠ পাঠানোর সতর্কতা পড়ে সম্মতি দিন।"
@@ -691,39 +689,13 @@ private fun VideoMakerScreen() {
                 }
             }
         }
-        Card(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("বর্তমান অবস্থা", fontWeight = FontWeight.SemiBold)
-                Text(if (online) "ফোনের ইন্টারনেট: সংযুক্ত" else "ফোনের ইন্টারনেট: সংযোগ নেই")
-                Text(serverStatus, modifier = Modifier.semantics {
-                    liveRegion = LiveRegionMode.Polite
-                    contentDescription = "অনলাইন সার্ভারের অবস্থা: " + serverStatus
-                })
-                OutlinedButton(onClick = {
-                    online = isInternetAvailable(context)
-                    serverCheckRunning = true
-                    serverStatus = "অনলাইন সার্ভারের সংযোগ পরীক্ষা চলছে।"
-                    scope.launch {
-                        serverStatus = withContext(Dispatchers.IO) {
-                            try {
-                                val base = BuildConfig.API_BASE_URL.trim().trimEnd('/')
-                                val conn = (URL(base + "/health").openConnection() as HttpURLConnection).apply { connectTimeout = 10000; readTimeout = 10000; requestMethod = "GET" }
-                                try {
-                                    val code = conn.responseCode
-                                    if (code in 200..299) "সার্ভার অনলাইন। সর্বশেষ পরীক্ষা সফল (HTTP $code)।" else "সার্ভার উত্তর দিয়েছে, তবে সংযোগ সফল নয় (HTTP $code)।"
-                                } finally { conn.disconnect() }
-                            } catch (_: Exception) { "সার্ভারে সংযোগ করা যায়নি। ইন্টারনেট বা সার্ভার সাময়িকভাবে বন্ধ থাকতে পারে।" }
-                        }
-                        serverCheckRunning = false
-                    }
-                }, modifier = Modifier.fillMaxWidth(), enabled = !serverCheckRunning) {
-                    Text(if (serverCheckRunning) "সার্ভার পরীক্ষা চলছে" else "সার্ভার সংযোগ পরীক্ষা ও আপডেট")
-                }
-                Text(status, modifier = Modifier.semantics {
+        if (!running && downloadPath.isBlank() && status != "অনলাইন সার্ভার যুক্ত হলে এখানে ভিডিও তৈরির অবস্থা দেখা যাবে।") {
+            Text(status, modifier = Modifier
+                .fillMaxWidth()
+                .semantics {
                     if (announceProgress) liveRegion = LiveRegionMode.Polite
-                    contentDescription = "ভিডিও তৈরির বর্তমান অবস্থা: " + status
+                    contentDescription = "বর্তমান অবস্থা: " + status
                 })
-            }
         }
     }
     }
@@ -837,8 +809,7 @@ private fun SettingsScreen(
         }
 
         SettingsGroup(
-            title = "অ্যাক্সেসিবিলিটি",
-            summary = if (announceProgress) "TalkBack-এ কাজের অগ্রগতি জানানো চালু" else "কাজের অগ্রগতি ঘোষণা বন্ধ",
+            title = "অ্যাক্সেসিবিলিটি",            summary = if (announceProgress) "TalkBack-এ কাজের অগ্রগতি জানানো চালু" else "কাজের অগ্রগতি ঘোষণা বন্ধ",
             expanded = expandedSection == "accessibility",
             onToggle = { expandedSection = if (expandedSection == "accessibility") "" else "accessibility" }
         ) {
