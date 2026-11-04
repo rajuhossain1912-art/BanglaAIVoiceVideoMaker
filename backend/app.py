@@ -172,30 +172,52 @@ def synthesize_mixed_speech(script: str, folder: Path) -> Path:
     return combined
 
 
-def _write_gradio_audio_result(audio_result, folder: Path, stem: str):
-    """Normalize Gradio audio outputs, including remote FileData path+URL objects."""
+def _write_gradio_audio_result(audio_result, folder: Path, stem: str, base_url: str = ""):
+    """Normalize Gradio audio results, including FileData objects and relative URLs."""
+    if audio_result is None:
+        return None
+
+    # Gradio versions may expose FileData as a mapping or a typed object.
+    if not isinstance(audio_result, (dict, tuple, list, str, bytes)):
+        values = {}
+        for key in ("path", "url", "audio", "data", "value"):
+            value = getattr(audio_result, key, None)
+            if value is not None:
+                values[key] = value
+        if values:
+            audio_result = values
+        else:
+            print(f"VOICE_CLONE_AUDIO_RESULT_UNSUPPORTED type={type(audio_result).__name__}", flush=True)
+            return None
+
     if isinstance(audio_result, dict):
-        # Gradio FileData commonly includes both a server-local path and a public
-        # URL. The path belongs to the remote Space, not this Render container;
-        # prefer a genuinely local file, then download the URL.
         path_value = audio_result.get("path")
+        url_value = audio_result.get("url")
+        print(
+            "VOICE_CLONE_AUDIO_RESULT "
+            f"type=dict keys={','.join(sorted(str(key) for key in audio_result.keys()))} "
+            f"path_type={type(path_value).__name__} url_type={type(url_value).__name__}",
+            flush=True,
+        )
         if isinstance(path_value, str) and Path(path_value).is_file():
             return Path(path_value)
-        url_value = audio_result.get("url")
         if isinstance(url_value, str) and url_value:
-            downloaded = _write_gradio_audio_result(url_value, folder, stem)
+            resolved_url = urllib.parse.urljoin((base_url.rstrip("/") + "/") if base_url else "", url_value)
+            downloaded = _write_gradio_audio_result(resolved_url, folder, stem, base_url=base_url)
             if downloaded is not None:
                 return downloaded
         for key in ("audio", "data", "value"):
             nested = audio_result.get(key)
             if nested is not None:
-                downloaded = _write_gradio_audio_result(nested, folder, stem)
+                downloaded = _write_gradio_audio_result(nested, folder, stem, base_url=base_url)
                 if downloaded is not None:
                     return downloaded
-        # Some Gradio-compatible providers return only a local path.
-        if isinstance(path_value, str):
-            return _write_gradio_audio_result(path_value, folder, stem)
+        if isinstance(path_value, str) and path_value.startswith(("http://", "https://", "/")):
+            resolved_path = urllib.parse.urljoin((base_url.rstrip("/") + "/") if base_url else "", path_value)
+            if resolved_path.startswith(("http://", "https://")):
+                return _write_gradio_audio_result(resolved_path, folder, stem, base_url=base_url)
         return None
+
     if isinstance(audio_result, (tuple, list)) and len(audio_result) == 2 and isinstance(audio_result[0], (int, float)):
         try:
             import numpy as np
@@ -216,33 +238,47 @@ def _write_gradio_audio_result(audio_result, folder: Path, stem: str):
                 wav.setframerate(sample_rate)
                 wav.writeframes(samples.tobytes())
             return wav_path
-        except Exception:
+        except Exception as exc:
+            print(f"VOICE_CLONE_AUDIO_ARRAY_FAILED error={type(exc).__name__}", flush=True)
             return None
+
     if isinstance(audio_result, (tuple, list)):
         for index, item in enumerate(audio_result):
-            candidate = _write_gradio_audio_result(item, folder, f"{stem}-{index}")
+            candidate = _write_gradio_audio_result(item, folder, f"{stem}-{index}", base_url=base_url)
             if candidate is not None:
                 return candidate
         return None
+
     if isinstance(audio_result, bytes):
         if len(audio_result) > 100:
             raw_audio = folder / f"{stem}-remote"
             raw_audio.write_bytes(audio_result)
             return raw_audio
         return None
-    if isinstance(audio_result, str) and Path(audio_result).is_file():
-        return Path(audio_result)
-    if isinstance(audio_result, str) and audio_result.startswith(("https://", "http://")):
-        remote_audio = folder / f"{stem}-remote"
-        try:
-            with urllib.request.urlopen(urllib.request.Request(audio_result, headers={"User-Agent": "BanglaAIVoiceVideoMaker/0.4"}), timeout=30) as response:
-                data = response.read(50 * 1024 * 1024 + 1)
-            if 100 < len(data) <= 50 * 1024 * 1024:
-                remote_audio.write_bytes(data)
-                return remote_audio
-        except Exception as exc:
-            print(f"VOICE_CLONE_AUDIO_DOWNLOAD_FAILED error={type(exc).__name__}", flush=True)
-            return None
+
+    if isinstance(audio_result, str):
+        if Path(audio_result).is_file():
+            return Path(audio_result)
+        if audio_result.startswith(("https://", "http://")) or (audio_result.startswith("/") and base_url):
+            remote_url = urllib.parse.urljoin((base_url.rstrip("/") + "/") if base_url else "", audio_result)
+            remote_audio = folder / f"{stem}-remote"
+            try:
+                request = urllib.request.Request(
+                    remote_url,
+                    headers={"User-Agent": "BanglaAIVoiceVideoMaker/0.4"},
+                )
+                with urllib.request.urlopen(request, timeout=45) as response:
+                    data = response.read(50 * 1024 * 1024 + 1)
+                    response_headers = getattr(response, "headers", None)
+                    content_type = response_headers.get("Content-Type", "") if hasattr(response_headers, "get") else ""
+                if 100 < len(data) <= 50 * 1024 * 1024 and "text/html" not in content_type.lower():
+                    remote_audio.write_bytes(data)
+                    print(f"VOICE_CLONE_AUDIO_DOWNLOADED bytes={len(data)} content_type={content_type[:80]}", flush=True)
+                    return remote_audio
+                print(f"VOICE_CLONE_AUDIO_DOWNLOAD_INVALID bytes={len(data)} content_type={content_type[:80]}", flush=True)
+            except Exception as exc:
+                print(f"VOICE_CLONE_AUDIO_DOWNLOAD_FAILED error={type(exc).__name__} url_host={urllib.parse.urlparse(remote_url).netloc}", flush=True)
+                return None
     return None
 
 
@@ -256,7 +292,12 @@ def _clone_with_cosyvoice(script: str, normalized: Path, space: str):
         1.0,
         api_name="/generate_cross_lingual_audio",
     )
-    return result[0] if isinstance(result, (list, tuple)) else result
+    # Resolve relative FileData URLs against the actual Space host. Gradio
+    # FileData may be returned as a dict or typed object depending on version.
+    base_url = getattr(client, "src", "") or ""
+    if isinstance(result, (list, tuple)):
+        return (result[0], base_url) if result else (None, base_url)
+    return result, base_url
 
 
 def _clone_with_chatterbox(script: str, normalized: Path, space: str):
@@ -292,7 +333,10 @@ def _clone_with_provider_fallback(
         try:
             print(f"VOICE_CLONE_TRY language={language} space={space}", flush=True)
             result = clone_function(script, normalized, space)
-            candidate = _write_gradio_audio_result(result, folder, stem)
+            base_url = ""
+            if isinstance(result, tuple) and len(result) == 2 and isinstance(result[1], str):
+                result, base_url = result
+            candidate = _write_gradio_audio_result(result, folder, stem, base_url=base_url)
             if candidate is None or not candidate.exists() or candidate.stat().st_size < 100:
                 raise RuntimeError("Space returned no usable audio file")
             print(f"VOICE_CLONE_OK language={language} space={space}", flush=True)
