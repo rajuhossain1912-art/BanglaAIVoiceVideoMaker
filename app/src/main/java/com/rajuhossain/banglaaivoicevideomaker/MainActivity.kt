@@ -277,7 +277,8 @@ private fun VideoMakerScreen() {
                     }
                     require(durationMs >= 10_000L) {
                         "অডিও নমুনা অন্তত ১০ সেকেন্ড হতে হবে। ভালো ফলের জন্য ২০ থেকে ৩০ সেকেন্ডের পরিষ্কার কণ্ঠ নির্বাচন করুন।"
-                    }                    val profile = File(context.filesDir, "voice_profile_sample")
+                    }
+                    val profile = File(context.filesDir, "voice_profile_sample")
                     val pendingProfile = File(context.filesDir, "voice_profile_sample.pending")
                     pendingProfile.delete()
                     try {
@@ -556,7 +557,8 @@ private fun VideoMakerScreen() {
         Button(
             onClick = {
                 online = isInternetAvailable(context)
-                val baseUrl = BuildConfig.API_BASE_URL.trim().trimEnd('/')                when {
+                val baseUrl = BuildConfig.API_BASE_URL.trim().trimEnd('/')
+                when {
                     script.isBlank() -> status = "আগে বাংলা বা ইংরেজি লেখা যোগ করুন।"
                     mode == "clone" && script.trim().length > 3000 -> status = "নিজের কণ্ঠে একবারে সর্বোচ্চ ৩০০০ অক্ষর দিন।"
                     mode == "clone" && !cloneConsent -> status = "আগে বাহ্যিক সার্ভারে কণ্ঠ পাঠানোর সতর্কতা পড়ে সম্মতি দিন।"
