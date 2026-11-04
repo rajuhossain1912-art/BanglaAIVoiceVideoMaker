@@ -27,3 +27,20 @@ jobs:
           gradle-version: "8.9"
       - name: Build debug APK
         run: gradle --no-daemon assembleDebug -PAPI_BASE_URL="https://bangla-ai-voice-video-maker-api.onrender.com"
+      - name: Set up Android SDK signing tools
+        uses: android-actions/setup-android@v3
+        with:
+          packages: build-tools;35.0.0
+      - name: Download previous and latest release APKs
+        run: |
+          set -euo pipefail
+          curl -fL "https://github.com/${GITHUB_REPOSITORY}/releases/download/v0.3.100/BanglaAIVoiceVideoMaker-v0.3.100.apk" -o previous.apk
+          curl -fL "https://github.com/${GITHUB_REPOSITORY}/releases/download/v0.3.104/BanglaAIVoiceVideoMaker-v0.3.104.apk" -o latest.apk
+      - name: Compare APK signing certificates
+        run: |
+          set -euo pipefail
+          APKSIGNER="${ANDROID_HOME}/build-tools/35.0.0/apksigner"
+          for apk in previous.apk latest.apk app/build/outputs/apk/debug/app-debug.apk; do
+            echo "===== ${apk} ====="
+            "${APKSIGNER}" verify --print-certs "${apk}"
+          done
