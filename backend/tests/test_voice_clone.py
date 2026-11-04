@@ -1,3 +1,4 @@
+import io
 import tempfile
 import unittest
 from pathlib import Path
@@ -7,6 +8,34 @@ from backend import app as video_app
 
 
 class VoiceCloneUnitTests(unittest.TestCase):
+    def test_gradio_remote_filedata_downloads_url_when_path_is_remote(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            folder = Path(temp_dir)
+            payload = b"RIFF" + (b"generated-audio-data" * 12)
+            result = {
+                "path": "/tmp/gradio/remote-space-output.wav",
+                "url": "https://space.example/gradio_api/file=output.wav",
+            }
+            with patch.object(video_app.urllib.request, "urlopen", return_value=io.BytesIO(payload)):
+                output = video_app._write_gradio_audio_result(result, folder, "remote-test")
+            self.assertIsNotNone(output)
+            self.assertTrue(output.exists())
+            self.assertEqual(output.read_bytes(), payload)
+
+    def test_gradio_local_filedata_path_is_used_without_download(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            folder = Path(temp_dir)
+            local_audio = folder / "local.wav"
+            local_audio.write_bytes(b"local-audio" * 20)
+            result = {
+                "path": str(local_audio),
+                "url": "https://space.example/gradio_api/file=unused.wav",
+            }
+            with patch.object(video_app.urllib.request, "urlopen") as download:
+                output = video_app._write_gradio_audio_result(result, folder, "local-test")
+            self.assertEqual(output, local_audio)
+            download.assert_not_called()
+
     def test_split_voice_clone_text_respects_limit_and_preserves_text(self):
         script = ("বাংলাদেশের উন্নয়ন মানুষের সম্মিলিত প্রচেষ্টার ওপর নির্ভর করে। " * 12).strip()
         chunks = video_app._split_voice_clone_text(script, max_chars=80)

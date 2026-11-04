@@ -173,9 +173,29 @@ def synthesize_mixed_speech(script: str, folder: Path) -> Path:
 
 
 def _write_gradio_audio_result(audio_result, folder: Path, stem: str):
-    """Convert Gradio filepath/URL or (sample_rate, numpy audio) results into a local WAV."""
+    """Normalize Gradio audio outputs, including remote FileData path+URL objects."""
     if isinstance(audio_result, dict):
-        audio_result = audio_result.get("path") or audio_result.get("url") or audio_result.get("audio")
+        # Gradio FileData commonly includes both a server-local path and a public
+        # URL. The path belongs to the remote Space, not this Render container;
+        # prefer a genuinely local file, then download the URL.
+        path_value = audio_result.get("path")
+        if isinstance(path_value, str) and Path(path_value).is_file():
+            return Path(path_value)
+        url_value = audio_result.get("url")
+        if isinstance(url_value, str) and url_value:
+            downloaded = _write_gradio_audio_result(url_value, folder, stem)
+            if downloaded is not None:
+                return downloaded
+        for key in ("audio", "data", "value"):
+            nested = audio_result.get(key)
+            if nested is not None:
+                downloaded = _write_gradio_audio_result(nested, folder, stem)
+                if downloaded is not None:
+                    return downloaded
+        # Some Gradio-compatible providers return only a local path.
+        if isinstance(path_value, str):
+            return _write_gradio_audio_result(path_value, folder, stem)
+        return None
     if isinstance(audio_result, (tuple, list)) and len(audio_result) == 2 and isinstance(audio_result[0], (int, float)):
         try:
             import numpy as np
@@ -198,9 +218,21 @@ def _write_gradio_audio_result(audio_result, folder: Path, stem: str):
             return wav_path
         except Exception:
             return None
+    if isinstance(audio_result, (tuple, list)):
+        for index, item in enumerate(audio_result):
+            candidate = _write_gradio_audio_result(item, folder, f"{stem}-{index}")
+            if candidate is not None:
+                return candidate
+        return None
+    if isinstance(audio_result, bytes):
+        if len(audio_result) > 100:
+            raw_audio = folder / f"{stem}-remote"
+            raw_audio.write_bytes(audio_result)
+            return raw_audio
+        return None
     if isinstance(audio_result, str) and Path(audio_result).is_file():
         return Path(audio_result)
-    if isinstance(audio_result, str) and audio_result.startswith("https://"):
+    if isinstance(audio_result, str) and audio_result.startswith(("https://", "http://")):
         remote_audio = folder / f"{stem}-remote"
         try:
             with urllib.request.urlopen(urllib.request.Request(audio_result, headers={"User-Agent": "BanglaAIVoiceVideoMaker/0.4"}), timeout=30) as response:
@@ -208,7 +240,8 @@ def _write_gradio_audio_result(audio_result, folder: Path, stem: str):
             if 100 < len(data) <= 50 * 1024 * 1024:
                 remote_audio.write_bytes(data)
                 return remote_audio
-        except Exception:
+        except Exception as exc:
+            print(f"VOICE_CLONE_AUDIO_DOWNLOAD_FAILED error={type(exc).__name__}", flush=True)
             return None
     return None
 
