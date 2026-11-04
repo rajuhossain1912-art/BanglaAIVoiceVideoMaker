@@ -36,6 +36,35 @@ class VoiceCloneUnitTests(unittest.TestCase):
             self.assertEqual(output, local_audio)
             download.assert_not_called()
 
+    def test_gradio_filedata_object_supports_relative_url(self):
+        class FileData:
+            path = "/tmp/remote-space/audio.wav"
+            url = "/gradio_api/file=audio.wav"
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            folder = Path(temp_dir)
+            payload = b"RIFF" + (b"audio-content" * 20)
+            with patch.object(video_app.urllib.request, "urlopen", return_value=io.BytesIO(payload)) as download:
+                output = video_app._write_gradio_audio_result(
+                    FileData(), folder, "typed-filedata", base_url="https://owner-space.hf.space"
+                )
+            self.assertIsNotNone(output)
+            self.assertEqual(output.read_bytes(), payload)
+            self.assertTrue(download.call_args.args[0].full_url.startswith("https://owner-space.hf.space/gradio_api/"))
+
+    def test_gradio_dict_relative_url_uses_space_host(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            folder = Path(temp_dir)
+            payload = b"RIFF" + (b"audio-content" * 20)
+            with patch.object(video_app.urllib.request, "urlopen", return_value=io.BytesIO(payload)) as download:
+                output = video_app._write_gradio_audio_result(
+                    {"path": "/tmp/remote/audio.wav", "url": "/file=audio.wav"},
+                    folder, "relative-filedata", base_url="https://owner-space.hf.space"
+                )
+            self.assertIsNotNone(output)
+            self.assertEqual(output.read_bytes(), payload)
+            self.assertEqual(download.call_args.args[0].full_url, "https://owner-space.hf.space/file=audio.wav")
+
     def test_split_voice_clone_text_respects_limit_and_preserves_text(self):
         script = ("বাংলাদেশের উন্নয়ন মানুষের সম্মিলিত প্রচেষ্টার ওপর নির্ভর করে। " * 12).strip()
         chunks = video_app._split_voice_clone_text(script, max_chars=80)
