@@ -506,7 +506,53 @@ private fun VideoMakerScreen() {
             OutlinedButton(onClick = { audioPicker.launch("audio/*") }, modifier = Modifier.fillMaxWidth(), enabled = !running && !isRecording) {
                 Text(if (hasSavedVoiceProfile) "সংরক্ষিত কণ্ঠ বদলান" else "নিজের কণ্ঠের নমুনা নির্বাচন করুন")
             }
-            if (hasSavedVoiceProfile) Text("নিজের কণ্ঠের নমুনা ফোনে সংরক্ষিত আছে। মুছতে Settings খুলুন।", style = MaterialTheme.typography.bodySmall)
+            if (hasSavedVoiceProfile) {
+                Text(
+                    "সংরক্ষিত কণ্ঠ: এই ফোনে পাওয়া গেছে। নিচের বোতাম চাপলে রেকর্ডটি শুনে নিশ্চিত হতে পারবেন।",
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }
+                )
+                OutlinedButton(
+                    onClick = {
+                        try {
+                            val profile = File(context.filesDir, "voice_profile_sample")
+                            require(profile.exists() && profile.length() > 1000L) { "সংরক্ষিত কণ্ঠের ফাইল পাওয়া যায়নি। আবার রেকর্ড করুন।" }
+                            runCatching { previewPlayer?.release() }
+                            val player = MediaPlayer().apply {
+                                setDataSource(profile.absolutePath)
+                                setOnCompletionListener {
+                                    it.release()
+                                    previewPlayer = null
+                                    previewPlaying = false
+                                    status = "সংরক্ষিত কণ্ঠ শোনা শেষ হয়েছে।"
+                                }
+                                prepare()
+                                start()
+                            }
+                            previewPlayer = player
+                            previewPlaying = true
+                            status = "ফোনে সংরক্ষিত আপনার নিজের কণ্ঠ বাজছে।"
+                        } catch (e: Exception) {
+                            previewPlaying = false
+                            status = e.message ?: "সংরক্ষিত কণ্ঠ শোনা যাচ্ছে না।"
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !previewPlaying && !running
+                ) { Text("সংরক্ষিত কণ্ঠ শুনুন") }
+                OutlinedButton(
+                    onClick = {
+                        runCatching { previewPlayer?.stop() }
+                        runCatching { previewPlayer?.release() }
+                        previewPlayer = null
+                        previewPlaying = false
+                        status = "সংরক্ষিত কণ্ঠ শোনা বন্ধ হয়েছে।"
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = previewPlaying
+                ) { Text("কণ্ঠ শোনা বন্ধ করুন") }
+                Text("নমুনাটি অ্যাপের ব্যক্তিগত স্টোরেজে থাকে; সাধারণ ফাইল ম্যানেজারে দেখা যায় না।", style = MaterialTheme.typography.bodySmall)
+            }
         }
         Button(
             onClick = {
