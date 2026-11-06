@@ -43,6 +43,27 @@ class SceneIntervalDiagnosticsTests(unittest.TestCase):
         self.assertTrue(all(item in scenes for item in result))
         self.assertEqual([result.count(scene) for scene in scenes], [3, 4, 3])
 
+    def test_repeated_visual_slots_keep_subject_but_change_composition(self):
+        subject = "A Bangladeshi student reading a Braille book in a classroom."
+        first = video_app._vary_visual_prompt(subject, 0)
+        second = video_app._vary_visual_prompt(subject, 1)
+        third = video_app._vary_visual_prompt(subject, 2)
+        self.assertIn(subject, first)
+        self.assertIn(subject, second)
+        self.assertIn(subject, third)
+        self.assertNotEqual(first, second)
+        self.assertNotEqual(second, third)
+        self.assertIn("wide establishing", first)
+        self.assertIn("medium eye-level", second)
+        self.assertIn("over-the-shoulder", third)
+
+    def test_visual_composition_variation_cycles_after_eight_slots(self):
+        subject = "A farmer working in a rice field."
+        self.assertEqual(
+            video_app._vary_visual_prompt(subject, 0),
+            video_app._vary_visual_prompt(subject, 8),
+        )
+
     def test_handles_missing_image_count(self):
         result = video_app._scene_interval_diagnostics(30.0, 0, 3)
         self.assertEqual(result["expected_images"], 10)
