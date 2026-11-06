@@ -1722,8 +1722,8 @@ def _review_generated_image_against_scene(image_path: Path, narration: str, visu
         image_data = "data:image/jpeg;base64," + base64.b64encode(buffer.getvalue()).decode("ascii")
         question = (
             "Judge whether this image visibly depicts the narration, not merely its general mood. "
-            "Narration: " + re.sub(r"\\s+", " ", str(narration)).strip()[:420] +
-            ". Intended visual: " + re.sub(r"\\s+", " ", str(visual_prompt or "")).strip()[:300] +
+            "Narration: " + re.sub(r"\s+", " ", str(narration)).strip()[:420] +
+            ". Intended visual: " + re.sub(r"\s+", " ", str(visual_prompt or "")).strip()[:300] +
             ". Return one JSON object with keys match (boolean), confidence (number from 0 to 1), "
             "description (short factual description of visible contents), and reason (short explanation). "
             "Reject generic landscapes, icons, cartoons, abstract shapes, and unrelated objects when "
