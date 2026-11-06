@@ -68,6 +68,10 @@ jobs:
         run: |
           set -e
           docker exec bangla-video-api python -c 'from app import _image_keywords; terms=_image_keywords("বাংলায় একজন কৃষক জমিতে চারা রোপণ করছেন", "A farmer planting rice seedlings in a flooded paddy field beside green rice plants"); assert all(word in terms for word in ("farmer","rice","seedlings","paddy","field")), terms; assert "photographic" not in terms and "documentary" not in terms, terms; print("Licensed image search uses concrete English storyboard subjects when Bangla narration has no local keyword match:", terms)'
+      - name: Verify licensed photo candidates are ranked by storyboard relevance
+        run: |
+          set -e
+          docker exec bangla-video-api python -c 'from app import _image_title_relevance_score as score; terms=["farmer","rice","seedlings","paddy","field"]; relevant=score("Bangladeshi farmer planting rice seedlings in paddy field",terms); generic=score("Beautiful green landscape at sunrise",terms); partial=score("Rice field landscape",terms); assert relevant > partial > generic, (relevant,partial,generic); assert score("A city skyline",terms) == 0; print("Licensed photo ranking prioritizes concrete storyboard subjects over generic scenery")'
       - name: Verify voice cloning requires explicit consent
         run: |
           set -e
