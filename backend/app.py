@@ -1752,7 +1752,7 @@ def _review_generated_image_against_scene(image_path: Path, narration: str, visu
             review = raw
         else:
             response_text = str(raw).strip()
-            object_match = re.search(r"\\{.*?\\}", response_text, flags=re.S)
+            object_match = re.search(r"\{.*?\}", response_text, flags=re.S)
             review = None
             if object_match:
                 try:
@@ -1761,8 +1761,8 @@ def _review_generated_image_against_scene(image_path: Path, narration: str, visu
                     review = None
             if not isinstance(review, dict):
                 normalized = response_text.lower()
-                match_word = re.search(r"\\b(match|matches)\\s*[:=]?\\s*(true|false|yes|no)\\b", normalized)
-                confidence_word = re.search(r"\\bconfidence\\s*[:=]?\\s*(0(?:\\.\\d+)?|1(?:\\.0+)?)", normalized)
+                match_word = re.search(r"\b(match|matches)\s*[:=]?\s*(true|false|yes|no)\b", normalized)
+                confidence_word = re.search(r"\bconfidence\s*[:=]?\s*(0(?:\.\d+)?|1(?:\.0+)?)", normalized)
                 if match_word:
                     review = {
                         "match": match_word.group(2) in ("true", "yes"),
