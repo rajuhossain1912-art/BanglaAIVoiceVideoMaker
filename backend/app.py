@@ -1103,6 +1103,7 @@ def _english_visual_prompt(script: str, model_visual_prompt: Optional[str] = Non
     return (
         "One coherent documentary photograph, vertical 9:16, for a Bangladeshi educational video. "
         "Depict the exact real-world subject and physical action stated in this scene: " + subject + ". "
+        + exclusions +
         "The main subject must be large, recognizable, in focus, and visibly doing the described action; "
         "show the actual named object, person, place, or activity rather than a symbolic substitute. "
         "Prefer a believable real photograph with natural human proportions, authentic materials, "
@@ -1111,8 +1112,8 @@ def _english_visual_prompt(script: str, model_visual_prompt: Optional[str] = Non
         "never substitute mountains, sunrise, generic scenery, icons, stick figures, cartoons, "
         "vector art, clip art, 3D icons, diagrams, or decorative shapes for a concrete narrated subject. "
         "Use only details supported by the narration and its neighboring context. "
-        "One scene, one main action, no unrelated topic collage." + exclusions +
-        " No text, no captions, no letters, no logos, no watermark."
+        "One scene, one main action, no unrelated topic collage. "
+        "No text, no captions, no letters, no logos, no watermark."
     )[:1100]
 
 
