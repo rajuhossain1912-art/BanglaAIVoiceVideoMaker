@@ -23,13 +23,25 @@ class SceneIntervalDiagnosticsTests(unittest.TestCase):
         self.assertEqual(len(result), 2)
         self.assertEqual(" ".join(result), scenes[0])
 
-    def test_visual_scene_count_expands_long_sentence_to_interval_budget(self):
+    def test_visual_scene_count_expands_long_sentence_without_fragmenting_it(self):
         words = [f"শব্দ{i}" for i in range(170)]
-        scenes = [" ".join(words)]
-        result = video_app._visual_scenes_for_interval(scenes, 113.6, 3, 48)
+        sentence = " ".join(words) + "।"
+        result = video_app._visual_scenes_for_interval([sentence], 113.6, 3, 48)
         self.assertEqual(len(result), 38)
-        self.assertEqual(" ".join(" ".join(result).split()), " ".join(words))
-        self.assertTrue(all(result))
+        self.assertTrue(all(item == sentence for item in result))
+
+    def test_multiple_sentences_keep_complete_meaning_and_order(self):
+        scenes = [
+            "একজন শিক্ষার্থী ব্রেইল বই পড়ছে।",
+            "একজন শিক্ষক তাকে পড়তে সাহায্য করছেন।",
+            "শিক্ষার্থীটি নতুন দক্ষতা শিখছে।",
+        ]
+        result = video_app._visual_scenes_for_interval(scenes, 30, 3, 48)
+        self.assertEqual(len(result), 10)
+        self.assertEqual(result[0], scenes[0])
+        self.assertEqual(result[-1], scenes[-1])
+        self.assertTrue(all(item in scenes for item in result))
+        self.assertEqual([result.count(scene) for scene in scenes], [4, 3, 3])
 
     def test_handles_missing_image_count(self):
         result = video_app._scene_interval_diagnostics(30.0, 0, 3)
