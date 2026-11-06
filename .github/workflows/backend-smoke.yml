@@ -80,6 +80,10 @@ jobs:
         run: |
           set -e
           docker exec bangla-video-api python -c 'from app import _image_metadata_relevance_score as score, _image_metadata_is_relevant as relevant; terms=["farmer","rice","seedlings","paddy","field"]; tagged=score("Untitled photograph", [{"name":"farmer"},{"name":"rice seedlings"},{"name":"paddy field"}], terms); generic=score("Untitled photograph", [{"name":"green landscape"},{"name":"sunrise"}], terms); title=score("Bangladeshi rice farmers", [{"name":"agriculture"}], terms); assert tagged >= 10 and title >= 10 and generic == 0, (tagged,title,generic); assert relevant("Untitled photograph", [{"name":"rice seedlings"}], terms); assert not relevant("Untitled photograph", [{"name":"green landscape"}], terms); print("Licensed photo relevance correctly uses subject tags when titles are generic and rejects unrelated tags")'
+      - name: Verify Wikimedia photo relevance uses category metadata
+        run: |
+          set -e
+          docker exec bangla-video-api python -c 'from app import _image_metadata_relevance_score as score, _image_metadata_is_relevant as relevant; terms=["farmer","rice","seedlings","paddy","field"]; categories=[{"name":"Agriculture in Bangladesh"},{"name":"Rice cultivation"},{"name":"Paddy fields"}]; assert score("Untitled photograph",categories,terms)>=10; assert relevant("Untitled photograph",categories,terms); assert not relevant("Untitled photograph",[{"name":"Sunsets"},{"name":"Green landscapes"}],terms); print("Wikimedia photo ranking accepts relevant category metadata and rejects unrelated categories")'
       - name: Verify voice cloning requires explicit consent
         run: |
           set -e
