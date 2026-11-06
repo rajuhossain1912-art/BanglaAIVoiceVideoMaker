@@ -1344,6 +1344,17 @@ def _vary_visual_prompt(base_prompt: Optional[str], variation_seed: int = 0):
     return (prompt[:850].rstrip() + " " + cue)[:1100]
 
 
+def _distinct_scene_retry_prompt(base_prompt: Optional[str], scene_text: str):
+    """Ask image providers for a fresh composition without changing the narrated subject."""
+    prompt = (base_prompt or _english_visual_prompt(scene_text)).strip()
+    instruction = (
+        ". Create a clearly different photographic composition from previous scenes. "
+        "Change camera angle, setting, subject position, lighting, and moment of action. "
+        "Do not reuse the same stock-photo composition or background."
+    )
+    return (prompt[:850].rstrip() + instruction)[:1050]
+
+
 def make_background(script: str, folder: Path, model_visual_prompt: Optional[str] = None, force_topic_graphic: bool = False, variation_seed: int = 0, scene_index: Optional[int] = None):
     # Small canvas is intentional: keep peak memory below Render Free's 512 MiB limit.
     width, height = 360, 640
@@ -1947,12 +1958,7 @@ def make_scene_backgrounds(script: str, folder: Path, progress_callback=None, du
             print(f"IMAGE_REVIEW skipped scene={index + 1} reason=non_photographic_source source={review_source}", flush=True)
         if any(_scene_images_too_similar(background, prior) for prior in backgrounds):
             print(f"IMAGE_SCENE repeated_image index={index + 1} action=try_new_photo_composition", flush=True)
-            distinct_prompt = (
-                (scene_visual_prompt or _english_visual_prompt(scene_text))
-                + ". Create a clearly different photographic composition from previous scenes. "
-                + "Change camera angle, setting, subject position, lighting, and moment of action. "
-                + "Do not reuse the same stock-photo composition or background."
-            )[:1050]
+            distinct_prompt = _distinct_scene_retry_prompt(scene_visual_prompt, scene_text)
             distinct_background = make_background(
                 scene_text, scene_dir, distinct_prompt,
                 variation_seed=index + len(visual_scenes) * 3 + 17,
