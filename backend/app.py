@@ -640,7 +640,7 @@ def _image_title_relevance_score(title: str, keywords):
             variants.add(value[:-1])
         return variants
 
-    title_text = re.sub(r"\\s+", " ", str(title or "")).lower()
+    title_text = re.sub(r"\s+", " ", str(title or "")).lower()
     title_tokens = set(re.findall(r"[a-z]{3,}", title_text))
     normalized_title = set().union(*(forms(token) for token in title_tokens)) if title_tokens else set()
     terms = list(dict.fromkeys(
