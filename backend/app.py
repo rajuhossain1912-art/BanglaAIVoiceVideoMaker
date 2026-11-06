@@ -953,6 +953,22 @@ def transcribe_uploaded_audio(audio_path: Path, folder: Path, progress_callback=
     return transcript
 
 
+def _storyboard_scene_payload(scenes, context_scenes=None, context_offset=0):
+    """Build scene prompts with adjacent narration from the complete storyboard."""
+    full_context = context_scenes if context_scenes is not None else scenes
+    return [
+        {
+            "scene": context_offset + i + 1,
+            "context_before": re.sub(r"\s+", " ", full_context[context_offset + i - 1]).strip()[:180]
+                if context_offset + i > 0 else "",
+            "text": re.sub(r"\s+", " ", text).strip()[:300],
+            "context_after": re.sub(r"\s+", " ", full_context[context_offset + i + 1]).strip()[:180]
+                if context_offset + i + 1 < len(full_context) else "",
+        }
+        for i, text in enumerate(scenes)
+    ]
+
+
 def _plan_scene_visual_prompts(scenes, context_scenes=None, context_offset=0):
     """Plan prompts in batches while preserving neighboring narration across batch edges."""
     if not LANGUAGE_MODEL_VISUAL_PLANNER_ENABLED or not scenes:
@@ -969,17 +985,7 @@ def _plan_scene_visual_prompts(scenes, context_scenes=None, context_offset=0):
                 return None
             planned.extend(batch)
         return planned
-    scene_payload = [
-        {
-            "scene": context_offset + i + 1,
-            "context_before": re.sub(r"\s+", " ", full_context[context_offset + i - 1]).strip()[:180]
-                if context_offset + i > 0 else "",
-            "text": re.sub(r"\s+", " ", text).strip()[:300],
-            "context_after": re.sub(r"\s+", " ", full_context[context_offset + i + 1]).strip()[:180]
-                if context_offset + i + 1 < len(full_context) else "",
-        }
-        for i, text in enumerate(scenes)
-    ]
+    scene_payload = _storyboard_scene_payload(scenes, full_context, context_offset)
     cache_key = json.dumps(scene_payload, ensure_ascii=False, sort_keys=True)
     if cache_key in LANGUAGE_MODEL_VISUAL_CACHE:
         return LANGUAGE_MODEL_VISUAL_CACHE[cache_key]
