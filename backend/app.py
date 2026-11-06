@@ -515,8 +515,8 @@ VISUAL_CONCEPTS = [
     (("বন্যা", "ঘূর্ণিঝড়", "ঘূর্ণিঝড়", "দুর্যোগ", "জলোচ্ছ্বাস"), "a Bangladeshi village responding to monsoon flooding"),
     (("রাস্তা", "গাড়ি", "গাড়ি", "বাস", "পরিবহন", "চালক", "যাত্রী", "পথচারী"), "a realistic Bangladeshi street with safe public transport"),
     (("শিশু", "বাচ্চা", "ছেলে", "মেয়ে", "মেয়ে", "খেলাধুলা"), "children learning or playing safely outdoors"),
-    (("পরিশ্রম", "পরিশ্রমের", "চেষ্টা", "চেষ্টা চালিয়ে", "সাফল্য", "সফল", "দক্ষতা", "বিশ্বাস", "আশা", "সাহস", "লক্ষ্য", "লক্ষ্যে", "লক্ষ্যের", "ভবিষ্যৎ", "ভবিষ্যত", "এগিয়ে", "এগিয়ে", "বাধা", "ব্যর্থ", "থেমে", "পথ"), "a determined Bangladeshi person taking a concrete step toward a goal, persevering through a challenge, realistic human action and hopeful expression"),
-    (("স্বপ্ন", "আশা", "সাহস", "ভবিষ্যৎ", "ভবিষ্যত"), "an inspiring hopeful sunrise over Bangladesh"),
+    (("পরিশ্রম", "পরিশ্রমের", "চেষ্টা", "চেষ্টা চালিয়ে", "সাফল্য", "সফল", "দক্ষতা", "লক্ষ্য", "লক্ষ্যে", "লক্ষ্যের", "বাধা", "ব্যর্থ", "থেমে"), "a determined Bangladeshi person doing a specific real-world task related to the surrounding sentence, documentary photography, clear subject"),
+    (("স্বপ্ন",), "a realistic Bangladeshi person planning or working toward a clearly described personal goal, documentary photography"),
     (("সকাল", "ভোর", "সূর্যোদয়", "সূর্যোদয়"), "sunrise over a peaceful green landscape"),
     (("গাছপালা", "গাছ", "সবুজ", "বন", "প্রকৃতি"), "lush green trees and natural scenery"),
     (("আকাশ", "মেঘ", "নীল আকাশ"), "blue sky with soft white clouds"),
@@ -1481,39 +1481,47 @@ def _scene_images_too_similar(first: Path, second: Path) -> bool:
 
 
 def _visual_scenes_for_interval(scenes, duration: float, interval: int, max_scenes: int):
-    """Create one focused visual prompt per requested interval, within the free-tier scene cap."""
-    if not scenes:
+    """Allocate image slots across complete semantic scenes without fragmenting sentences."""
+    clean_scenes = [re.sub(r"\\s+", " ", str(scene or "")).strip() for scene in scenes or []]
+    clean_scenes = [scene for scene in clean_scenes if scene]
+    if not clean_scenes:
         return ["বাংলা ভিডিও"]
     try:
         seconds = max(0.1, float(duration))
         cadence = int(interval)
+        cap = max(1, int(max_scenes))
     except (TypeError, ValueError):
-        return list(scenes[:max(1, max_scenes)])
+        return clean_scenes[:max(1, int(max_scenes))]
     if cadence not in (3, 5, 10, 15, 20):
         cadence = 5
-    target_count = max(1, min(max(1, int(max_scenes)), int(math.ceil(seconds / cadence))))
-    if len(scenes) >= target_count:
-        if len(scenes) == target_count:
-            return list(scenes)
+    target_count = max(1, min(cap, int(math.ceil(seconds / cadence))))
+    if len(clean_scenes) >= target_count:
+        if len(clean_scenes) == target_count:
+            return clean_scenes
         if target_count == 1:
-            return [scenes[0]]
-        indices = sorted({round(i * (len(scenes) - 1) / (target_count - 1)) for i in range(target_count)})
-        return [scenes[i] for i in indices]
-    # A long sentence or a small number of sentences must not force one image
-    # to cover a much longer video interval. Split in narration order without
-    # dropping or reordering any words; the model then plans each segment alone.
-    words = [word for scene in scenes for word in scene.split()]
-    if not words:
-        return list(scenes)
-    target_count = min(target_count, len(words))
+            return [clean_scenes[0]]
+        indices = sorted({round(i * (len(clean_scenes) - 1) / (target_count - 1)) for i in range(target_count)})
+        return [clean_scenes[i] for i in indices]
+
+    # Give every sentence one slot, then distribute remaining slots by sentence
+    # length. Repeating a complete sentence keeps its subject and context intact;
+    # the per-slot variation seed can create a different composition for each.
+    weights = [max(1, len(re.findall(r"\\S+", scene))) for scene in clean_scenes]
+    allocations = [1] * len(clean_scenes)
+    remaining = target_count - len(clean_scenes)
+    total_weight = sum(weights)
+    exact = [remaining * weight / total_weight for weight in weights]
+    whole = [int(value) for value in exact]
+    allocations = [base + extra for base, extra in zip(allocations, whole)]
+    leftover = remaining - sum(whole)
+    order = sorted(range(len(clean_scenes)), key=lambda index: (exact[index] - whole[index], weights[index], -index), reverse=True)
+    for index in order[:leftover]:
+        allocations[index] += 1
+
     result = []
-    for index in range(target_count):
-        start = round(index * len(words) / target_count)
-        end = round((index + 1) * len(words) / target_count)
-        segment = " ".join(words[start:end]).strip()
-        if segment:
-            result.append(segment)
-    return result or list(scenes)
+    for scene, count in zip(clean_scenes, allocations):
+        result.extend([scene] * count)
+    return result[:target_count]
 
 
 def make_scene_backgrounds(script: str, folder: Path, progress_callback=None, duration: float = 0.0, scene_interval: int = 5):
