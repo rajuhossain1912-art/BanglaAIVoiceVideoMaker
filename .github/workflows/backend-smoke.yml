@@ -117,6 +117,10 @@ jobs:
         run: |
           set -e
           docker exec bangla-video-api python -c 'from app import _storyboard_scene_payload as payload; scenes=[f"scene {i}" for i in range(17)]; left=payload(scenes[:8],scenes,0); middle=payload(scenes[8:16],scenes,8); right=payload(scenes[16:],scenes,16); assert left[-1]["context_after"]=="scene 8"; assert middle[0]["context_before"]=="scene 7"; assert middle[-1]["context_after"]=="scene 16"; assert right[0]["context_before"]=="scene 15"; assert middle[0]["scene"]==9; print("Storyboard context remains continuous across 8-scene model batches")'
+      - name: Verify storyboard reviewer preserves neighboring narration context
+        run: |
+          set -e
+          docker exec bangla-video-api python -c 'from app import _storyboard_review_payload as payload; scenes=[f"scene {i}" for i in range(17)]; prompts=[f"photorealistic scene {i} documentary photo" for i in range(17)]; middle=payload(scenes[8:16],prompts[8:16],scenes,8); right=payload(scenes[16:],prompts[16:],scenes,16); assert middle[0]["context_before"]=="scene 7"; assert middle[-1]["context_after"]=="scene 16"; assert middle[0]["scene"]==9; assert right[0]["context_before"]=="scene 15"; assert middle[0]["proposed_visual_prompt"]==prompts[8]; print("Independent storyboard reviewer receives neighboring narration across batch boundaries")'
       - name: Verify repeated images request a distinct photo composition
         run: |
           set -e
