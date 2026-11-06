@@ -28,6 +28,7 @@ jobs:
       ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
       ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
       ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+      GH_RELEASE_TOKEN: ${{ secrets.GH_RELEASE_TOKEN }}
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
@@ -90,10 +91,10 @@ jobs:
             BanglaAIVoiceVideoMaker-v${{ env.APP_VERSION_NAME }}.apk
             BanglaAIVoiceVideoMaker-latest.apk
       - name: Retry GitHub Release with repository release token
-        if: steps.publish_with_workflow_token.outcome == 'failure' && secrets.GH_RELEASE_TOKEN != ''
+        if: steps.publish_with_workflow_token.outcome == 'failure' && env.GH_RELEASE_TOKEN != ''
         uses: softprops/action-gh-release@v2
         with:
-          token: ${{ secrets.GH_RELEASE_TOKEN }}
+          token: ${{ env.GH_RELEASE_TOKEN }}
           tag_name: v${{ env.APP_VERSION_NAME }}
           name: Bangla AI Voice Video Maker v${{ env.APP_VERSION_NAME }}
           target_commitish: ${{ github.sha }}
