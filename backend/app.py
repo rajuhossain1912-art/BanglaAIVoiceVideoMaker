@@ -1725,6 +1725,64 @@ def _visual_scenes_for_interval(scenes, duration: float, interval: int, max_scen
 
 
 
+def _parse_scene_match_response(raw):
+    """Normalize common vision-model response shapes into a conservative match result."""
+    if isinstance(raw, dict):
+        candidate = raw
+    else:
+        text = str(raw or "").strip()
+        object_match = re.search(r"\{.*?\}", text, flags=re.S)
+        candidate = None
+        if object_match:
+            try:
+                parsed = json.loads(object_match.group(0))
+                if isinstance(parsed, dict):
+                    candidate = parsed
+            except (TypeError, ValueError):
+                candidate = None
+        if candidate is None:
+            normalized = re.sub(r"\s+", " ", text).strip().lower()
+            label = re.fullmatch(r"(match|mismatch)[.!]?", normalized)
+            if label:
+                return {
+                    "match": label.group(1) == "match",
+                    "confidence": 0.70,
+                    "description": "",
+                    "reason": "Vision model returned a strict scene-match label",
+                }
+            match_word = re.search(r"\bmatch(?:es)?\s*[:=]?\s*(true|false|yes|no)\b", normalized)
+            confidence_word = re.search(r"\bconfidence\s*[:=]?\s*(0(?:\.\d+)?|1(?:\.0+)?)", normalized)
+            if match_word:
+                return {
+                    "match": match_word.group(1) in ("true", "yes"),
+                    "confidence": float(confidence_word.group(1)) if confidence_word else 0.65,
+                    "description": "",
+                    "reason": text[:180],
+                }
+            return None
+    match_value = candidate.get("match")
+    if isinstance(match_value, str):
+        value = match_value.strip().lower()
+        if value in ("match", "true", "yes"):
+            match_value = True
+        elif value in ("mismatch", "false", "no"):
+            match_value = False
+    if not isinstance(match_value, bool):
+        return None
+    try:
+        confidence = float(candidate.get("confidence", 0.70))
+    except (TypeError, ValueError):
+        confidence = 0.70
+    if not 0.0 <= confidence <= 1.0:
+        confidence = 0.0
+    return {
+        "match": match_value,
+        "confidence": confidence,
+        "description": str(candidate.get("description") or "")[:240],
+        "reason": str(candidate.get("reason") or "")[:180],
+    }
+
+
 def _review_generated_image_against_scene(image_path: Path, narration: str, visual_prompt: Optional[str] = None):
     """Ask Moondream to inspect a generated image and judge whether it depicts this narration."""
     account_id = os.getenv("CLOUDFLARE_ACCOUNT_ID", "").strip()
@@ -1741,8 +1799,8 @@ def _review_generated_image_against_scene(image_path: Path, narration: str, visu
         image_data = "data:image/jpeg;base64," + base64.b64encode(buffer.getvalue()).decode("ascii")
         question = (
             "Compare the visible image with this exact scene. Narration: "
-            + re.sub(r"\\s+", " ", str(narration)).strip()[:420]
-            + ". Intended visual: " + re.sub(r"\\s+", " ", str(visual_prompt or "")).strip()[:300]
+            + re.sub(r"\s+", " ", str(narration)).strip()[:420]
+            + ". Intended visual: " + re.sub(r"\s+", " ", str(visual_prompt or "")).strip()[:300]
             + ". Reply with exactly one word: MATCH or MISMATCH. MATCH only if the main visible "
             "subject and action clearly depict the scene. Generic landscapes, icons, cartoons, "
             "abstract shapes, or unrelated objects are MISMATCH for a specific narrated subject."
@@ -1762,59 +1820,21 @@ def _review_generated_image_against_scene(image_path: Path, narration: str, visu
         with urllib.request.urlopen(request, timeout=18) as response:
             data = json.loads(response.read(180_000).decode("utf-8"))
         result = data.get("result") or {}
-        raw = (
-            result.get("answer") or result.get("response") or result.get("description")
-            or result.get("text") or data.get("response") or ""
-        ) if isinstance(result, dict) else result
-        if isinstance(raw, dict):
-            review = raw
+        if isinstance(result, dict):
+            raw = (
+                result.get("answer") or result.get("response") or result.get("description")
+                or result.get("text") or result.get("output") or data.get("response") or ""
+            )
         else:
-            response_text = str(raw).strip()
-            object_match = re.search(r"\{.*?\}", response_text, flags=re.S)
-            review = None
-            if object_match:
-                try:
-                    review = json.loads(object_match.group(0))
-                except (TypeError, ValueError):
-                    review = None
-            if not isinstance(review, dict):
-                normalized = response_text.strip().lower()
-                strict_label = re.fullmatch(r"(match|mismatch)[.!\\s]*", normalized)
-                if strict_label:
-                    review = {
-                        "match": strict_label.group(1) == "match",
-                        "confidence": 0.70,
-                        "description": "",
-                        "reason": "Vision model returned a strict scene-match label",
-                    }
-                else:
-                    match_word = re.search(r"\\b(match|matches)\\s*[:=]?\\s*(true|false|yes|no)\\b", normalized)
-                    confidence_word = re.search(r"\\bconfidence\\s*[:=]?\\s*(0(?:\\.\\d+)?|1(?:\\.0+)?)", normalized)
-                    if match_word:
-                        review = {
-                            "match": match_word.group(2) in ("true", "yes"),
-                            "confidence": float(confidence_word.group(1)) if confidence_word else 0.65,
-                            "description": "",
-                            "reason": response_text[:180],
-                        }
-        if not isinstance(review, dict):
-                normalized = response_text.lower()
-                match_word = re.search(r"\b(match|matches)\s*[:=]?\s*(true|false|yes|no)\b", normalized)
-                confidence_word = re.search(r"\bconfidence\s*[:=]?\s*(0(?:\.\d+)?|1(?:\.0+)?)", normalized)
-                if match_word:
-                    review = {
-                        "match": match_word.group(2) in ("true", "yes"),
-                        "confidence": float(confidence_word.group(1)) if confidence_word else 0.65,
-                        "description": "",
-                        "reason": response_text[:180],
-                    }
-        if not isinstance(review, dict) or not isinstance(review.get("match"), bool):
+            raw = result
+        review = _parse_scene_match_response(raw)
+        if not review:
             print("IMAGE_REVIEW unavailable reason=unstructured_vision_response", flush=True)
             return None
-        confidence = float(review.get("confidence", 0.0))
-        description = re.sub(r"\s+", " ", str(review.get("description") or "")).strip()[:240]
-        reason = re.sub(r"\s+", " ", str(review.get("reason") or "")).strip()[:180]
-        accepted = bool(review["match"]) and confidence >= 0.62
+        confidence = review["confidence"]
+        accepted = review["match"] and confidence >= 0.62
+        description = re.sub(r"\s+", " ", review["description"]).strip()[:240]
+        reason = re.sub(r"\s+", " ", review["reason"]).strip()[:180]
         print(
             f"IMAGE_REVIEW model={model} match={accepted} confidence={confidence:.2f} "
             f"description={description[:120]} reason={reason[:100]}",
@@ -1824,7 +1844,6 @@ def _review_generated_image_against_scene(image_path: Path, narration: str, visu
     except Exception as exc:
         print(f"IMAGE_REVIEW unavailable model={model} error={type(exc).__name__}: {str(exc)[:140]}", flush=True)
         return None
-
 
 def make_scene_backgrounds(script: str, folder: Path, progress_callback=None, duration: float = 0.0, scene_interval: int = 5):
     """Plan as many visual scenes as the duration and selected interval require."""
