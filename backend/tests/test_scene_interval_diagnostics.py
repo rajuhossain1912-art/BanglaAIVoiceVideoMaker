@@ -26,8 +26,8 @@ class SceneIntervalDiagnosticsTests(unittest.TestCase):
     def test_visual_scene_count_expands_long_sentence_to_interval_budget(self):
         words = [f"শব্দ{i}" for i in range(170)]
         scenes = [" ".join(words)]
-        result = video_app._visual_scenes_for_interval(scenes, 113.6, 3, 32)
-        self.assertEqual(len(result), 32)
+        result = video_app._visual_scenes_for_interval(scenes, 113.6, 3, 48)
+        self.assertEqual(len(result), 38)
         self.assertEqual(" ".join(" ".join(result).split()), " ".join(words))
         self.assertTrue(all(result))
 
