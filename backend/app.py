@@ -628,15 +628,35 @@ def _image_keywords(script: str, model_visual_prompt: Optional[str] = None):
 
 
 def _image_title_relevance_score(title: str, keywords):
-    """Rank reusable photo candidates by overlap with concrete storyboard subjects."""
+    """Rank photo titles using exact words and conservative English plural normalization."""
+    def forms(word):
+        value = re.sub(r"[^a-z]", "", str(word or "").lower())
+        variants = {value} if len(value) >= 3 else set()
+        if len(value) > 4 and value.endswith("ies"):
+            variants.add(value[:-3] + "y")
+        if len(value) > 4 and value.endswith(("ches", "shes", "xes", "zes", "sses")):
+            variants.add(value[:-2])
+        elif len(value) > 3 and value.endswith("s") and not value.endswith(("ss", "us", "is")):
+            variants.add(value[:-1])
+        return variants
+
     title_text = re.sub(r"\\s+", " ", str(title or "")).lower()
     title_tokens = set(re.findall(r"[a-z]{3,}", title_text))
-    terms = [str(word).lower() for word in (keywords or []) if re.fullmatch(r"[A-Za-z]{3,}", str(word))]
-    matched = sum(1 for word in terms if word in title_tokens)
+    normalized_title = set().union(*(forms(token) for token in title_tokens)) if title_tokens else set()
+    terms = list(dict.fromkeys(
+        str(word).lower() for word in (keywords or [])
+        if re.fullmatch(r"[A-Za-z]{3,}", str(word))
+    ))
     if not terms:
         return 0
-    # Prefer candidates matching several specific scene terms, not generic scenery.
-    return matched * 10 + (matched / len(set(terms)))
+    matched = sum(1 for word in terms if forms(word) & normalized_title)
+    # A title with no concrete storyboard term is not a safe contextual-photo choice.
+    return matched * 10 + (matched / len(terms))
+
+
+def _licensed_photo_title_is_relevant(title: str, keywords):
+    """Reject generic stock titles that share none of the requested scene subjects."""
+    return _image_title_relevance_score(title, keywords) >= 10
 
 
 def _download_checked_image(image_url: str, folder: Path, filename: str, credit: str):
@@ -691,6 +711,8 @@ def find_openverse_image(script: str, folder: Path, model_visual_prompt: Optiona
             reverse=True,
         )
         for _, item in results:
+            if not _licensed_photo_title_is_relevant(item.get("title", ""), keywords):
+                continue
             license_code = str(item.get("license", "")).lower()
             if license_code not in {"cc0", "pdm", "by", "by-sa"}:
                 continue
@@ -740,6 +762,8 @@ def find_contextual_image(script: str, folder: Path, model_visual_prompt: Option
             reverse=True,
         )
         for _, page in pages:
+            if not _licensed_photo_title_is_relevant(str(page.get("title", "")).replace("File:", ""), keywords):
+                continue
             info = (page.get("imageinfo") or [{}])[0]
             metadata = info.get("extmetadata") or {}
             license_name = str((metadata.get("LicenseShortName") or {}).get("value", "")).strip()
