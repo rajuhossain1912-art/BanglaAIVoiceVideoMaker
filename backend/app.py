@@ -555,13 +555,24 @@ def _contains_visual_term(text: str, term: str) -> bool:
     term_tokens = re.findall(r"[A-Za-z]+|[\u0980-\u09FF]+", (term or "").lower())
     if not term_tokens:
         return False
+    bengali_suffixes = (
+        "ের", "র", "ে", "এ", "তে", "টি", "টা", "খানা", "খানি",
+        "রা", "দের", "কে", "গুলি", "গুলো", "সমূহ", "জন", "জনের",
+        "জনকে", "টির", "টার", "গুলোর", "গুলিতে",
+    )
     for start in range(max(0, len(text_tokens) - len(term_tokens) + 1)):
         matched = True
         for offset, expected in enumerate(term_tokens):
             actual = text_tokens[start + offset]
             if actual == expected:
                 continue
-            if len(expected) >= 4 and actual.startswith(expected):
+            if re.fullmatch(r"[\\u0980-\\u09FF]+", expected):
+                # Match common Bengali inflections without broad substring hits.
+                # For example, কৃষক -> কৃষকের, বাস -> বাসের, but not বাস -> বাস্তব.
+                remainder = actual[len(expected):] if actual.startswith(expected) else ""
+                if remainder in bengali_suffixes:
+                    continue
+            elif len(expected) >= 4 and actual.startswith(expected):
                 continue
             matched = False
             break
