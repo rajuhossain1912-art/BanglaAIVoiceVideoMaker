@@ -808,6 +808,80 @@ def _parse_scene_visual_prompts(raw: str, expected_count: int):
         cleaned.append(value)
     return cleaned
 
+def _review_scene_visual_prompts(scenes, prompts, model_names, planner_model):
+    """Use a second, different language model to critique scene-to-image prompt alignment."""
+    account_id = os.getenv("CLOUDFLARE_ACCOUNT_ID", "").strip()
+    api_token = os.getenv("CLOUDFLARE_AI_API_TOKEN", os.getenv("CLOUDFLARE_API_TOKEN", "")).strip()
+    if not account_id or not api_token or not prompts:
+        return prompts
+    reviewer_models = [name for name in model_names if name != planner_model]
+    if not reviewer_models:
+        return prompts
+    review_items = [
+        {
+            "scene": index + 1,
+            "narration": re.sub(r"\\s+", " ", str(scene)).strip()[:300],
+            "proposed_visual_prompt": prompt,
+        }
+        for index, (scene, prompt) in enumerate(zip(scenes, prompts))
+    ]
+    review_prompt = (
+        "You are an independent quality reviewer for a Bangladeshi educational video storyboard. "
+        "Check each proposed visual prompt against its exact narration. Reject generic scenery, "
+        "symbols, cartoons, vague silhouettes, unrelated objects, and details not supported by the narration. "
+        "Keep the actual subject and action explicit. Use nearby scene context only when needed to resolve references. "
+        "Rewrite weak prompts as concise, photorealistic documentary photography prompts. "
+        "Do not invent facts, people, places, or actions. Preserve one prompt for each scene in the same order. "
+        "Return ONLY a JSON array with keys scene and visual_prompt; each prompt must be 40 to 220 characters. "
+        "Items: " + json.dumps(review_items, ensure_ascii=False)
+    )
+    for reviewer_model in reviewer_models[:2]:
+        try:
+            model_path = urllib.parse.quote(reviewer_model, safe="@/-")
+            body = json.dumps({
+                "messages": [
+                    {"role": "system", "content": "Independently audit scene relevance. Return valid JSON only."},
+                    {"role": "user", "content": review_prompt},
+                ],
+                "temperature": 0.1,
+                "max_tokens": 1800,
+            }).encode("utf-8")
+            request = urllib.request.Request(
+                f"https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/run/{model_path}",
+                data=body,
+                headers={
+                    "Authorization": "Bearer " + api_token,
+                    "Content-Type": "application/json",
+                    "User-Agent": "BanglaAIVoiceVideoMaker/1.0",
+                },
+                method="POST",
+            )
+            with urllib.request.urlopen(request, timeout=9) as response:
+                data = json.loads(response.read(250_000).decode("utf-8"))
+            result = data.get("result") or {}
+            raw = result.get("response") or result.get("choices", [{}])[0].get("message", {}).get("content", "")
+            reviewed = _parse_scene_visual_prompts(raw, len(scenes))
+            if reviewed:
+                print(
+                    "LANGUAGE_MODEL review=passed planner=" + planner_model
+                    + " reviewer=" + reviewer_model,
+                    flush=True,
+                )
+                return reviewed
+            print(
+                "LANGUAGE_MODEL review=fallback reason=invalid_review_response reviewer="
+                + reviewer_model,
+                flush=True,
+            )
+        except Exception as exc:
+            print(
+                f"LANGUAGE_MODEL review=fallback reviewer={reviewer_model} "
+                f"error={type(exc).__name__}: {str(exc)[:100]}",
+                flush=True,
+            )
+    return prompts
+
+
 def _parse_cloudflare_transcription_response(data):
     """Extract a non-empty transcript from a Workers AI Whisper response."""
     if not isinstance(data, dict) or data.get("success") is False:
@@ -926,7 +1000,8 @@ def _plan_scene_visual_prompts(scenes):
     cf_api_token = os.getenv("CLOUDFLARE_AI_API_TOKEN", os.getenv("CLOUDFLARE_API_TOKEN", "")).strip()
     if cf_account_id and cf_api_token:
         default_models = [
-            os.getenv("CLOUDFLARE_AI_MODEL", "@cf/meta/llama-3.2-3b-instruct").strip(),
+            os.getenv("CLOUDFLARE_AI_MODEL", "@cf/google/gemma-4-26b-a4b-it").strip(),
+            "@cf/zai-org/glm-4.7-flash",
             "@cf/qwen/qwen2.5-7b-instruct",
             "@cf/google/gemma-3-12b-it",
         ]
@@ -957,6 +1032,8 @@ def _plan_scene_visual_prompts(scenes):
                 raw = result.get("response") or result.get("choices", [{}])[0].get("message", {}).get("content", "")
                 prompts = _parse_scene_visual_prompts(raw, len(scenes))
                 if prompts:
+                    # Cross-check with a different model before accepting the storyboard.
+                    prompts = _review_scene_visual_prompts(scenes, prompts, model_names, model)
                     LANGUAGE_MODEL_VISUAL_CACHE[cache_key] = prompts
                     print("LANGUAGE_MODEL selected=Cloudflare-Workers-AI model=" + model, flush=True)
                     return prompts
