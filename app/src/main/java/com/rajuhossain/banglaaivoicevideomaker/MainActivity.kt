@@ -1,6 +1,8 @@
 // PR build validation trigger: keep this comment while CI verifies the UI changes.
 package com.rajuhossain.banglaaivoicevideomaker
 
+import com.rajuhossain.banglaaivoicemaker.BuildConfig
+
 import android.Manifest
 import android.app.DownloadManager
 import android.content.Context
