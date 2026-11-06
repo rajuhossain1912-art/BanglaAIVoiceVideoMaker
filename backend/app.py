@@ -702,6 +702,8 @@ def _download_checked_image(image_url: str, folder: Path, filename: str, credit:
             if check.width < 80 or check.height < 80 or check.width * check.height > 4_000_000:
                 raise ValueError("Image dimensions outside safe limits")
             check.verify()
+        if not _image_has_visible_content(target):
+            raise ValueError("Downloaded image is blank or near-black")
         return target, credit[:180]
     except Exception:
         try:
@@ -1243,6 +1245,8 @@ def find_pollinations_image(script: str, folder: Path, model_visual_prompt: Opti
             if check.width < 80 or check.height < 80 or check.width * check.height > 4_000_000:
                 raise ValueError("Pollinations image dimensions outside safe limits")
             check.verify()
+        if not _image_has_visible_content(target):
+            raise ValueError("Pollinations returned blank or near-black image")
         print("IMAGE_PROVIDER selected=Pollinations-Flux", flush=True)
         return target, "AI-generated with Pollinations | https://pollinations.ai"
     except Exception as exc:
@@ -1459,6 +1463,8 @@ def find_generated_image(script: str, folder: Path, model_visual_prompt: Optiona
                     if check.width < 80 or check.height < 80 or check.width * check.height > 4_000_000:
                         raise ValueError("Generated image dimensions outside safe limits")
                     check.verify()
+                if not _image_has_visible_content(target):
+                    raise ValueError(f"{provider_name} returned blank or near-black image")
                 print(f"IMAGE_PROVIDER selected={provider_name}", flush=True)
                 return target, f"AI-generated with {provider_name} | https://huggingface.co/spaces/{space_id}"
             if isinstance(image_result, str) and image_result.startswith("https://"):
