@@ -2052,6 +2052,29 @@ def job_status(job_id: str):
         return dict(job)
 
 
+def _scene_interval_diagnostics(duration: float, image_count, interval):
+    """Compare generated background count with the requested maximum image-change cadence."""
+    try:
+        seconds = float(duration)
+        cadence = int(interval)
+        count = int(image_count)
+    except (TypeError, ValueError):
+        return {"expected_images": None, "average_seconds_per_image": None, "warning": False}
+    if seconds <= 0 or cadence <= 0 or count <= 0:
+        return {
+            "expected_images": max(1, int(math.ceil(seconds / cadence))) if seconds > 0 and cadence > 0 else None,
+            "average_seconds_per_image": None,
+            "warning": bool(seconds > 0 and cadence > 0 and count <= 0),
+        }
+    expected = max(1, int(math.ceil(seconds / cadence)))
+    average = round(seconds / count, 1)
+    return {
+        "expected_images": expected,
+        "average_seconds_per_image": average,
+        "warning": count < expected,
+    }
+
+
 @app.get("/api/jobs/{job_id}/report")
 def video_quality_report(job_id: str):
     """Create a TalkBack-friendly, free technical report for a completed MP4."""
@@ -2082,6 +2105,9 @@ def video_quality_report(job_id: str):
     except (TypeError, ValueError):
         duration = 0.0
     size_bytes = video_path.stat().st_size
+    image_count = snapshot.get("scene_count")
+    scene_interval = snapshot.get("scene_interval_seconds")
+    interval_diagnostics = _scene_interval_diagnostics(duration, image_count, scene_interval)
 
     audio_check = "অডিও ট্র্যাক পাওয়া যায়নি।"
     audio_level = None
@@ -2186,6 +2212,9 @@ def video_quality_report(job_id: str):
     elif dark_sample_count is not None and visual_sample_count and dark_sample_count / visual_sample_count >= 0.5:
         summary = "সতর্কতা: ভিডিও ও অডিও ট্র্যাক আছে, কিন্তু নমুনা চিত্রের অর্ধেক বা তার বেশি খুব অন্ধকার। ভিডিওর দৃশ্য কালো বা অস্পষ্ট হতে পারে; এই ফলাফল যাচাই না করে ভিডিওকে সম্পূর্ণ সফল বলা যাবে না।"
         overall = "visual_warning"
+    elif interval_diagnostics["warning"]:
+        summary = "প্রাথমিক প্রযুক্তিগত পরীক্ষা সফল, তবে নির্বাচিত ছবি পরিবর্তনের বিরতি পূরণ হয়নি। ভিডিওর দৈর্ঘ্য অনুযায়ী পর্যাপ্ত পটভূমির ছবি তৈরি হয়নি; তাই প্রতি নির্বাচিত বিরতিতে নতুন ছবি আসা নিশ্চিত নয়।"
+        overall = "visual_warning"
     else:
         summary = "প্রাথমিক প্রযুক্তিগত পরীক্ষা সফল। ভিডিও ও অডিও ট্র্যাক এবং ফাইলের দৈর্ঘ্য পাওয়া গেছে। দৃশ্যের উজ্জ্বলতা পরীক্ষা করা হয়েছে; তবে দৃশ্য ও সাবটাইটেলের বিষয়বস্তু শতভাগ সঠিক কি না, এই পরীক্ষা তা নিশ্চিত করে না।"
         overall = "passed_with_limits"
@@ -2196,15 +2225,21 @@ def video_quality_report(job_id: str):
     report_text += ("ভিডিও ট্র্যাক আছে। " if video_stream else "ভিডিও ট্র্যাক নেই। ")
     report_text += audio_check + " "
     report_text += scene_check + " "
-    image_count = snapshot.get("scene_count")
     narration_scene_count = snapshot.get("narration_scene_count")
-    scene_interval = snapshot.get("scene_interval_seconds")
     if isinstance(image_count, int) and image_count > 0:
         report_text += f"ভিডিওতে {image_count}টি পটভূমির ছবি ব্যবহার করা হয়েছে। "
     if isinstance(narration_scene_count, int) and narration_scene_count > 0:
         report_text += f"লেখা থেকে {narration_scene_count}টি বাক্যভিত্তিক দৃশ্য তৈরি হয়েছে। "
     if isinstance(scene_interval, int) and scene_interval > 0:
         report_text += f"নির্বাচিত ছবি পরিবর্তনের বিরতি ছিল {scene_interval} সেকেন্ড। "
+    if interval_diagnostics["expected_images"] is not None and interval_diagnostics["average_seconds_per_image"] is not None:
+        report_text += (
+            f"এই দৈর্ঘ্যে {scene_interval} সেকেন্ড বিরতি মানতে আনুমানিক "
+            f"{interval_diagnostics['expected_images']}টি ছবি দরকার ছিল। "
+            f"প্রতি ছবির গড় কভারেজ {interval_diagnostics['average_seconds_per_image']} সেকেন্ড। "
+        )
+        if interval_diagnostics["warning"]:
+            report_text += "তৈরি ছবির সংখ্যা কম হওয়ায় নির্বাচিত বিরতিতে ছবি বদলানো নিশ্চিত হয়নি। "
     captions = snapshot.get("caption_frame_count")
     if isinstance(captions, int) and captions > 0:
         report_text += f"তৈরির সময় {captions}টি সাবটাইটেল ফ্রেম তৈরি হয়েছিল। "
