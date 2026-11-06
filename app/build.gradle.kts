@@ -12,10 +12,11 @@ android {
     namespace = "com.rajuhossain.banglaaivoicemaker"
     compileSdk = 35
     defaultConfig {
-        applicationId = "com.rajuhossain.banglaaivoicemaker"
+        // Use a distinct package so the new persistent-signing app can coexist
+        // with the legacy installation and its private saved voice profile.
+        applicationId = "com.rajuhossain.banglaaivoicemaker.new"
         minSdk = 26
         targetSdk = 35
-        // Keep versionCode increasing so newer APKs can update older installations.
         versionCode = providers.environmentVariable("APP_VERSION_CODE").getOrElse("4").toInt()
         versionName = providers.environmentVariable("APP_VERSION_NAME").getOrElse("0.3.0")
         buildConfigField("String", "API_BASE_URL", "\"$configuredApiBaseUrl\"")
@@ -32,8 +33,6 @@ android {
     }
     buildTypes {
         getByName("release") {
-            // Until the owner adds the private keystore secrets, retain the existing
-            // debug-signing behavior. Once configured, every release uses the same key.
             signingConfig = if (hasPersistentReleaseKey) {
                 signingConfigs.getByName("release")
             } else {
