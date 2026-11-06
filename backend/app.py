@@ -1495,7 +1495,8 @@ def make_background(script: str, folder: Path, model_visual_prompt: Optional[str
     return target
 
 def _split_script_into_scenes(script: str, max_scenes: Optional[int] = None, target_words: int = 8):
-    """Split narration into meaningful sentence-sized scenes without losing words."""    text = (script or "").strip()
+    """Split narration into meaningful sentence-sized scenes without losing words."""
+    text = (script or "").strip()
     if not text:
         return ["বাংলা ভিডিও"]
 
