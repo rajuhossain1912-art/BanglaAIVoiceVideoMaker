@@ -117,6 +117,10 @@ jobs:
         run: |
           set -e
           docker exec bangla-video-api python -c 'from app import _storyboard_scene_payload as payload; scenes=[f"scene {i}" for i in range(17)]; left=payload(scenes[:8],scenes,0); middle=payload(scenes[8:16],scenes,8); right=payload(scenes[16:],scenes,16); assert left[-1]["context_after"]=="scene 8"; assert middle[0]["context_before"]=="scene 7"; assert middle[-1]["context_after"]=="scene 16"; assert right[0]["context_before"]=="scene 15"; assert middle[0]["scene"]==9; print("Storyboard context remains continuous across 8-scene model batches")'
+      - name: Verify visual planner parses global scene numbers in later batches
+        run: |
+          set -e
+          docker exec bangla-video-api python -c 'import json; from app import _parse_scene_visual_prompts as parse; data=json.dumps([{"scene":i,"visual_prompt":f"Photorealistic documentary scene number {i} with a clear visible subject"} for i in range(9,17)]); result=parse(data,8,8); assert result and len(result)==8; assert parse(data,8,0) is None; print("Visual planner correctly validates globally numbered scenes after the first 8-scene batch")'
       - name: Verify storyboard reviewer preserves neighboring narration context
         run: |
           set -e
