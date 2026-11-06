@@ -622,9 +622,13 @@ def _image_keywords(script: str, model_visual_prompt: Optional[str] = None):
         "was", "were", "have", "has", "had", "will", "would", "can", "could",
         "about", "into", "over", "under", "then", "than", "when", "where", "what",
         "why", "how", "not", "but", "or", "as", "is", "am", "be", "one", "scene",
-        "show", "showing", "real", "person", "photograph", "photographic", "documentary",
-        "image", "photo", "natural", "light", "clear", "focus", "vertical", "bangladeshi",
-        "working", "green", "clearly", "rural", "plants", "beside", "flooded",
+        "show", "showing", "real", "realistic", "person", "people", "photograph", "photographic",
+        "photorealistic", "documentary", "image", "images", "photo", "photos", "natural", "light",
+        "clear", "clearly", "focus", "focused", "sharp", "crisp", "vertical", "bangladeshi",
+        "recognizable", "recognisable", "visible", "subject", "subjects", "main", "specific",
+        "exact", "actual", "depict", "depicting", "prefer", "activity", "activities", "action",
+        "actions", "objects", "current", "neighboring", "context", "narration", "unless",
+        "discussed", "working", "green", "rural", "plants", "beside", "flooded",
     }
     return list(dict.fromkeys(word for word in tokens if word not in stopwords))[:8]
 
