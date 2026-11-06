@@ -1804,6 +1804,22 @@ def make_scene_backgrounds(script: str, folder: Path, progress_callback=None, du
         progress_callback(35, "ভিডিওর প্রতিটি দৃশ্যের জন্য উপযুক্ত ছবি পরিকল্পনা করা হচ্ছে।")
     visual_prompts = _plan_scene_visual_prompts(visual_scenes)
     backgrounds = []
+    semantic_review = {
+        "reviewed": 0, "matched": 0, "mismatched": 0,
+        "retried": 0, "retry_matched": 0, "unavailable": 0,
+    }
+    try:
+        review_limit = max(0, int(os.getenv("IMAGE_SEMANTIC_REVIEW_MAX_SCENES", "12")))
+    except (TypeError, ValueError):
+        review_limit = 12
+    review_indices = set()
+    if review_limit > 0 and len(visual_scenes) <= review_limit:
+        review_indices = set(range(len(visual_scenes)))
+    elif review_limit > 0 and len(visual_scenes) > review_limit:
+        review_indices = {
+            round(slot * (len(visual_scenes) - 1) / max(1, review_limit - 1))
+            for slot in range(review_limit)
+        }
     for index, scene_text in enumerate(visual_scenes):
         if progress_callback:
             percent = 36 + int(4 * index / max(1, len(visual_scenes)))
@@ -1813,23 +1829,17 @@ def make_scene_backgrounds(script: str, folder: Path, progress_callback=None, du
         print(f"IMAGE_SCENE index={index + 1}/{len(scenes)} words={len(scene_text.split())}", flush=True)
         scene_visual_prompt = visual_prompts[index] if visual_prompts else None
         background = make_background(scene_text, scene_dir, scene_visual_prompt, variation_seed=index, scene_index=index + 1)
-        # To protect the free-tier allowance, inspect a bounded, evenly distributed
-        # sample by default. Set the environment limit higher to review more scenes.
-        try:
-            review_limit = max(0, int(os.getenv("IMAGE_SEMANTIC_REVIEW_MAX_SCENES", "12")))
-        except (TypeError, ValueError):
-            review_limit = 12
-        review_indices = set()
-        if review_limit > 0 and len(visual_scenes) <= review_limit:
-            review_indices = set(range(len(visual_scenes)))
-        elif review_limit > 0 and len(visual_scenes) > review_limit:
-            review_indices = {
-                round(slot * (len(visual_scenes) - 1) / max(1, review_limit - 1))
-                for slot in range(review_limit)
-            }
+        # Inspect an evenly distributed sample to protect free-tier inference allowance.
         if index in review_indices:
+            semantic_review["reviewed"] += 1
             review = _review_generated_image_against_scene(background, scene_text, scene_visual_prompt)
-            if review and not review["match"]:
+            if review is None:
+                semantic_review["unavailable"] += 1
+            elif review["match"]:
+                semantic_review["matched"] += 1
+            else:
+                semantic_review["mismatched"] += 1
+                semantic_review["retried"] += 1
                 print(f"IMAGE_REVIEW action=regenerate scene={index + 1}", flush=True)
                 correction = (
                     (scene_visual_prompt or _english_visual_prompt(scene_text))
@@ -1842,10 +1852,13 @@ def make_scene_backgrounds(script: str, folder: Path, progress_callback=None, du
                     scene_index=index + 1
                 )
                 retry_review = _review_generated_image_against_scene(retry_background, scene_text, correction)
-                if retry_review and retry_review["match"]:
+                if retry_review is None:
+                    semantic_review["unavailable"] += 1
+                elif retry_review["match"]:
+                    semantic_review["retry_matched"] += 1
                     background = retry_background
                     print(f"IMAGE_REVIEW action=accepted_retry scene={index + 1}", flush=True)
-                elif retry_review:
+                else:
                     print(f"IMAGE_REVIEW action=retry_still_mismatch scene={index + 1}", flush=True)
         if any(_scene_images_too_similar(background, prior) for prior in backgrounds):
             print(f"IMAGE_SCENE repeated_image index={index + 1} action=regenerate_topic_graphic", flush=True)
@@ -2207,7 +2220,7 @@ def render(job_id: str, script: str, mode: str, audio_path: Optional[Path], capt
                 if job_id in JOBS and JOBS[job_id].get("status") == "processing":
                     JOBS[job_id]["progress"] = max(JOBS[job_id].get("progress", 0), progress)
                     JOBS[job_id]["message"] = message
-        backgrounds, visual_scene_texts = make_scene_backgrounds(script, folder, update_visual_progress, duration=duration, scene_interval=scene_interval)
+        backgrounds, visual_scene_texts, semantic_review = make_scene_backgrounds(script, folder, update_visual_progress, duration=duration, scene_interval=scene_interval)
         provider_order = ",".join(AI_IMAGE_PROVIDER_ORDER) or "none"
         licensed_fallback = "enabled" if ALLOW_LICENSED_IMAGE_FALLBACK else "disabled"
         print(
@@ -2241,7 +2254,7 @@ def render(job_id: str, script: str, mode: str, audio_path: Optional[Path], capt
         ], 240)
         print(f"VIDEO_STAGE job={job_id} stage=ffmpeg_done", flush=True)
         with LOCK:
-            JOBS[job_id].update(status="completed", progress=100, message="ভিডিও তৈরি হয়েছে", download_url=f"/api/jobs/{job_id}/download", duration=round(duration, 2), scene_count=len(backgrounds), narration_scene_count=len(visual_scene_texts), scene_interval_seconds=scene_interval, caption_frame_count=frame_count, script_characters=len(script), video_mode=mode, completed_at=time.time())
+            JOBS[job_id].update(status="completed", progress=100, message="ভিডিও তৈরি হয়েছে", download_url=f"/api/jobs/{job_id}/download", duration=round(duration, 2), scene_count=len(backgrounds), narration_scene_count=len(visual_scene_texts), scene_interval_seconds=scene_interval, caption_frame_count=frame_count, semantic_review=semantic_review, script_characters=len(script), video_mode=mode, completed_at=time.time())
     except Exception as exc:
         print(f"VIDEO_STAGE job={job_id} stage=failed error={type(exc).__name__}: {str(exc)[:500]}", flush=True)
         with LOCK:
