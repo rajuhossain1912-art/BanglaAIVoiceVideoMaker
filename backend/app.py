@@ -809,17 +809,10 @@ def _parse_scene_visual_prompts(raw: str, expected_count: int):
         cleaned.append(value)
     return cleaned
 
-def _review_scene_visual_prompts(scenes, prompts, model_names, planner_model, context_scenes=None, context_offset=0):
-    """Use a second, different language model to critique scene-to-image prompt alignment."""
-    account_id = os.getenv("CLOUDFLARE_ACCOUNT_ID", "").strip()
-    api_token = os.getenv("CLOUDFLARE_AI_API_TOKEN", os.getenv("CLOUDFLARE_API_TOKEN", "")).strip()
-    if not account_id or not api_token or not prompts:
-        return prompts
-    reviewer_models = [name for name in model_names if name != planner_model]
-    if not reviewer_models:
-        return prompts
+def _storyboard_review_payload(scenes, prompts, context_scenes=None, context_offset=0):
+    """Build reviewer items with full-story neighboring context for each scene."""
     full_context = context_scenes if context_scenes is not None else scenes
-    review_items = [
+    return [
         {
             "scene": context_offset + index + 1,
             "context_before": re.sub(r"\s+", " ", str(full_context[context_offset + index - 1])).strip()[:180]
@@ -831,6 +824,18 @@ def _review_scene_visual_prompts(scenes, prompts, model_names, planner_model, co
         }
         for index, (scene, prompt) in enumerate(zip(scenes, prompts))
     ]
+
+
+def _review_scene_visual_prompts(scenes, prompts, model_names, planner_model, context_scenes=None, context_offset=0):
+    """Use a second, different language model to critique scene-to-image prompt alignment."""
+    account_id = os.getenv("CLOUDFLARE_ACCOUNT_ID", "").strip()
+    api_token = os.getenv("CLOUDFLARE_AI_API_TOKEN", os.getenv("CLOUDFLARE_API_TOKEN", "")).strip()
+    if not account_id or not api_token or not prompts:
+        return prompts
+    reviewer_models = [name for name in model_names if name != planner_model]
+    if not reviewer_models:
+        return prompts
+    review_items = _storyboard_review_payload(scenes, prompts, context_scenes, context_offset)
     review_prompt = (
         "You are an independent quality reviewer for a Bangladeshi educational video storyboard. "
         "Check each proposed visual prompt against its exact narration. Use context_before and context_after only "
