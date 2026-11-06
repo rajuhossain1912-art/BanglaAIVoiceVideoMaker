@@ -1291,6 +1291,15 @@ def _image_has_visible_content(image_path: Path):
         return False
 
 
+def _cloudflare_image_model_inputs(model: str, prompt: str):
+    """Send only parameters supported by each Workers AI image model schema."""
+    if model == "@cf/black-forest-labs/flux-1-schnell":
+        # FLUX.1-schnell accepts prompt and optional steps (default 4).
+        # Keep the REST request minimal to avoid schema-validation failures.
+        return {"prompt": prompt}
+    return {"prompt": prompt, "width": 512, "height": 768, "num_steps": 4}
+
+
 def find_cloudflare_generated_image(script: str, folder: Path, model_visual_prompt: Optional[str] = None):
     """Try Cloudflare Workers AI image models on the configured account's free allocation."""
     account_id = os.getenv("CLOUDFLARE_ACCOUNT_ID", "").strip()
@@ -1312,10 +1321,7 @@ def find_cloudflare_generated_image(script: str, folder: Path, model_visual_prom
             print(f"IMAGE_PROVIDER skipped={provider_key} reason=cooldown remaining_seconds={int(cooldown_until - time.time())}", flush=True)
             continue
         try:
-            if model == "@cf/black-forest-labs/flux-1-schnell":
-                model_inputs = {"prompt": prompt, "steps": 8}
-            else:
-                model_inputs = {"prompt": prompt, "width": 512, "height": 768, "num_steps": 4}
+            model_inputs = _cloudflare_image_model_inputs(model, prompt)
             body = json.dumps(model_inputs).encode("utf-8")
             model_path = urllib.parse.quote(model, safe="@/-")
             request = urllib.request.Request(
@@ -1348,9 +1354,17 @@ def find_cloudflare_generated_image(script: str, folder: Path, model_visual_prom
             print("IMAGE_PROVIDER selected=" + provider_key, flush=True)
             return target, "AI-generated with Cloudflare Workers AI model " + model
         except Exception as exc:
+            detail = str(exc)[:150]
+            if isinstance(exc, urllib.error.HTTPError):
+                try:
+                    body_detail = exc.read(700).decode("utf-8", errors="replace").strip()
+                    if body_detail:
+                        detail = f"HTTP {exc.code}: {body_detail[:700]}"
+                except Exception:
+                    pass
             with IMAGE_PROVIDER_COOLDOWN_LOCK:
                 IMAGE_PROVIDER_COOLDOWN_UNTIL[provider_key] = time.time() + IMAGE_PROVIDER_COOLDOWN_SECONDS
-            print(f"IMAGE_PROVIDER failed provider={provider_key} cooldown_seconds={IMAGE_PROVIDER_COOLDOWN_SECONDS} error={type(exc).__name__}: {str(exc)[:150]}", flush=True)
+            print(f"IMAGE_PROVIDER failed provider={provider_key} cooldown_seconds={IMAGE_PROVIDER_COOLDOWN_SECONDS} error={type(exc).__name__}: {detail}", flush=True)
     return None, ""
 
 
