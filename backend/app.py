@@ -30,6 +30,8 @@ AI_IMAGE_GENERATION_ENABLED = os.getenv("AI_IMAGE_GENERATION_ENABLED", "true").l
 AI_IMAGE_PROVIDER_ORDER = [x.strip().lower() for x in os.getenv("AI_IMAGE_PROVIDER_ORDER", "pollinations,flux,zimage").split(",") if x.strip()]
 AI_IMAGE_PROVIDER_TIMEOUT = max(12, min(45, int(os.getenv("AI_IMAGE_PROVIDER_TIMEOUT", "28"))))
 ALLOW_LICENSED_IMAGE_FALLBACK = os.getenv("ALLOW_LICENSED_IMAGE_FALLBACK", "true").lower() in ("1", "true", "yes")
+# Search a wider but bounded candidate pool so relevant documentary photos are less likely to be missed.
+IMAGE_SEARCH_CANDIDATE_LIMIT = 20
 WORK_DIR = Path(os.getenv("WORK_DIR", "/tmp/bangla-video-jobs"))
 WORK_DIR.mkdir(parents=True, exist_ok=True)
 MAX_SCRIPT_CHARS = int(os.getenv("MAX_SCRIPT_CHARS", "50000"))
@@ -694,7 +696,7 @@ def find_openverse_image(script: str, folder: Path, model_visual_prompt: Optiona
     params = urllib.parse.urlencode({
         "q": " ".join(keywords),
         "license": "cc0,pdm,by,by-sa",
-        "page_size": "8",
+        "page_size": str(IMAGE_SEARCH_CANDIDATE_LIMIT),
         "mature": "false",
     })
     try:
@@ -744,7 +746,7 @@ def find_contextual_image(script: str, folder: Path, model_visual_prompt: Option
     params = urllib.parse.urlencode({
         "action": "query", "generator": "search",
         "gsrsearch": "filetype:bitmap " + " ".join(keywords),
-        "gsrnamespace": "6", "gsrlimit": "8",
+        "gsrnamespace": "6", "gsrlimit": str(IMAGE_SEARCH_CANDIDATE_LIMIT),
         "prop": "imageinfo", "iiprop": "url|extmetadata",
         "iiurlwidth": "900", "format": "json"
     })
