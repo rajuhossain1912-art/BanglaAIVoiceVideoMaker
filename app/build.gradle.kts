@@ -6,17 +6,40 @@ plugins {
 val configuredApiBaseUrl = providers.gradleProperty("API_BASE_URL")
     .orElse(providers.environmentVariable("API_BASE_URL"))
     .getOrElse("https://bangla-ai-voice-video-maker-api.onrender.com")
+val hasPersistentReleaseKey = providers.environmentVariable("ANDROID_KEYSTORE_PATH")
+    .orNull?.isNotBlank() == true
 android {
-    namespace = "com.rajuhossain.banglaaivoicevideomaker"
+    namespace = "com.rajuhossain.banglaaivoicemaker"
     compileSdk = 35
     defaultConfig {
-        applicationId = "com.rajuhossain.banglaaivoicevideomaker"
+        applicationId = "com.rajuhossain.banglaaivoicemaker"
         minSdk = 26
         targetSdk = 35
-        // Use the GitHub Actions run number so every released APK can update the previous install.
+        // Keep versionCode increasing so newer APKs can update older installations.
         versionCode = providers.environmentVariable("APP_VERSION_CODE").getOrElse("4").toInt()
         versionName = providers.environmentVariable("APP_VERSION_NAME").getOrElse("0.3.0")
         buildConfigField("String", "API_BASE_URL", "\"$configuredApiBaseUrl\"")
+    }
+    signingConfigs {
+        create("release") {
+            if (hasPersistentReleaseKey) {
+                storeFile = file(providers.environmentVariable("ANDROID_KEYSTORE_PATH").get())
+                storePassword = providers.environmentVariable("ANDROID_KEYSTORE_PASSWORD").get()
+                keyAlias = providers.environmentVariable("ANDROID_KEY_ALIAS").get()
+                keyPassword = providers.environmentVariable("ANDROID_KEY_PASSWORD").get()
+            }
+        }
+    }
+    buildTypes {
+        getByName("release") {
+            // Until the owner adds the private keystore secrets, retain the existing
+            // debug-signing behavior. Once configured, every release uses the same key.
+            signingConfig = if (hasPersistentReleaseKey) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
+        }
     }
     buildFeatures { compose = true; buildConfig = true }
     compileOptions {
