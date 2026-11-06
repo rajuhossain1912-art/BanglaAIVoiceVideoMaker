@@ -498,7 +498,6 @@ def wrap_text(draw, text, font, max_width):
         lines.append(current)
     return lines
 
-
 VISUAL_CONCEPTS = [
     (("ট্রেন", "রেল", "রেলগাড়ি", "রেলগাড়ি", "রেলওয়ে", "রেলওয়ে", "স্টেশন", "train", "railway", "rail station"), "a real passenger train at a Bangladeshi railway station, with the train and railway tracks clearly visible"),
     (("বাসস্ট্যান্ড", "বাসস্টপ", "বাস", "যাত্রীবাহী বাস", "bus stop", "city bus"), "a real Bangladeshi passenger bus at a roadside bus stop, bus clearly visible"),
@@ -997,8 +996,7 @@ def _english_visual_prompt(script: str, model_visual_prompt: Optional[str] = Non
             "geographic map, planet Earth, or abstract global-network visualization."
         )
     else:
-        exclusions = (
-            " Do not show maps, globes, atlases, or geographic diagrams unless the scene explicitly discusses geography or maps."
+        exclusions = (            " Do not show maps, globes, atlases, or geographic diagrams unless the scene explicitly discusses geography or maps."
         )
     return (
         "One coherent photorealistic vertical 9:16 scene for a Bangladeshi educational video. "
@@ -1497,8 +1495,7 @@ def make_background(script: str, folder: Path, model_visual_prompt: Optional[str
     return target
 
 def _split_script_into_scenes(script: str, max_scenes: Optional[int] = None, target_words: int = 8):
-    """Split narration into meaningful sentence-sized scenes without losing words."""
-    text = (script or "").strip()
+    """Split narration into meaningful sentence-sized scenes without losing words."""    text = (script or "").strip()
     if not text:
         return ["বাংলা ভিডিও"]
 
@@ -1656,7 +1653,7 @@ def make_scene_backgrounds(script: str, folder: Path, progress_callback=None, du
             print(f"IMAGE_SCENE repeated_image index={index + 1} action=regenerate_topic_graphic", flush=True)
             background = make_background(scene_text, scene_dir, force_topic_graphic=True, variation_seed=index, scene_index=index + 1)
         backgrounds.append(background)
-    print(f"IMAGE_SCENE unique_backgrounds={len(backgrounds)} total_narration_scenes={len(scenes)} interval={scene_interval}s duration={duration:.1f}s visual_budget={max_visual_scenes or "duration_based"}", flush=True)
+    print(f"IMAGE_SCENE unique_backgrounds={len(backgrounds)} total_narration_scenes={len(scenes)} interval={scene_interval}s duration={duration:.1f}s visual_budget={max_visual_scenes or 'duration_based'}", flush=True)
     if progress_callback:
         progress_callback(40, f"{len(backgrounds)}টি দৃশ্যের ছবি প্রস্তুত হয়েছে।")
     return backgrounds, scenes
@@ -1997,8 +1994,7 @@ def render(job_id: str, script: str, mode: str, audio_path: Optional[Path], capt
                 audio_path = synthesize_cloned_voice(script, reference_audio, folder, update_voice_progress)
             finally:
                 try:
-                    reference_audio.unlink(missing_ok=True)
-                except Exception:
+                    reference_audio.unlink(missing_ok=True)                except Exception:
                     pass
         elif audio_path is None:
             audio_path = synthesize_mixed_speech(script, folder)
