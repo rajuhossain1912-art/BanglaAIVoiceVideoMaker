@@ -21,6 +21,15 @@ class SceneImageSimilarityTests(unittest.TestCase):
         self.assertFalse(video_app._contains_visual_term("নিজের ওপর বিশ্বাস রাখুন", "বাস"))
         self.assertTrue(video_app._contains_visual_term("বাসস্ট্যান্ডে একটি বাস দাঁড়িয়ে আছে", "বাস"))
 
+    def test_bengali_inflections_match_their_visual_subjects(self):
+        self.assertTrue(video_app._contains_visual_term("কৃষকেরা ধানক্ষেতে কাজ করছেন", "কৃষক"))
+        self.assertTrue(video_app._contains_visual_term("বাসের যাত্রীরা অপেক্ষা করছেন", "বাস"))
+        self.assertTrue(video_app._contains_visual_term("ডাক্তারের সঙ্গে রোগীর কথা হচ্ছে", "ডাক্তার"))
+
+    def test_bengali_prefix_matching_does_not_match_unrelated_words(self):
+        self.assertFalse(video_app._contains_visual_term("বাস্তব জীবনের গল্প", "বাস"))
+        self.assertFalse(video_app._contains_visual_term("বিশ্বাস ধরে রাখুন", "বাস"))
+
     def test_motivation_text_selects_motivation_visual_not_bus(self):
         concepts = video_app._matched_visual_concepts("নিজের ওপর বিশ্বাস রাখুন এবং চেষ্টা চালিয়ে যান")
         self.assertTrue(any("meaningful goal" in item for item in concepts))
