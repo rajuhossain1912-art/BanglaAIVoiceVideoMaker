@@ -1134,6 +1134,22 @@ IMAGE_PROVIDER_COOLDOWN_SECONDS = 900
 IMAGE_PROVIDER_COOLDOWN_LOCK = threading.Lock()
 
 
+def _decode_cloudflare_image_response(image_bytes: bytes, content_type: str = ""):
+    """Decode either raw image bytes or Workers AI JSON containing a base64 image."""
+    if "json" in (content_type or "").lower() or image_bytes.lstrip().startswith(b"{"):
+        try:
+            envelope = json.loads(image_bytes.decode("utf-8"))
+            result = envelope.get("result") or {}
+            encoded = result.get("image") or envelope.get("image")
+            if not isinstance(encoded, str) or not encoded.strip():
+                raise ValueError("Cloudflare JSON response has no image field")
+            encoded = encoded.split(",", 1)[1] if encoded.startswith("data:") and "," in encoded else encoded
+            image_bytes = base64.b64decode(encoded, validate=True)
+        except (UnicodeDecodeError, ValueError, TypeError, KeyError) as exc:
+            raise ValueError("Could not decode Cloudflare base64 image response") from exc
+    return image_bytes
+
+
 def find_cloudflare_generated_image(script: str, folder: Path, model_visual_prompt: Optional[str] = None):
     """Try Cloudflare Workers AI image models on the configured account's free allocation."""
     account_id = os.getenv("CLOUDFLARE_ACCOUNT_ID", "").strip()
@@ -1177,9 +1193,9 @@ def find_cloudflare_generated_image(script: str, folder: Path, model_visual_prom
                 content_type = response.headers.get("Content-Type", "").lower()
             if not 100 < len(image_bytes) <= 8 * 1024 * 1024:
                 raise ValueError("Cloudflare returned an empty or oversized image")
-            # Some model endpoints return raw image bytes; reject JSON error envelopes.
-            if "json" in content_type or image_bytes.lstrip().startswith(b"{"):
-                raise ValueError("Cloudflare returned JSON instead of image bytes")
+            image_bytes = _decode_cloudflare_image_response(image_bytes, content_type)
+            if not 100 < len(image_bytes) <= 8 * 1024 * 1024:
+                raise ValueError("Cloudflare decoded an empty or oversized image")
             target = folder / ("cloudflare-" + re.sub(r"[^a-zA-Z0-9]+", "-", model).strip("-") + ".png")
             target.write_bytes(image_bytes)
             with Image.open(target) as check:
