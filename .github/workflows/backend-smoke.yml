@@ -67,7 +67,7 @@ jobs:
       - name: Verify storyboard prompts improve licensed image search terms
         run: |
           set -e
-          docker exec bangla-video-api python -c 'from app import _image_keywords; terms=_image_keywords("বাংলায় একজন কৃষক জমিতে চারা রোপণ করছেন", "A farmer planting rice seedlings in a flooded paddy field beside green rice plants"); assert all(word in terms for word in ("farmer","rice","seedlings","paddy","field")), terms; assert "photographic" not in terms and "documentary" not in terms, terms; print("Licensed image search uses concrete English storyboard subjects when Bangla narration has no local keyword match:", terms)'
+          docker exec bangla-video-api python -c 'from app import _image_keywords; terms=_image_keywords("বাংলায় একজন কৃষক জমিতে চারা রোপণ করছেন", "A recognizable person showing a realistic documentary photograph of a farmer planting rice seedlings in a flooded paddy field, clear visible subject, natural light"); assert all(word in terms for word in ("farmer","rice","seedlings","paddy","field")), terms; generic=("photographic","photorealistic","documentary","recognizable","realistic","person","showing","visible","subject","natural","light","clear"); assert not any(word in terms for word in generic), terms; print("Licensed image search removes generic visual-style words and prioritizes concrete storyboard subjects:", terms)'
       - name: Verify licensed image search checks a broad candidate pool
         run: |
           set -e
