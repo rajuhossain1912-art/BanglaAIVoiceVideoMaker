@@ -607,9 +607,11 @@ def _image_keywords(script: str, model_visual_prompt: Optional[str] = None):
     concepts = _matched_visual_concepts(script, limit=2)
     # Bangla narration may have no local keyword match. In that case the storyboard
     # model's English description is the best available semantic search query.
-    phrase = " ".join(concepts)
-    if model_visual_prompt:
-        phrase += " " + re.sub(r"\\s+", " ", str(model_visual_prompt)).strip()
+    # Put concrete storyboard terms first so broad Bangla concepts cannot
+    # consume the short query budget before the actual scene subject.
+    phrase = re.sub(r"\s+", " ", str(model_visual_prompt or "")).strip()
+    if concepts:
+        phrase += " " + " ".join(concepts)
     if not phrase.strip():
         phrase = (script or "")[:500]
     tokens = re.findall(r"[A-Za-z]{3,}", phrase.lower())
@@ -620,6 +622,7 @@ def _image_keywords(script: str, model_visual_prompt: Optional[str] = None):
         "why", "how", "not", "but", "or", "as", "is", "am", "be", "one", "scene",
         "show", "showing", "real", "person", "photograph", "photographic", "documentary",
         "image", "photo", "natural", "light", "clear", "focus", "vertical", "bangladeshi",
+        "working", "green", "clearly", "rural", "plants", "beside", "flooded",
     }
     return list(dict.fromkeys(word for word in tokens if word not in stopwords))[:8]
 
