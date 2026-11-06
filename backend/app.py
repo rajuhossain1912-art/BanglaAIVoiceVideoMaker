@@ -1740,13 +1740,12 @@ def _review_generated_image_against_scene(image_path: Path, narration: str, visu
             preview.save(buffer, format="JPEG", quality=78, optimize=True)
         image_data = "data:image/jpeg;base64," + base64.b64encode(buffer.getvalue()).decode("ascii")
         question = (
-            "Judge whether this image visibly depicts the narration, not merely its general mood. "
-            "Narration: " + re.sub(r"\s+", " ", str(narration)).strip()[:420] +
-            ". Intended visual: " + re.sub(r"\s+", " ", str(visual_prompt or "")).strip()[:300] +
-            ". Return one JSON object with keys match (boolean), confidence (number from 0 to 1), "
-            "description (short factual description of visible contents), and reason (short explanation). "
-            "Reject generic landscapes, icons, cartoons, abstract shapes, and unrelated objects when "
-            "the narration describes a specific person, action, or object."
+            "Compare the visible image with this exact scene. Narration: "
+            + re.sub(r"\\s+", " ", str(narration)).strip()[:420]
+            + ". Intended visual: " + re.sub(r"\\s+", " ", str(visual_prompt or "")).strip()[:300]
+            + ". Reply with exactly one word: MATCH or MISMATCH. MATCH only if the main visible "
+            "subject and action clearly depict the scene. Generic landscapes, icons, cartoons, "
+            "abstract shapes, or unrelated objects are MISMATCH for a specific narrated subject."
         )
         model_path = urllib.parse.quote(model, safe="@/-")
         payload = {"task": "query", "image": image_data, "question": question}
@@ -1779,6 +1778,26 @@ def _review_generated_image_against_scene(image_path: Path, narration: str, visu
                 except (TypeError, ValueError):
                     review = None
             if not isinstance(review, dict):
+                normalized = response_text.strip().lower()
+                strict_label = re.fullmatch(r"(match|mismatch)[.!\\s]*", normalized)
+                if strict_label:
+                    review = {
+                        "match": strict_label.group(1) == "match",
+                        "confidence": 0.70,
+                        "description": "",
+                        "reason": "Vision model returned a strict scene-match label",
+                    }
+                else:
+                    match_word = re.search(r"\\b(match|matches)\\s*[:=]?\\s*(true|false|yes|no)\\b", normalized)
+                    confidence_word = re.search(r"\\bconfidence\\s*[:=]?\\s*(0(?:\\.\\d+)?|1(?:\\.0+)?)", normalized)
+                    if match_word:
+                        review = {
+                            "match": match_word.group(2) in ("true", "yes"),
+                            "confidence": float(confidence_word.group(1)) if confidence_word else 0.65,
+                            "description": "",
+                            "reason": response_text[:180],
+                        }
+        if not isinstance(review, dict):
                 normalized = response_text.lower()
                 match_word = re.search(r"\b(match|matches)\s*[:=]?\s*(true|false|yes|no)\b", normalized)
                 confidence_word = re.search(r"\bconfidence\s*[:=]?\s*(0(?:\.\d+)?|1(?:\.0+)?)", normalized)
