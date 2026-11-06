@@ -113,6 +113,10 @@ jobs:
         run: |
           set -e
           docker exec bangla-video-api python -c 'from app import _parse_scene_match_response as parse; assert parse("MATCH")["match"] is True; assert parse("MISMATCH")["match"] is False; assert parse("MATCH.")["match"] is True; assert parse({"match":True,"confidence":0.91})["confidence"] == 0.91; assert parse({"match":"mismatch","confidence":0.88})["match"] is False; assert parse("I cannot determine") is None; print("Vision review accepts strict labels and JSON while rejecting ambiguous responses")'
+      - name: Verify repeated images request a distinct photo composition
+        run: |
+          set -e
+          docker exec bangla-video-api python -c 'from app import _distinct_scene_retry_prompt as retry; p=retry("A Bangladeshi farmer working in a rice field", "একজন কৃষক ধানক্ষেতে কাজ করছেন"); assert "different photographic composition" in p; assert "camera angle" in p; assert "Do not reuse" in p; assert "farmer" in p.lower(); print("Repeated-image retry preserves the narrated subject and requests a different photo composition")'
       - name: Verify vision review skips local fallback graphics
         run: |
           set -e
