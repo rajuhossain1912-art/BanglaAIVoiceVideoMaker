@@ -627,6 +627,18 @@ def _image_keywords(script: str, model_visual_prompt: Optional[str] = None):
     return list(dict.fromkeys(word for word in tokens if word not in stopwords))[:8]
 
 
+def _image_title_relevance_score(title: str, keywords):
+    """Rank reusable photo candidates by overlap with concrete storyboard subjects."""
+    title_text = re.sub(r"\\s+", " ", str(title or "")).lower()
+    title_tokens = set(re.findall(r"[a-z]{3,}", title_text))
+    terms = [str(word).lower() for word in (keywords or []) if re.fullmatch(r"[A-Za-z]{3,}", str(word))]
+    matched = sum(1 for word in terms if word in title_tokens)
+    if not terms:
+        return 0
+    # Prefer candidates matching several specific scene terms, not generic scenery.
+    return matched * 10 + (matched / len(set(terms)))
+
+
 def _download_checked_image(image_url: str, folder: Path, filename: str, credit: str):
     if not image_url or not image_url.startswith("https://"):
         return None, ""
@@ -672,7 +684,13 @@ def find_openverse_image(script: str, folder: Path, model_visual_prompt: Optiona
         )
         with urllib.request.urlopen(request, timeout=6) as response:
             data = json.loads(response.read(1_500_000).decode("utf-8"))
-        for item in data.get("results", []):
+        results = data.get("results", [])
+        results = sorted(
+            enumerate(results),
+            key=lambda pair: (_image_title_relevance_score(pair[1].get("title", ""), keywords), -pair[0]),
+            reverse=True,
+        )
+        for _, item in results:
             license_code = str(item.get("license", "")).lower()
             if license_code not in {"cc0", "pdm", "by", "by-sa"}:
                 continue
@@ -716,7 +734,12 @@ def find_contextual_image(script: str, folder: Path, model_visual_prompt: Option
         with urllib.request.urlopen(request, timeout=8) as response:
             data = json.loads(response.read(2_000_000).decode("utf-8"))
         pages = list((data.get("query", {}).get("pages") or {}).values())
-        for page in pages:
+        pages = sorted(
+            enumerate(pages),
+            key=lambda pair: (_image_title_relevance_score(str(pair[1].get("title", "")).replace("File:", ""), keywords), -pair[0]),
+            reverse=True,
+        )
+        for _, page in pages:
             info = (page.get("imageinfo") or [{}])[0]
             metadata = info.get("extmetadata") or {}
             license_name = str((metadata.get("LicenseShortName") or {}).get("value", "")).strip()
