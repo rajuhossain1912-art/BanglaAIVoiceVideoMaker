@@ -1003,8 +1003,7 @@ def _plan_scene_visual_prompts(scenes):
         default_models = [
             os.getenv("CLOUDFLARE_AI_MODEL", "@cf/google/gemma-4-26b-a4b-it").strip(),
             "@cf/zai-org/glm-4.7-flash",
-            "@cf/qwen/qwen2.5-7b-instruct",
-            "@cf/google/gemma-3-12b-it",
+            "@cf/qwen/qwen3-30b-a3b-fp8",
         ]
         configured_models = os.getenv("CLOUDFLARE_AI_MODELS", "").strip()
         model_names = list(dict.fromkeys(
@@ -1019,6 +1018,7 @@ def _plan_scene_visual_prompts(scenes):
                         {"role": "user", "content": prompt},
                     ],
                     "temperature": 0.15, "max_tokens": 1800,
+                    **({"chat_template_kwargs": {"enable_thinking": False}} if model == "@cf/google/gemma-4-26b-a4b-it" else {}),
                 }).encode("utf-8")
                 model_path = urllib.parse.quote(model, safe="@/-")
                 request = urllib.request.Request(
