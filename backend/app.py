@@ -1568,6 +1568,13 @@ def make_background(script: str, folder: Path, model_visual_prompt: Optional[str
     # Do not burn the script, app title, or provider credits into every background image.
     target = folder / "background.png"
     image.save(target, optimize=True)
+    try:
+        (folder / "scene-source.json").write_text(
+            json.dumps({"source": scene_source, "provider": scene_provider}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+    except Exception as exc:
+        print(f"IMAGE_SCENE_SOURCE metadata_write_failed error={type(exc).__name__}", flush=True)
     return target
 
 def _split_script_into_scenes(script: str, max_scenes: Optional[int] = None, target_words: int = 8):
@@ -1804,6 +1811,7 @@ def make_scene_backgrounds(script: str, folder: Path, progress_callback=None, du
     semantic_review = {
         "reviewed": 0, "matched": 0, "mismatched": 0,
         "retried": 0, "retry_matched": 0, "retry_mismatched": 0, "unavailable": 0,
+        "image_sources": {"ai_generated": 0, "licensed_contextual": 0, "topic_graphic": 0, "unknown": 0},
     }
     try:
         review_limit = max(0, int(os.getenv("IMAGE_SEMANTIC_REVIEW_MAX_SCENES", "12")))
@@ -1870,6 +1878,14 @@ def make_scene_backgrounds(script: str, folder: Path, progress_callback=None, du
         if any(_scene_images_too_similar(background, prior) for prior in backgrounds):
             print(f"IMAGE_SCENE repeated_image index={index + 1} action=regenerate_topic_graphic", flush=True)
             background = make_background(scene_text, scene_dir, force_topic_graphic=True, variation_seed=index, scene_index=index + 1)
+        try:
+            source_info = json.loads((scene_dir / "scene-source.json").read_text(encoding="utf-8"))
+            source_name = str(source_info.get("source") or "unknown")
+            if source_name not in semantic_review["image_sources"]:
+                source_name = "unknown"
+        except Exception:
+            source_name = "unknown"
+        semantic_review["image_sources"][source_name] += 1
         backgrounds.append(background)
     print(f"IMAGE_SCENE unique_backgrounds={len(backgrounds)} total_narration_scenes={len(scenes)} interval={scene_interval}s duration={duration:.1f}s visual_budget={max_visual_scenes or 'duration_based'}", flush=True)
     if progress_callback:
@@ -2565,9 +2581,16 @@ def video_quality_report(job_id: str):
         key: int(semantic_review.get(key, 0) or 0)
         for key in ("reviewed", "matched", "mismatched", "retried", "retry_matched", "retry_mismatched", "unavailable")
     }
+    raw_image_sources = snapshot.get("semantic_review") or {}
+    raw_image_sources = raw_image_sources.get("image_sources") or {}
+    image_source_counts = {
+        key: int(raw_image_sources.get(key, 0) or 0)
+        for key in ("ai_generated", "licensed_contextual", "topic_graphic", "unknown")
+    }
 
     checks = {
         "semantic_image_review": semantic_review,
+        "image_source_counts": image_source_counts,
         "file_exists": True,
         "video_track": video_stream is not None,
         "audio_track": audio_stream is not None,
@@ -2616,6 +2639,12 @@ def video_quality_report(job_id: str):
     narration_scene_count = snapshot.get("narration_scene_count")
     if isinstance(image_count, int) and image_count > 0:
         report_text += f"ভিডিওতে {image_count}টি পটভূমির ছবি ব্যবহার করা হয়েছে। "
+    if sum(image_source_counts.values()) > 0:
+        report_text += (
+            f"ছবির উৎসের হিসাবে {image_source_counts['ai_generated']}টি AI-তৈরি ছবি, "
+            f"{image_source_counts['licensed_contextual']}টি লাইসেন্সভিত্তিক প্রাসঙ্গিক ছবি এবং "
+            f"{image_source_counts['topic_graphic']}টি বিষয়ভিত্তিক বিকল্প গ্রাফিক ব্যবহার হয়েছে। "
+        )
     if semantic_review["reviewed"] > 0:
         report_text += (
             f"ছবির বিষয়বস্তু যাচাইয়ে {semantic_review['reviewed']}টি নির্বাচিত ছবি পরীক্ষা করা হয়েছে। "
