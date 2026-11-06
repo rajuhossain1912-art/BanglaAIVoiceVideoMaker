@@ -829,6 +829,9 @@ def _plan_scene_visual_prompts(scenes):
         "Treat each scene independently. Do not blend topics from neighboring scenes, use generic symbols, flags, globes, maps, abstract gradients, or unrelated stock imagery unless that exact subject is discussed. "
         "Prefer real, recognizable objects and actions: if the scene says farmer or rice field, show a farmer working in a rice field; if it says city traffic, show actual buses and street traffic; if it says students, show students learning; if it says technology or smartphones, show a person using real digital devices. "
         "Use Bangladesh-local people and places when relevant. Never replace a specific subject with a vague landscape or symbolic icon. "
+        "Every image must be crisp, sharp-focused, realistic documentary photography with a clear visible subject and natural light. "
+        "Avoid blur, haze, glowing silhouettes, abstract human shapes, extreme close-ups, distorted faces, and empty gradients. "
+        "For a person, show a recognizable activity and relevant objects in the same frame. "
         "For smartphone, TalkBack, accessibility or screen-reader scenes show a real person using a phone, never a world map or globe unless geography is explicitly discussed. "
         "No text, subtitles, letters, logos, flags, watermarks, or decorative symbols unless the scene explicitly mentions them. "
         "Return ONLY valid JSON as an array of objects with keys scene and visual_prompt, in the same order, exactly one object per input. "
@@ -1517,9 +1520,9 @@ def make_scene_backgrounds(script: str, folder: Path, progress_callback=None, du
     """Plan visual scenes from the selected image-change interval, within free-tier limits."""
     scenes = _split_script_into_scenes(script, max_scenes=None, target_words=8)
     try:
-        max_visual_scenes = max(1, min(48, int(os.getenv("MAX_VISUAL_SCENES", "32"))))
+        max_visual_scenes = max(1, min(48, int(os.getenv("MAX_VISUAL_SCENES", "48"))))
     except (TypeError, ValueError):
-        max_visual_scenes = 32
+        max_visual_scenes = 48
     visual_scenes = _visual_scenes_for_interval(scenes, duration, scene_interval, max_visual_scenes)
     # Prompts are batched in groups of eight; every narration scene is retained for subtitles/timing.
     if progress_callback:
