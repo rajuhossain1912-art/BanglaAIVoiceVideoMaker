@@ -26,6 +26,29 @@ class SceneImageSimilarityTests(unittest.TestCase):
         self.assertTrue(any("meaningful goal" in item for item in concepts))
         self.assertFalse(any("passenger bus" in item for item in concepts))
 
+    def test_success_and_forward_progress_select_motivation_visual(self):
+        for text in (
+            "জীবনে সফল হতে হলে সামনে এগিয়ে যেতে হবে",
+            "বাধা এলেও নিজের লক্ষ্যের পথে থেমে যাবেন না",
+        ):
+            concepts = video_app._matched_visual_concepts(text)
+            self.assertTrue(any("determined Bangladeshi person" in item for item in concepts))
+
+    def test_motivation_fallback_has_three_distinct_scene_variants(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            outputs = []
+            with patch.object(video_app, "find_generated_image", return_value=(None, "")), \\
+                 patch.object(video_app, "ALLOW_LICENSED_IMAGE_FALLBACK", False):
+                for index in range(3):
+                    folder = root / str(index)
+                    folder.mkdir()
+                    outputs.append(video_app.make_background(
+                        "জীবনে সফল হতে হলে সামনে এগিয়ে যেতে হবে",
+                        folder, variation_seed=index, scene_index=index
+                    ))
+            self.assertEqual(len({path.read_bytes() for path in outputs}), 3)
+
     def test_detects_identical_scene_images(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             folder = Path(temp_dir)
