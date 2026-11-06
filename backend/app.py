@@ -822,11 +822,21 @@ def _plan_scene_visual_prompts(scenes):
     cache_key = json.dumps([re.sub(r"\s+", " ", x).strip()[:300] for x in scenes], ensure_ascii=False)
     if cache_key in LANGUAGE_MODEL_VISUAL_CACHE:
         return LANGUAGE_MODEL_VISUAL_CACHE[cache_key]
-    scene_payload = [{"scene": i + 1, "text": re.sub(r"\s+", " ", text).strip()[:300]} for i, text in enumerate(scenes)]
+    scene_payload = [
+        {
+            "scene": i + 1,
+            "context_before": re.sub(r"\s+", " ", scenes[i - 1]).strip()[:180] if i > 0 else "",
+            "text": re.sub(r"\s+", " ", text).strip()[:300],
+            "context_after": re.sub(r"\s+", " ", scenes[i + 1]).strip()[:180] if i + 1 < len(scenes) else "",
+        }
+        for i, text in enumerate(scenes)
+    ]
     prompt = (
         "You are a strict visual storyboard planner for a Bangladeshi educational video. "
         "For EACH input scene, create exactly one concrete, photorealistic image prompt depicting the main subject or action explicitly stated in THAT scene. "
-        "Treat each scene independently. Do not blend topics from neighboring scenes, use generic symbols, flags, globes, maps, abstract gradients, or unrelated stock imagery unless that exact subject is discussed. "
+        "Understand the narration as a connected story. Use context_before and context_after to resolve pronouns, implied subjects, people, places, and cause-and-effect, so the image fits what is being said. "
+        "Depict the main action in the current scene text; neighboring context may clarify it but must not replace or blend the current scene subject. "
+        "Do not use generic symbols, flags, globes, maps, abstract gradients, or unrelated stock imagery unless that exact subject is discussed. "
         "Prefer real, recognizable objects and actions: if the scene says farmer or rice field, show a farmer working in a rice field; if it says city traffic, show actual buses and street traffic; if it says students, show students learning; if it says technology or smartphones, show a person using real digital devices. "
         "Use Bangladesh-local people and places when relevant. Never replace a specific subject with a vague landscape or symbolic icon. "
         "Every image must be crisp, sharp-focused, realistic documentary photography with a clear visible subject and natural light. "
