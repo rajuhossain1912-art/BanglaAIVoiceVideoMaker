@@ -769,7 +769,7 @@ def find_contextual_image(script: str, folder: Path, model_visual_prompt: Option
         "action": "query", "generator": "search",
         "gsrsearch": "filetype:bitmap " + " ".join(keywords),
         "gsrnamespace": "6", "gsrlimit": str(IMAGE_SEARCH_CANDIDATE_LIMIT),
-        "prop": "imageinfo", "iiprop": "url|extmetadata",
+        "prop": "categories|imageinfo", "cllimit": "20", "iiprop": "url|extmetadata",
         "iiurlwidth": "900", "format": "json"
     })
     request = urllib.request.Request(
@@ -782,11 +782,21 @@ def find_contextual_image(script: str, folder: Path, model_visual_prompt: Option
         pages = list((data.get("query", {}).get("pages") or {}).values())
         pages = sorted(
             enumerate(pages),
-            key=lambda pair: (_image_title_relevance_score(str(pair[1].get("title", "")).replace("File:", ""), keywords), -pair[0]),
+            key=lambda pair: (_image_metadata_relevance_score(
+                str(pair[1].get("title", "")).replace("File:", ""),
+                [{"name": str(category.get("title", "")).replace("Category:", "")}
+                 for category in pair[1].get("categories", [])],
+                keywords,
+            ), -pair[0]),
             reverse=True,
         )
         for _, page in pages:
-            if not _licensed_photo_title_is_relevant(str(page.get("title", "")).replace("File:", ""), keywords):
+            page_title = str(page.get("title", "")).replace("File:", "")
+            page_categories = [
+                {"name": str(category.get("title", "")).replace("Category:", "")}
+                for category in page.get("categories", [])
+            ]
+            if not _image_metadata_is_relevant(page_title, page_categories, keywords):
                 continue
             info = (page.get("imageinfo") or [{}])[0]
             metadata = info.get("extmetadata") or {}
