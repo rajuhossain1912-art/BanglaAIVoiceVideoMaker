@@ -1482,7 +1482,7 @@ def _scene_images_too_similar(first: Path, second: Path) -> bool:
 
 def _visual_scenes_for_interval(scenes, duration: float, interval: int, max_scenes: int):
     """Allocate image slots across complete semantic scenes without fragmenting sentences."""
-    clean_scenes = [re.sub(r"\\s+", " ", str(scene or "")).strip() for scene in scenes or []]
+    clean_scenes = [re.sub(r"\s+", " ", str(scene or "")).strip() for scene in scenes or []]
     clean_scenes = [scene for scene in clean_scenes if scene]
     if not clean_scenes:
         return ["বাংলা ভিডিও"]
@@ -1506,7 +1506,7 @@ def _visual_scenes_for_interval(scenes, duration: float, interval: int, max_scen
     # Give every sentence one slot, then distribute remaining slots by sentence
     # length. Repeating a complete sentence keeps its subject and context intact;
     # the per-slot variation seed can create a different composition for each.
-    weights = [max(1, len(re.findall(r"\\S+", scene))) for scene in clean_scenes]
+    weights = [max(1, len(re.findall(r"\S+", scene))) for scene in clean_scenes]
     allocations = [1] * len(clean_scenes)
     remaining = target_count - len(clean_scenes)
     total_weight = sum(weights)
