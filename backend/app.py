@@ -10,6 +10,7 @@ import threading
 import time
 import uuid
 import tempfile
+import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
@@ -1965,6 +1966,14 @@ def _review_generated_image_against_scene(image_path: Path, narration: str, visu
         )
         with urllib.request.urlopen(request, timeout=18) as response:
             data = json.loads(response.read(180_000).decode("utf-8"))
+        if isinstance(data, dict) and data.get("success") is False:
+            errors = data.get("errors") or []
+            detail = "; ".join(
+                str(item.get("message") or item.get("code") or item)[:160]
+                for item in errors[:2]
+            ) or "Cloudflare returned success=false"
+            print(f"IMAGE_REVIEW unavailable model={model} reason=provider_error detail={detail}", flush=True)
+            return None
         result = data.get("result") or {}
         if isinstance(result, dict):
             raw = (
@@ -1987,8 +1996,19 @@ def _review_generated_image_against_scene(image_path: Path, narration: str, visu
             flush=True,
         )
         return {"match": accepted, "confidence": confidence, "description": description, "reason": reason}
+    except urllib.error.HTTPError as exc:
+        try:
+            detail = re.sub(r"\\s+", " ", exc.read(6000).decode("utf-8", errors="replace")).strip()
+        except Exception:
+            detail = ""
+        print(
+            f"IMAGE_REVIEW unavailable model={model} http_status={exc.code} "
+            f"reason={str(exc.reason)[:90]} detail={detail[:220]}",
+            flush=True,
+        )
+        return None
     except Exception as exc:
-        print(f"IMAGE_REVIEW unavailable model={model} error={type(exc).__name__}: {str(exc)[:140]}", flush=True)
+        print(f"IMAGE_REVIEW unavailable model={model} error={type(exc).__name__}: {str(exc)[:180]}", flush=True)
         return None
 
 def make_scene_backgrounds(script: str, folder: Path, progress_callback=None, duration: float = 0.0, scene_interval: int = 5):
