@@ -813,7 +813,7 @@ def _parse_cloudflare_transcription_response(data):
     if not isinstance(data, dict) or data.get("success") is False:
         raise RuntimeError("কথার অডিও বোঝার মডেল সঠিক উত্তর দেয়নি।")
     result = data.get("result") or {}
-    transcript = re.sub(r"\\s+", " ", str(result.get("text") or "")).strip()
+    transcript = re.sub(r"\s+", " ", str(result.get("text") or "")).strip()
     if not transcript:
         raise RuntimeError("অডিওতে বোঝার মতো কথা পাওয়া যায়নি।")
     return transcript
@@ -2103,6 +2103,13 @@ def api_version():
 def capabilities():
     return {
         "language_input": ["বাংলা", "English", "Banglish"],
+        "audio_understanding": {
+            "audio_only_upload": True,
+            "speech_to_text_model": "@cf/openai/whisper-large-v3-turbo",
+            "provider": "Cloudflare Workers AI",
+            "automatic_transcription_when_script_is_blank": True,
+            "chunk_seconds": 120,
+        },
         "video_generation": True,
         "scene_interval_seconds": [3, 5, 10, 15, 20],
         "scene_interval_default_seconds": 3,
