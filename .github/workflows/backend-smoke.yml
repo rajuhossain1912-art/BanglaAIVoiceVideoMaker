@@ -113,6 +113,10 @@ jobs:
         run: |
           set -e
           docker exec bangla-video-api python -c 'from app import _parse_scene_match_response as parse; assert parse("MATCH")["match"] is True; assert parse("MISMATCH")["match"] is False; assert parse("MATCH.")["match"] is True; assert parse({"match":True,"confidence":0.91})["confidence"] == 0.91; assert parse({"match":"mismatch","confidence":0.88})["match"] is False; assert parse("I cannot determine") is None; print("Vision review accepts strict labels and JSON while rejecting ambiguous responses")'
+      - name: Verify storyboard context crosses long-script batch boundaries
+        run: |
+          set -e
+          docker exec bangla-video-api python -c 'from app import _storyboard_scene_payload as payload; scenes=[f"scene {i}" for i in range(17)]; left=payload(scenes[:8],scenes,0); middle=payload(scenes[8:16],scenes,8); right=payload(scenes[16:],scenes,16); assert left[-1]["context_after"]=="scene 8"; assert middle[0]["context_before"]=="scene 7"; assert middle[-1]["context_after"]=="scene 16"; assert right[0]["context_before"]=="scene 15"; assert middle[0]["scene"]==9; print("Storyboard context remains continuous across 8-scene model batches")'
       - name: Verify repeated images request a distinct photo composition
         run: |
           set -e
