@@ -514,7 +514,7 @@ VISUAL_CONCEPTS = [
     (("বন্যা", "ঘূর্ণিঝড়", "ঘূর্ণিঝড়", "দুর্যোগ", "জলোচ্ছ্বাস"), "a Bangladeshi village responding to monsoon flooding"),
     (("রাস্তা", "গাড়ি", "গাড়ি", "বাস", "পরিবহন", "চালক", "যাত্রী", "পথচারী"), "a realistic Bangladeshi street with safe public transport"),
     (("শিশু", "বাচ্চা", "ছেলে", "মেয়ে", "মেয়ে", "খেলাধুলা"), "children learning or playing safely outdoors"),
-    (("পরিশ্রম", "চেষ্টা", "সাফল্য", "দক্ষতা"), "a person working diligently toward a goal"),
+    (("পরিশ্রম", "চেষ্টা", "সাফল্য", "দক্ষতা", "বিশ্বাস", "আশা", "সাহস", "লক্ষ্য", "ভবিষ্যৎ", "ভবিষ্যত"), "a determined person working toward a meaningful goal, overcoming a challenge with confidence"),
     (("স্বপ্ন", "আশা", "সাহস", "ভবিষ্যৎ", "ভবিষ্যত"), "an inspiring hopeful sunrise over Bangladesh"),
     (("সকাল", "ভোর", "সূর্যোদয়", "সূর্যোদয়"), "sunrise over a peaceful green landscape"),
     (("গাছপালা", "গাছ", "সবুজ", "বন", "প্রকৃতি"), "lush green trees and natural scenery"),
@@ -551,8 +551,8 @@ VISUAL_CONCEPTS = [
 
 def _contains_visual_term(text: str, term: str) -> bool:
     """Match subject words without accidental substring hits (e.g. বাস inside বিশ্বাস)."""
-    text_tokens = re.findall(r"[A-Za-z]+|[\\u0980-\\u09FF]+", (text or "").lower())
-    term_tokens = re.findall(r"[A-Za-z]+|[\\u0980-\\u09FF]+", (term or "").lower())
+    text_tokens = re.findall(r"[A-Za-z]+|[\u0980-\u09FF]+", (text or "").lower())
+    term_tokens = re.findall(r"[A-Za-z]+|[\u0980-\u09FF]+", (term or "").lower())
     if not term_tokens:
         return False
     for start in range(max(0, len(text_tokens) - len(term_tokens) + 1)):
