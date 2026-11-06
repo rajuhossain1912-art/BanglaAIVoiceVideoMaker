@@ -1101,11 +1101,17 @@ def _english_visual_prompt(script: str, model_visual_prompt: Optional[str] = Non
         exclusions = (            " Do not show maps, globes, atlases, or geographic diagrams unless the scene explicitly discusses geography or maps."
         )
     return (
-        "One coherent photorealistic vertical 9:16 scene for a Bangladeshi educational video. "
-        "Show the main subject clearly: " + subject + ". "
-        "Use one central visual idea that matches this scene's message, realistic local details, "
-        "natural lighting, clear composition and an uncluttered background. "
-        "Do not combine unrelated topics." + exclusions +
+        "One coherent documentary photograph, vertical 9:16, for a Bangladeshi educational video. "
+        "Depict the exact real-world subject and physical action stated in this scene: " + subject + ". "
+        "The main subject must be large, recognizable, in focus, and visibly doing the described action; "
+        "show the actual named object, person, place, or activity rather than a symbolic substitute. "
+        "Prefer a believable real photograph with natural human proportions, authentic materials, "
+        "specific environmental details, natural light, and a clear camera viewpoint. "
+        "For abstract ideas, show a plausible real human situation that communicates the idea; "
+        "never substitute mountains, sunrise, generic scenery, icons, stick figures, cartoons, "
+        "vector art, clip art, 3D icons, diagrams, or decorative shapes for a concrete narrated subject. "
+        "Use only details supported by the narration and its neighboring context. "
+        "One scene, one main action, no unrelated topic collage." + exclusions +
         " No text, no captions, no letters, no logos, no watermark."
     )[:1100]
 
