@@ -105,6 +105,10 @@ jobs:
             curl --fail --silent --show-error "http://127.0.0.1:10000/api/jobs/$job_id/report" -o "$language-report.json"
             python -c 'import json,sys; d=json.load(open(sys.argv[1])); assert d["overall"] in ("passed_with_limits", "visual_warning"), d; assert d["checks"]["video_track"], d; assert d["checks"]["audio_track"], d; assert d["checks"]["duration_seconds"] > 0, d; assert d["checks"]["scene_count_from_generator"] > 0, d; assert d["checks"]["narration_scene_count"] > 0, d; assert d["checks"]["scene_interval_seconds"] == 3, d; assert isinstance(d["checks"]["semantic_image_review"], dict), d; assert all(k in d["checks"]["semantic_image_review"] for k in ("reviewed","matched","mismatched","retried","retry_matched","retry_mismatched","unavailable")), d; assert all(k in d["checks"]["image_source_counts"] for k in ("ai_generated","licensed_contextual","topic_graphic","unknown")), d; assert "AI-তৈরি ছবি" in d["report_text"], d; assert "পটভূমির ছবি" in d["report_text"], d; assert "বাক্যভিত্তিক দৃশ্য" in d["report_text"], d; assert "পরিবর্তনের বিরতি" in d["report_text"], d; assert "প্রতিবেদন" in d["report_text"], d; print("Accessible video quality report and scene details passed:", d["report_text"])' "$language-report.json"
           done
+      - name: Verify Cloudflare image response decoding
+        run: |
+          set -e
+          docker exec bangla-video-api python -c 'import base64,json; from app import _decode_cloudflare_image_response; raw=b"\\x89PNG\\r\\n\\x1a\\nexample-image-bytes"; encoded=base64.b64encode(raw).decode(); envelope=json.dumps({"result":{"image":encoded}}).encode(); assert _decode_cloudflare_image_response(raw,"image/png")==raw; assert _decode_cloudflare_image_response(envelope,"application/json")==raw; assert _decode_cloudflare_image_response(json.dumps({"image":"data:image/png;base64,"+encoded}).encode(),"application/json")==raw; print("Cloudflare raw and JSON/base64 image decoding passed")'
       - name: Show backend logs on failure
         if: failure()
         run: docker logs bangla-video-api || true
