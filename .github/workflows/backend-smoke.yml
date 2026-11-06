@@ -64,6 +64,10 @@ jobs:
         run: |
           set -e
           docker exec bangla-video-api python -c 'from app import _contains_visual_term as match; assert match("কৃষকেরা ধানক্ষেতে কাজ করছেন", "কৃষক"); assert match("বাসের যাত্রীরা অপেক্ষা করছেন", "বাস"); assert match("ডাক্তারের সঙ্গে রোগীর কথা হচ্ছে", "ডাক্তার"); assert not match("বাস্তব জীবনের গল্প", "বাস"); assert not match("বিশ্বাস ধরে রাখুন", "বাস"); print("Bengali inflection-aware visual keyword matching passed")'
+      - name: Verify storyboard prompts improve licensed image search terms
+        run: |
+          set -e
+          docker exec bangla-video-api python -c 'from app import _image_keywords; terms=_image_keywords("বাংলায় একজন কৃষক জমিতে চারা রোপণ করছেন", "A farmer planting rice seedlings in a flooded paddy field beside green rice plants"); assert all(word in terms for word in ("farmer","rice","seedlings","paddy","field")), terms; assert "photographic" not in terms and "documentary" not in terms, terms; print("Licensed image search uses concrete English storyboard subjects when Bangla narration has no local keyword match:", terms)'
       - name: Verify voice cloning requires explicit consent
         run: |
           set -e
