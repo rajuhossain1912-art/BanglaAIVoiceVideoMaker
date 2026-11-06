@@ -25,10 +25,19 @@ jobs:
         run: docker run -d --name bangla-video-api -e AI_IMAGE_GENERATION_ENABLED=false -e LANGUAGE_MODEL_VISUAL_PLANNER_ENABLED=false -p 10000:10000 bangla-video-api-test
       - name: Wait for health endpoint
         run: |
-          for i in $(seq 1 30); do
-            if curl --fail --silent http://127.0.0.1:10000/health > health.json; then break; fi
+          ready=0
+          for i in $(seq 1 45); do
+            if curl --fail --silent --show-error http://127.0.0.1:10000/health > health.json; then
+              ready=1
+              break
+            fi
             sleep 2
           done
+          if [ "$ready" -ne 1 ]; then
+            echo "Backend health endpoint did not become ready"
+            docker logs bangla-video-api || true
+            exit 1
+          fi
           cat health.json
           python -c 'import json; d=json.load(open("health.json")); assert d["status"] == "ok", d'
       - name: Verify sampled scene timeline mapping
