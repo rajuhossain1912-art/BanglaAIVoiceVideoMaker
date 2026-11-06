@@ -43,6 +43,10 @@ jobs:
         run: |
           set -e
           docker exec bangla-video-api python -c 'from app import _split_script_into_scenes as split; first="একজন কৃষক সবুজ ধানক্ষেতে কাজ করছেন।"; second="তিনি জমির পরিচর্যা করছেন।"; scenes=split(first+" "+second,target_words=4); assert scenes == [first,second], scenes; long="বাংলাদেশের একজন পরিশ্রমী কৃষক সকালে মাঠে গিয়ে ধানের চারা রোপণ করেন এবং যত্ন নিয়ে ফসলের পরিচর্যা করেন।"; parts=split(long,target_words=4); assert " ".join(" ".join(parts).split()) == " ".join(long.split()), parts; assert all(len(part.split()) <= 8 for part in parts), parts; print("Sentence-aware visual scene splitting passed")'
+      - name: Verify Bengali visual keyword inflections
+        run: |
+          set -e
+          docker exec bangla-video-api python -c 'from app import _contains_visual_term as match; assert match("কৃষকেরা ধানক্ষেতে কাজ করছেন", "কৃষক"); assert match("বাসের যাত্রীরা অপেক্ষা করছেন", "বাস"); assert match("ডাক্তারের সঙ্গে রোগীর কথা হচ্ছে", "ডাক্তার"); assert not match("বাস্তব জীবনের গল্প", "বাস"); assert not match("বিশ্বাস ধরে রাখুন", "বাস"); print("Bengali inflection-aware visual keyword matching passed")'
       - name: Verify voice cloning requires explicit consent
         run: |
           set -e
