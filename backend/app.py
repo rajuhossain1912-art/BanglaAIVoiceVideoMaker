@@ -1501,8 +1501,8 @@ def _scene_images_too_similar(first: Path, second: Path) -> bool:
         return False
 
 
-def _visual_scenes_for_interval(scenes, duration: float, interval: int, max_scenes: int):
-    """Allocate image slots across complete semantic scenes without fragmenting sentences."""
+def _visual_scenes_for_interval(scenes, duration: float, interval: int, max_scenes: Optional[int] = None):
+    """Allocate image slots from media duration; no fixed default image-count ceiling."""
     clean_scenes = [re.sub(r"\s+", " ", str(scene or "")).strip() for scene in scenes or []]
     clean_scenes = [scene for scene in clean_scenes if scene]
     if not clean_scenes:
@@ -1510,12 +1510,14 @@ def _visual_scenes_for_interval(scenes, duration: float, interval: int, max_scen
     try:
         seconds = max(0.1, float(duration))
         cadence = int(interval)
-        cap = max(1, int(max_scenes))
+        cap = max(1, int(max_scenes)) if max_scenes not in (None, 0, "0", "") else None
     except (TypeError, ValueError):
-        return clean_scenes[:max(1, int(max_scenes))]
+        cap = None
     if cadence not in (3, 5, 10, 15, 20):
         cadence = 5
-    target_count = max(1, min(cap, int(math.ceil(seconds / cadence))))
+    target_count = max(1, int(math.ceil(seconds / cadence)))
+    if cap is not None:
+        target_count = min(cap, target_count)
     if len(clean_scenes) >= target_count:
         if len(clean_scenes) == target_count:
             return clean_scenes
@@ -1546,12 +1548,15 @@ def _visual_scenes_for_interval(scenes, duration: float, interval: int, max_scen
 
 
 def make_scene_backgrounds(script: str, folder: Path, progress_callback=None, duration: float = 0.0, scene_interval: int = 5):
-    """Plan visual scenes from the selected image-change interval, within free-tier limits."""
+    """Plan as many visual scenes as the duration and selected interval require."""
     scenes = _split_script_into_scenes(script, max_scenes=None, target_words=8)
+    # Zero/unset means automatic duration-based planning with no fixed 38/48-image ceiling.
+    # Operators may set a positive ceiling for constrained hosting environments.
     try:
-        max_visual_scenes = max(1, min(48, int(os.getenv("MAX_VISUAL_SCENES", "48"))))
+        configured_limit = max(0, int(os.getenv("MAX_VISUAL_SCENES", "0")))
     except (TypeError, ValueError):
-        max_visual_scenes = 48
+        configured_limit = 0
+    max_visual_scenes = configured_limit or None
     visual_scenes = _visual_scenes_for_interval(scenes, duration, scene_interval, max_visual_scenes)
     # Prompts are batched in groups of eight; every narration scene is retained for subtitles/timing.
     if progress_callback:
@@ -1570,7 +1575,7 @@ def make_scene_backgrounds(script: str, folder: Path, progress_callback=None, du
             print(f"IMAGE_SCENE repeated_image index={index + 1} action=regenerate_topic_graphic", flush=True)
             background = make_background(scene_text, scene_dir, force_topic_graphic=True, variation_seed=index, scene_index=index + 1)
         backgrounds.append(background)
-    print(f"IMAGE_SCENE unique_backgrounds={len(backgrounds)} total_narration_scenes={len(scenes)} interval={scene_interval}s duration={duration:.1f}s visual_budget={max_visual_scenes}", flush=True)
+    print(f"IMAGE_SCENE unique_backgrounds={len(backgrounds)} total_narration_scenes={len(scenes)} interval={scene_interval}s duration={duration:.1f}s visual_budget={max_visual_scenes or "duration_based"}", flush=True)
     if progress_callback:
         progress_callback(40, f"{len(backgrounds)}টি দৃশ্যের ছবি প্রস্তুত হয়েছে।")
     return backgrounds, scenes
