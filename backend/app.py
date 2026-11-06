@@ -1887,7 +1887,7 @@ def render(job_id: str, script: str, mode: str, audio_path: Optional[Path], capt
         ], 240)
         print(f"VIDEO_STAGE job={job_id} stage=ffmpeg_done", flush=True)
         with LOCK:
-            JOBS[job_id].update(status="completed", progress=100, message="ভিডিও তৈরি হয়েছে", download_url=f"/api/jobs/{job_id}/download", duration=round(duration, 2), scene_count=len(backgrounds), caption_frame_count=frame_count, script_characters=len(script), video_mode=mode, completed_at=time.time())
+            JOBS[job_id].update(status="completed", progress=100, message="ভিডিও তৈরি হয়েছে", download_url=f"/api/jobs/{job_id}/download", duration=round(duration, 2), scene_count=len(backgrounds), narration_scene_count=len(visual_scene_texts), scene_interval_seconds=scene_interval, caption_frame_count=frame_count, script_characters=len(script), video_mode=mode, completed_at=time.time())
     except Exception as exc:
         print(f"VIDEO_STAGE job={job_id} stage=failed error={type(exc).__name__}: {str(exc)[:500]}", flush=True)
         with LOCK:
@@ -2168,6 +2168,8 @@ def video_quality_report(job_id: str):
         "visual_sample_count": visual_sample_count,
         "very_dark_sample_count": dark_sample_count,
         "scene_count_from_generator": snapshot.get("scene_count"),
+        "narration_scene_count": snapshot.get("narration_scene_count"),
+        "scene_interval_seconds": snapshot.get("scene_interval_seconds"),
         "caption_frame_count": snapshot.get("caption_frame_count"),
         "file_size_bytes": size_bytes,
         "format": probe.get("format", {}).get("format_name", "unknown"),
@@ -2194,6 +2196,15 @@ def video_quality_report(job_id: str):
     report_text += ("ভিডিও ট্র্যাক আছে। " if video_stream else "ভিডিও ট্র্যাক নেই। ")
     report_text += audio_check + " "
     report_text += scene_check + " "
+    image_count = snapshot.get("scene_count")
+    narration_scene_count = snapshot.get("narration_scene_count")
+    scene_interval = snapshot.get("scene_interval_seconds")
+    if isinstance(image_count, int) and image_count > 0:
+        report_text += f"ভিডিওতে {image_count}টি পটভূমির ছবি ব্যবহার করা হয়েছে। "
+    if isinstance(narration_scene_count, int) and narration_scene_count > 0:
+        report_text += f"লেখা থেকে {narration_scene_count}টি বাক্যভিত্তিক দৃশ্য তৈরি হয়েছে। "
+    if isinstance(scene_interval, int) and scene_interval > 0:
+        report_text += f"নির্বাচিত ছবি পরিবর্তনের বিরতি ছিল {scene_interval} সেকেন্ড। "
     captions = snapshot.get("caption_frame_count")
     if isinstance(captions, int) and captions > 0:
         report_text += f"তৈরির সময় {captions}টি সাবটাইটেল ফ্রেম তৈরি হয়েছিল। "
