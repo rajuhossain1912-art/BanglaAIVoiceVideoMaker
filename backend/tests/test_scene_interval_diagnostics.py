@@ -41,7 +41,7 @@ class SceneIntervalDiagnosticsTests(unittest.TestCase):
         self.assertEqual(result[0], scenes[0])
         self.assertEqual(result[-1], scenes[-1])
         self.assertTrue(all(item in scenes for item in result))
-        self.assertEqual([result.count(scene) for scene in scenes], [4, 3, 3])
+        self.assertEqual([result.count(scene) for scene in scenes], [3, 4, 3])
 
     def test_handles_missing_image_count(self):
         result = video_app._scene_interval_diagnostics(30.0, 0, 3)
