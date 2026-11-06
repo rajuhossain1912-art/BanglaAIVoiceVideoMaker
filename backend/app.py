@@ -1155,12 +1155,11 @@ def find_cloudflare_generated_image(script: str, folder: Path, model_visual_prom
             print(f"IMAGE_PROVIDER skipped={provider_key} reason=cooldown remaining_seconds={int(cooldown_until - time.time())}", flush=True)
             continue
         try:
-            body = json.dumps({
-                "prompt": prompt,
-                "width": 512,
-                "height": 768,
-                "num_steps": 4,
-            }).encode("utf-8")
+            if model == "@cf/black-forest-labs/flux-1-schnell":
+                model_inputs = {"prompt": prompt, "steps": 8}
+            else:
+                model_inputs = {"prompt": prompt, "width": 512, "height": 768, "num_steps": 4}
+            body = json.dumps(model_inputs).encode("utf-8")
             model_path = urllib.parse.quote(model, safe="@/-")
             request = urllib.request.Request(
                 f"https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/run/{model_path}",
