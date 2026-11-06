@@ -1054,7 +1054,7 @@ def _plan_scene_visual_prompts(scenes, context_scenes=None, context_offset=0):
                     data = json.loads(response.read(250_000).decode("utf-8"))
                 result = data.get("result") or {}
                 raw = result.get("response") or result.get("choices", [{}])[0].get("message", {}).get("content", "")
-                prompts = _parse_scene_visual_prompts(raw, len(scenes))
+                prompts = _parse_scene_visual_prompts(raw, len(scenes), context_offset)
                 if prompts:
                     # Cross-check with a different model before accepting the storyboard.
                     prompts = _review_scene_visual_prompts(scenes, prompts, model_names, model, full_context, context_offset)
