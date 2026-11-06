@@ -664,6 +664,24 @@ def _licensed_photo_title_is_relevant(title: str, keywords):
     """Reject generic stock titles that share none of the requested scene subjects."""
     return _image_title_relevance_score(title, keywords) >= 10
 
+def _image_metadata_relevance_score(title: str, tags, keywords):
+    """Rank licensed photos using concrete subject terms in titles and provider tags."""
+    tag_names = []
+    for tag in tags or []:
+        if isinstance(tag, dict):
+            value = tag.get("name") or tag.get("title") or ""
+        else:
+            value = str(tag or "")
+        if value:
+            tag_names.append(value)
+    searchable = " ".join([str(title or ""), *tag_names])
+    return _image_title_relevance_score(searchable, keywords)
+
+
+def _image_metadata_is_relevant(title: str, tags, keywords):
+    """Accept a candidate only when its title or tags identify a requested scene subject."""
+    return _image_metadata_relevance_score(title, tags, keywords) >= 10
+
 
 def _download_checked_image(image_url: str, folder: Path, filename: str, credit: str):
     if not image_url or not image_url.startswith("https://"):
@@ -713,11 +731,11 @@ def find_openverse_image(script: str, folder: Path, model_visual_prompt: Optiona
         results = data.get("results", [])
         results = sorted(
             enumerate(results),
-            key=lambda pair: (_image_title_relevance_score(pair[1].get("title", ""), keywords), -pair[0]),
+            key=lambda pair: (_image_metadata_relevance_score(pair[1].get("title", ""), pair[1].get("tags", []), keywords), -pair[0]),
             reverse=True,
         )
         for _, item in results:
-            if not _licensed_photo_title_is_relevant(item.get("title", ""), keywords):
+            if not _image_metadata_is_relevant(item.get("title", ""), item.get("tags", []), keywords):
                 continue
             license_code = str(item.get("license", "")).lower()
             if license_code not in {"cc0", "pdm", "by", "by-sa"}:
