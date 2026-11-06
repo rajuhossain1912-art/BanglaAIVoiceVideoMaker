@@ -1274,6 +1274,23 @@ def _decode_cloudflare_image_response(image_bytes: bytes, content_type: str = ""
     return image_bytes
 
 
+def _image_has_visible_content(image_path: Path):
+    """Reject corrupt, blank, or near-black provider output before accepting an image."""
+    try:
+        with Image.open(image_path) as source:
+            sample = source.convert("RGB")
+            sample.thumbnail((24, 42), Image.Resampling.LANCZOS)
+            pixels = list(sample.getdata())
+        if not pixels:
+            return False
+        luminance = [(r * 299 + g * 587 + b * 114) / 1000 for r, g, b in pixels]
+        mean_luma = sum(luminance) / len(luminance)
+        variance = sum((value - mean_luma) ** 2 for value in luminance) / len(luminance)
+        return not (mean_luma < 18 or (mean_luma < 32 and variance < 25))
+    except Exception:
+        return False
+
+
 def find_cloudflare_generated_image(script: str, folder: Path, model_visual_prompt: Optional[str] = None):
     """Try Cloudflare Workers AI image models on the configured account's free allocation."""
     account_id = os.getenv("CLOUDFLARE_ACCOUNT_ID", "").strip()
@@ -1326,6 +1343,8 @@ def find_cloudflare_generated_image(script: str, folder: Path, model_visual_prom
                 if check.width < 80 or check.height < 80 or check.width * check.height > 4_000_000:
                     raise ValueError("Cloudflare image dimensions outside safe limits")
                 check.verify()
+            if not _image_has_visible_content(target):
+                raise ValueError("Cloudflare returned blank or near-black image")
             print("IMAGE_PROVIDER selected=" + provider_key, flush=True)
             return target, "AI-generated with Cloudflare Workers AI model " + model
         except Exception as exc:
