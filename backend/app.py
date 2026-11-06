@@ -787,25 +787,26 @@ LANGUAGE_MODEL_VISUAL_CACHE = {}
 
 
 def _parse_scene_visual_prompts(raw: str, expected_count: int):
-    """Accept only a JSON list with one short English visual prompt per input scene."""
+    """Accept only correctly indexed JSON objects with concise scene-matched prompts."""
     text = (raw or "").strip()
-    text = re.sub(r"^```(?:json)?\s*|\s*```$", "", text, flags=re.I)
+    text = re.sub(r"^\x60\x60\x60(?:json)?\s*|\s*\x60\x60\x60$", "", text, flags=re.I)
     match = re.search(r"\[.*?\]", text, flags=re.S)
     try:
         parsed = json.loads(match.group(0)) if match else None
-        values = [item.get("visual_prompt", "") if isinstance(item, dict) else item for item in parsed] if isinstance(parsed, list) else []
     except Exception:
-        values = []
-    if len(values) != expected_count:
+        parsed = None
+    if not isinstance(parsed, list) or len(parsed) != expected_count:
         return None
     cleaned = []
-    for value in values:
-        value = re.sub(r"\s+", " ", str(value or "")).strip().strip('"')
-        if not 25 <= len(value) <= 360 or re.search(r"[\x00-\x1f]", value):
+    for index, item in enumerate(parsed, start=1):
+        # Prevent reordered model output from assigning one scene another scene's image.
+        if not isinstance(item, dict) or item.get("scene") != index:
+            return None
+        value = re.sub(r"\s+", " ", str(item.get("visual_prompt") or "")).strip().strip('"')
+        if not 40 <= len(value) <= 220 or re.search(r"[\x00-\x1f]", value):
             return None
         cleaned.append(value)
     return cleaned
-
 
 def _parse_cloudflare_transcription_response(data):
     """Extract a non-empty transcript from a Workers AI Whisper response."""
