@@ -129,6 +129,10 @@ jobs:
         run: |
           set -e
           docker exec bangla-video-api python -c 'import base64,json; from app import _decode_cloudflare_image_response; raw=b"\\x89PNG\\r\\n\\x1a\\nexample-image-bytes"; encoded=base64.b64encode(raw).decode(); envelope=json.dumps({"result":{"image":encoded}}).encode(); assert _decode_cloudflare_image_response(raw,"image/png")==raw; assert _decode_cloudflare_image_response(envelope,"application/json")==raw; assert _decode_cloudflare_image_response(json.dumps({"image":"data:image/png;base64,"+encoded}).encode(),"application/json")==raw; print("Cloudflare raw and JSON/base64 image decoding passed")'
+      - name: Verify Cloudflare image models receive supported inputs
+        run: |
+          set -e
+          docker exec bangla-video-api python -c 'from app import _cloudflare_image_model_inputs as inputs; flux=inputs("@cf/black-forest-labs/flux-1-schnell","a documentary photograph"); assert flux=={"prompt":"a documentary photograph"}, flux; other=inputs("@cf/lykon/dreamshaper-8-lcm","a documentary photograph"); assert other=={"prompt":"a documentary photograph","width":512,"height":768,"num_steps":4}, other; print("Cloudflare FLUX receives only its documented prompt input; other configured models retain their supported dimensions and step count")'
       - name: Verify blank image providers are rejected before selection
         run: |
           set -e
