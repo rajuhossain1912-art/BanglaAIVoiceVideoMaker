@@ -17,6 +17,15 @@ class SceneImageSimilarityTests(unittest.TestCase):
         Image.new("RGB", (120, 180), color).save(path)
         return path
 
+    def test_bengali_bus_keyword_does_not_match_inside_biswas(self):
+        self.assertFalse(video_app._contains_visual_term("নিজের ওপর বিশ্বাস রাখুন", "বাস"))
+        self.assertTrue(video_app._contains_visual_term("বাসস্ট্যান্ডে একটি বাস দাঁড়িয়ে আছে", "বাস"))
+
+    def test_motivation_text_selects_motivation_visual_not_bus(self):
+        concepts = video_app._matched_visual_concepts("নিজের ওপর বিশ্বাস রাখুন এবং চেষ্টা চালিয়ে যান")
+        self.assertTrue(any("meaningful goal" in item for item in concepts))
+        self.assertFalse(any("passenger bus" in item for item in concepts))
+
     def test_detects_identical_scene_images(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             folder = Path(temp_dir)
