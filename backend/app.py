@@ -1868,7 +1868,7 @@ def make_scene_backgrounds(script: str, folder: Path, progress_callback=None, du
     print(f"IMAGE_SCENE unique_backgrounds={len(backgrounds)} total_narration_scenes={len(scenes)} interval={scene_interval}s duration={duration:.1f}s visual_budget={max_visual_scenes or 'duration_based'}", flush=True)
     if progress_callback:
         progress_callback(40, f"{len(backgrounds)}টি দৃশ্যের ছবি প্রস্তুত হয়েছে।")
-    return backgrounds, scenes
+    return backgrounds, scenes, semantic_review
 
 def make_srt(script: str, duration: float, path: Path):
     # Estimated sentence timing is a fallback, not forced alignment.
