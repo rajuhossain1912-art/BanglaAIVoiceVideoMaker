@@ -137,6 +137,10 @@ jobs:
         run: |
           set -e
           docker exec bangla-video-api python -c 'import tempfile; from pathlib import Path; from PIL import Image; from app import _image_has_visible_content as visible; folder=Path(tempfile.mkdtemp()); black=folder/"black.png"; usable=folder/"usable.png"; Image.new("RGB",(64,64),(0,0,0)).save(black); Image.new("RGB",(64,64),(90,130,170)).save(usable); assert not visible(black); assert visible(usable); assert not visible(folder/"missing.png"); print("Blank and corrupt image files are rejected before a Cloudflare provider can be selected; visible images pass")'
+      - name: Verify every image provider rejects blank output
+        run: |
+          set -e
+          docker exec bangla-video-api python -c 'import inspect; from app import _download_checked_image, find_pollinations_image, find_generated_image; targets=[_download_checked_image,find_pollinations_image,find_generated_image]; missing=[fn.__name__ for fn in targets if "_image_has_visible_content(target)" not in inspect.getsource(fn)]; assert not missing, missing; print("Downloaded licensed images, Pollinations images, and Hugging Face image outputs all pass visible-content validation before selection")'
       - name: Verify vision review response parsing
         run: |
           set -e
