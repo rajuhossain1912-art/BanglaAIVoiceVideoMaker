@@ -820,7 +820,7 @@ def _review_scene_visual_prompts(scenes, prompts, model_names, planner_model):
     review_items = [
         {
             "scene": index + 1,
-            "narration": re.sub(r"\\s+", " ", str(scene)).strip()[:300],
+            "narration": re.sub(r"\s+", " ", str(scene)).strip()[:300],
             "proposed_visual_prompt": prompt,
         }
         for index, (scene, prompt) in enumerate(zip(scenes, prompts))
