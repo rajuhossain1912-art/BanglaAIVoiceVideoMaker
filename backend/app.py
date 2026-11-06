@@ -548,15 +548,37 @@ VISUAL_CONCEPTS = [
     (("মহিলা", "নারী", "মেয়ে", "মেয়ে", "নারীর অধিকার", "মাতৃত্ব"), "Bangladeshi women participating in everyday community life"),
 ]
 
+
+def _contains_visual_term(text: str, term: str) -> bool:
+    """Match subject words without accidental substring hits (e.g. বাস inside বিশ্বাস)."""
+    text_tokens = re.findall(r"[A-Za-z]+|[\\u0980-\\u09FF]+", (text or "").lower())
+    term_tokens = re.findall(r"[A-Za-z]+|[\\u0980-\\u09FF]+", (term or "").lower())
+    if not term_tokens:
+        return False
+    for start in range(max(0, len(text_tokens) - len(term_tokens) + 1)):
+        matched = True
+        for offset, expected in enumerate(term_tokens):
+            actual = text_tokens[start + offset]
+            if actual == expected:
+                continue
+            if len(expected) >= 4 and actual.startswith(expected):
+                continue
+            matched = False
+            break
+        if matched:
+            return True
+    return False
+
+
 def _matched_visual_concepts(script: str, limit: int = 2):
     """Choose only the strongest topics present in this scene, avoiding unrelated mixed prompts."""
     text = re.sub(r"\s+", " ", script or "").strip().lower()
     ranked = []
     for order, (terms, prompt) in enumerate(VISUAL_CONCEPTS):
-        hits = sum(text.count(term.lower()) for term in terms if term.lower() in text)
+        hits = sum(1 for term in terms if _contains_visual_term(text, term))
         if hits:
             # Specific terms win ties over broad concepts; original order is a stable final tie-breaker.
-            specificity = max(len(term) for term in terms if term.lower() in text)
+            specificity = max(len(term) for term in terms if _contains_visual_term(text, term))
             ranked.append((hits * 10 + min(specificity, 20) / 100 - order / 10000, order, prompt))
     ranked.sort(reverse=True)
     selected = []
@@ -742,9 +764,9 @@ def _is_unrelated_map_image(script: str, image_title: str) -> bool:
     title = re.sub(r"\s+", " ", (image_title or "").lower())
     map_terms = ("মানচিত্র", "বিশ্ব মানচিত্র", "ভূগোল", "পৃথিবীর মানচিত্র", "world map", "map of the world", "globe", "atlas", "geographic map", "geography")
     tech_terms = ("মোবাইল", "ফোন", "ইন্টারনেট", "প্রযুক্তি", "কম্পিউটার", "অ্যাপ", "স্ক্রিন রিডার", "টকব্যাক", "smartphone", "screen reader", "talkback", "accessibility", "digital technology", "mobile app")
-    explicit_map_context = any(term in text for term in map_terms)
-    technology_context = any(term in text for term in tech_terms)
-    return technology_context and not explicit_map_context and any(term in title for term in map_terms)
+    explicit_map_context = any(_contains_visual_term(text, term) for term in map_terms)
+    technology_context = any(_contains_visual_term(text, term) for term in tech_terms)
+    return technology_context and not explicit_map_context and any(_contains_visual_term(title, term) for term in map_terms)
 
 
 
@@ -865,11 +887,11 @@ def _english_visual_prompt(script: str, model_visual_prompt: Optional[str] = Non
         concepts = [subject]
     subject = " and ".join(concepts)
     text = (script or "").lower()
-    technology_context = any(term in text for term in (
+    technology_context = any(_contains_visual_term(text, term) for term in (
         "মোবাইল", "ফোন", "ইন্টারনেট", "প্রযুক্তি", "কম্পিউটার", "অ্যাপ", "স্ক্রিন রিডার",
         "টকব্যাক", "smartphone", "screen reader", "talkback", "accessibility", "mobile app"
     ))
-    geography_context = any(term in text for term in (
+    geography_context = any(_contains_visual_term(text, term) for term in (
         "মানচিত্র", "বিশ্ব মানচিত্র", "ভূগোল", "পৃথিবীর মানচিত্র", "world map", "globe", "atlas", "geography"
     ))
     if technology_context and not geography_context:
@@ -1195,8 +1217,9 @@ def make_background(script: str, folder: Path, model_visual_prompt: Optional[str
         draw = ImageDraw.Draw(image)
         text = (script or "").lower()
         themes = [
+            (("পরিশ্রম", "চেষ্টা", "সাফল্য", "বিশ্বাস", "স্বপ্ন", "আশা", "সাহস", "ভবিষ্যৎ", "ভবিষ্যত", "লক্ষ্য", "অধ্যবসায়", "অধ্যবসায়", "কঠিন পরিস্থিতি"), (35, 91, 75), "motivation"),
             (("ট্রেন", "রেল", "রেলগাড়ি", "রেলগাড়ি", "রেলওয়ে", "রেলওয়ে", "স্টেশন", "train", "railway", "station"), (44, 77, 110), "rail"),
-            (("বাসস্ট্যান্ড", "বাসস্টপ", "যাত্রীবাহী বাস", "বাস", "bus stop", "city bus"), (45, 91, 126), "bus"),
+            (("বাসস্ট্যান্ড", "বাসস্টপ", "যাত্রীবাহী বাস", "বাস", "বাসে", "বাসের", "bus stop", "city bus"), (45, 91, 126), "bus"),
             (("ক্রিকেট", "ব্যাটসম্যান", "বোলার", "স্টেডিয়াম", "cricket", "football", "ফুটবল"), (22, 91, 65), "sport"),
             (("রান্না", "খাবার", "রেসিপি", "খাদ্য", "cooking", "food"), (150, 76, 31), "food"),
             (("নদী", "সমুদ্র", "ভ্রমণ", "পাহাড়", "পর্যটন", "travel", "river", "sea"), (25, 95, 135), "travel"),
@@ -1208,7 +1231,7 @@ def make_background(script: str, folder: Path, model_visual_prompt: Optional[str
             (("বই", "শিক্ষা", "স্কুল", "শিক্ষার্থী", "education", "book"), (95, 63, 128), "education"),
             (("বাংলাদেশ", "দেশ", "জাতীয়", "বাংলা", "bangladesh"), (24, 111, 73), "bangladesh"),
         ]
-        theme = next(((keywords, color, name) for keywords, color, name in themes if any(k in text for k in keywords)), None)
+        theme = next(((keywords, color, name) for keywords, color, name in themes if any(_contains_visual_term(text, k) for k in keywords)), None)
         if theme:
             base_color, theme_name = theme[1], theme[2]
         else:
@@ -1229,7 +1252,22 @@ def make_background(script: str, folder: Path, model_visual_prompt: Optional[str
             color = tuple(max(0, min(255, int(channel * (0.72 + ratio * 0.48)))) for channel in base_color)
             draw.line((0, y, width, y), fill=color)
         # A large, legible subject symbol gives the fallback a scene-specific composition.
-        if theme_name == "rail":
+        if theme_name == "motivation":
+            # A purposeful visual for perseverance: a person climbing steps toward sunrise.
+            draw.ellipse((238, 82, 322, 166), fill=(255, 211, 112))
+            draw.polygon([(0, 300), (95, 215), (175, 290), (260, 190), (360, 275), (360, 455), (0, 455)], fill=(53, 124, 104))
+            draw.polygon([(0, 390), (110, 320), (210, 385), (300, 285), (360, 335), (360, 500), (0, 500)], fill=(31, 99, 82))
+            for step in range(5):
+                y = 455 - step * 43
+                x = 34 + step * 43
+                draw.rectangle((x, y, x + 82, y + 25), fill=(220, 194, 143), outline=(245, 229, 195), width=3)
+            draw.ellipse((178, 218, 218, 258), fill=(29, 35, 39))
+            draw.line((198, 258, 193, 342), fill=(29, 35, 39), width=17)
+            draw.line((195, 282, 158, 315), fill=(29, 35, 39), width=11)
+            draw.line((196, 282, 232, 300), fill=(29, 35, 39), width=11)
+            draw.line((193, 340, 164, 382), fill=(29, 35, 39), width=12)
+            draw.line((194, 340, 224, 375), fill=(29, 35, 39), width=12)
+        elif theme_name == "rail":
             # Simple train body, windows, wheels and tracks; no text or map-like graphics.
             draw.rectangle((42, 260, 318, 405), fill=(214, 222, 230), outline=(255, 255, 255), width=6)
             draw.rectangle((60, 285, 112, 340), fill=(49, 108, 153))
@@ -1296,18 +1334,8 @@ def make_background(script: str, folder: Path, model_visual_prompt: Optional[str
         else:
             draw.ellipse((225, 95, 310, 180), fill=(255, 220, 135))
             draw.polygon([(0, 490), (95, 350), (170, 445), (265, 315), (360, 455), (360, 640), (0, 640)], fill=tuple(max(0, c-18) for c in base_color))
-        # Add a deterministic, scene-specific visual accent so fallback scenes from the same
-        # category do not collapse into identical still images.
-        scene_seed = sum((index + 1) * ord(ch) for index, ch in enumerate((script or "")[:240])) + (max(0, int(variation_seed)) * 7919)
-        accent = (150 + scene_seed % 90, 130 + (scene_seed // 5) % 100, 100 + (scene_seed // 11) % 120)
-        x1 = 28 + scene_seed % 210
-        y1 = 70 + (scene_seed // 7) % 190
-        radius = 18 + (scene_seed // 13) % 34
-        draw.ellipse((x1, y1, x1 + radius * 2, y1 + radius * 2), outline=accent, width=5)
-        x2 = 25 + (scene_seed // 17) % 180
-        draw.line((x2, 565, min(350, x2 + 95), 565 - (scene_seed % 65)), fill=accent, width=6)
-        draw.ellipse((18, 25, 42, 49), fill=(255, 255, 255))
-        draw.ellipse((315, 550, 342, 577), fill=(255, 255, 255))
+        # Keep fallback artwork clean; avoid floating decorative circles and lines.
+
     # Keep the visual background clean: narration text belongs only in the timed caption layer.
     # Do not burn the script, app title, or provider credits into every background image.
     target = folder / "background.png"
