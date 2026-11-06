@@ -566,7 +566,7 @@ def _contains_visual_term(text: str, term: str) -> bool:
             actual = text_tokens[start + offset]
             if actual == expected:
                 continue
-            if re.fullmatch(r"[\\u0980-\\u09FF]+", expected):
+            if re.fullmatch(r"[\u0980-\u09FF]+", expected):
                 # Match common Bengali inflections without broad substring hits.
                 # For example, কৃষক -> কৃষকের, বাস -> বাসের, but not বাস -> বাস্তব.
                 remainder = actual[len(expected):] if actual.startswith(expected) else ""
