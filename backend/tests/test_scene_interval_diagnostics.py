@@ -64,6 +64,17 @@ class SceneIntervalDiagnosticsTests(unittest.TestCase):
             video_app._vary_visual_prompt(subject, 8),
         )
 
+    def test_visual_scene_count_can_exceed_legacy_48_image_ceiling(self):
+        scenes = ["একজন শিক্ষার্থী ব্রেইল বই পড়ছে।"]
+        result = video_app._visual_scenes_for_interval(scenes, 153.1, 3, None)
+        self.assertEqual(len(result), 52)
+        self.assertTrue(all(item == scenes[0] for item in result))
+
+    def test_zero_visual_limit_means_duration_based_unlimited_planning(self):
+        scenes = ["একজন কৃষক ধানক্ষেতে কাজ করছেন।"]
+        result = video_app._visual_scenes_for_interval(scenes, 150.1, 3, 0)
+        self.assertEqual(len(result), 51)
+
     def test_handles_missing_image_count(self):
         result = video_app._scene_interval_diagnostics(30.0, 0, 3)
         self.assertEqual(result["expected_images"], 10)
