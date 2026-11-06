@@ -1,5 +1,6 @@
 import base64
 import json
+import io
 import math
 import os
 import re
@@ -1721,8 +1722,8 @@ def _review_generated_image_against_scene(image_path: Path, narration: str, visu
         image_data = "data:image/jpeg;base64," + base64.b64encode(buffer.getvalue()).decode("ascii")
         question = (
             "Judge whether this image visibly depicts the narration, not merely its general mood. "
-            "Narration: " + re.sub(r"\\s+", " ", str(narration)).strip()[:420] +
-            ". Intended visual: " + re.sub(r"\\s+", " ", str(visual_prompt or "")).strip()[:300] +
+            "Narration: " + re.sub(r"\s+", " ", str(narration)).strip()[:420] +
+            ". Intended visual: " + re.sub(r"\s+", " ", str(visual_prompt or "")).strip()[:300] +
             ". Return JSON only: {\\"match\\":true or false, \\"confidence\\":number from 0 to 1, "
             "\\"description\\":\\"short factual description of visible contents\\", "
             "\\"reason\\":\\"short reason\\\"}. Reject generic landscapes, icons, cartoons, "
@@ -1754,8 +1755,8 @@ def _review_generated_image_against_scene(image_path: Path, narration: str, visu
             print("IMAGE_REVIEW unavailable reason=unstructured_vision_response", flush=True)
             return None
         confidence = float(review.get("confidence", 0.0))
-        description = re.sub(r"\\s+", " ", str(review.get("description") or "")).strip()[:240]
-        reason = re.sub(r"\\s+", " ", str(review.get("reason") or "")).strip()[:180]
+        description = re.sub(r"\s+", " ", str(review.get("description") or "")).strip()[:240]
+        reason = re.sub(r"\s+", " ", str(review.get("reason") or "")).strip()[:180]
         accepted = bool(review["match"]) and confidence >= 0.62
         print(
             f"IMAGE_REVIEW model={model} match={accepted} confidence={confidence:.2f} "
