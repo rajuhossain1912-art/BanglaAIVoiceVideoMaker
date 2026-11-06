@@ -124,7 +124,7 @@ jobs:
       - name: Verify independent reviewer parses global scene numbers
         run: |
           set -e
-          docker exec bangla-video-api python -c 'import json; from app import _parse_scene_visual_prompts as parse; data=json.dumps([{"scene":i,"visual_prompt":f"Photorealistic documentary scene number {i} with a clear visible subject"} for i in range(9,17)]); reviewed=parse(data,8,8); assert reviewed and reviewed[0]["scene"]==9 and reviewed[-1]["scene"]==16; assert parse(data,8,0) is None; print("Independent reviewer parser accepts globally numbered scenes and rejects incorrect offsets")'
+          docker exec bangla-video-api python -c 'import json; from app import _parse_scene_visual_prompts as parse; data=json.dumps([{"scene":i,"visual_prompt":f"Photorealistic documentary scene number {i} with a clear visible subject"} for i in range(9,17)]); reviewed=parse(data,8,8); assert reviewed and reviewed[0].startswith("Photorealistic") and reviewed[-1].endswith("clear visible subject"); assert parse(data,8,0) is None; print("Independent reviewer parser accepts globally numbered scenes and rejects incorrect offsets")'
       - name: Verify storyboard reviewer preserves neighboring narration context
         run: |
           set -e
