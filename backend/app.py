@@ -953,30 +953,36 @@ def transcribe_uploaded_audio(audio_path: Path, folder: Path, progress_callback=
     return transcript
 
 
-def _plan_scene_visual_prompts(scenes):
-    """Plan prompts in small batches to avoid model context limits on long scripts."""
+def _plan_scene_visual_prompts(scenes, context_scenes=None, context_offset=0):
+    """Plan prompts in batches while preserving neighboring narration across batch edges."""
     if not LANGUAGE_MODEL_VISUAL_PLANNER_ENABLED or not scenes:
         return None
+    full_context = context_scenes if context_scenes is not None else scenes
     if len(scenes) > 8:
         planned = []
         for start in range(0, len(scenes), 8):
-            batch = _plan_scene_visual_prompts(scenes[start:start + 8])
+            batch = _plan_scene_visual_prompts(
+                scenes[start:start + 8], context_scenes=full_context,
+                context_offset=context_offset + start
+            )
             if not batch or len(batch) != len(scenes[start:start + 8]):
                 return None
             planned.extend(batch)
         return planned
-    cache_key = json.dumps([re.sub(r"\s+", " ", x).strip()[:300] for x in scenes], ensure_ascii=False)
-    if cache_key in LANGUAGE_MODEL_VISUAL_CACHE:
-        return LANGUAGE_MODEL_VISUAL_CACHE[cache_key]
     scene_payload = [
         {
-            "scene": i + 1,
-            "context_before": re.sub(r"\s+", " ", scenes[i - 1]).strip()[:180] if i > 0 else "",
-            "text": re.sub(r"\s+", " ", text).strip()[:300],
-            "context_after": re.sub(r"\s+", " ", scenes[i + 1]).strip()[:180] if i + 1 < len(scenes) else "",
+            "scene": context_offset + i + 1,
+            "context_before": re.sub(r"\\s+", " ", full_context[context_offset + i - 1]).strip()[:180]
+                if context_offset + i > 0 else "",
+            "text": re.sub(r"\\s+", " ", text).strip()[:300],
+            "context_after": re.sub(r"\\s+", " ", full_context[context_offset + i + 1]).strip()[:180]
+                if context_offset + i + 1 < len(full_context) else "",
         }
         for i, text in enumerate(scenes)
     ]
+    cache_key = json.dumps(scene_payload, ensure_ascii=False, sort_keys=True)
+    if cache_key in LANGUAGE_MODEL_VISUAL_CACHE:
+        return LANGUAGE_MODEL_VISUAL_CACHE[cache_key]
     prompt = (
         "You are a strict visual storyboard planner for a Bangladeshi educational video. "
         "For EACH input scene, create exactly one concrete, photorealistic image prompt depicting the main subject or action explicitly stated in THAT scene. "
