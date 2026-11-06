@@ -514,7 +514,7 @@ VISUAL_CONCEPTS = [
     (("বন্যা", "ঘূর্ণিঝড়", "ঘূর্ণিঝড়", "দুর্যোগ", "জলোচ্ছ্বাস"), "a Bangladeshi village responding to monsoon flooding"),
     (("রাস্তা", "গাড়ি", "গাড়ি", "বাস", "পরিবহন", "চালক", "যাত্রী", "পথচারী"), "a realistic Bangladeshi street with safe public transport"),
     (("শিশু", "বাচ্চা", "ছেলে", "মেয়ে", "মেয়ে", "খেলাধুলা"), "children learning or playing safely outdoors"),
-    (("পরিশ্রম", "চেষ্টা", "সাফল্য", "দক্ষতা", "বিশ্বাস", "আশা", "সাহস", "লক্ষ্য", "ভবিষ্যৎ", "ভবিষ্যত"), "a determined person working toward a meaningful goal, overcoming a challenge with confidence"),
+    (("পরিশ্রম", "পরিশ্রমের", "চেষ্টা", "চেষ্টা চালিয়ে", "সাফল্য", "সফল", "দক্ষতা", "বিশ্বাস", "আশা", "সাহস", "লক্ষ্য", "লক্ষ্যে", "লক্ষ্যের", "ভবিষ্যৎ", "ভবিষ্যত", "এগিয়ে", "এগিয়ে", "বাধা", "ব্যর্থ", "থেমে", "পথ"), "a determined Bangladeshi person taking a concrete step toward a goal, persevering through a challenge, realistic human action and hopeful expression"),
     (("স্বপ্ন", "আশা", "সাহস", "ভবিষ্যৎ", "ভবিষ্যত"), "an inspiring hopeful sunrise over Bangladesh"),
     (("সকাল", "ভোর", "সূর্যোদয়", "সূর্যোদয়"), "sunrise over a peaceful green landscape"),
     (("গাছপালা", "গাছ", "সবুজ", "বন", "প্রকৃতি"), "lush green trees and natural scenery"),
@@ -1260,20 +1260,50 @@ def make_background(script: str, folder: Path, model_visual_prompt: Optional[str
             draw.line((0, y, width, y), fill=color)
         # A large, legible subject symbol gives the fallback a scene-specific composition.
         if theme_name == "motivation":
-            # A purposeful visual for perseverance: a person climbing steps toward sunrise.
-            draw.ellipse((238, 82, 322, 166), fill=(255, 211, 112))
-            draw.polygon([(0, 300), (95, 215), (175, 290), (260, 190), (360, 275), (360, 455), (0, 455)], fill=(53, 124, 104))
-            draw.polygon([(0, 390), (110, 320), (210, 385), (300, 285), (360, 335), (360, 500), (0, 500)], fill=(31, 99, 82))
-            for step in range(5):
-                y = 455 - step * 43
-                x = 34 + step * 43
-                draw.rectangle((x, y, x + 82, y + 25), fill=(220, 194, 143), outline=(245, 229, 195), width=3)
-            draw.ellipse((178, 218, 218, 258), fill=(29, 35, 39))
-            draw.line((198, 258, 193, 342), fill=(29, 35, 39), width=17)
-            draw.line((195, 282, 158, 315), fill=(29, 35, 39), width=11)
-            draw.line((196, 282, 232, 300), fill=(29, 35, 39), width=11)
-            draw.line((193, 340, 164, 382), fill=(29, 35, 39), width=12)
-            draw.line((194, 340, 224, 375), fill=(29, 35, 39), width=12)
+            # Use several distinct human-action illustrations so fallback scenes do
+            # not become the same sun-and-mountain card throughout a narration.
+            variant = max(0, int(variation_seed)) % 3
+            if variant == 0:
+                # A person climbing real-looking steps toward a clear destination.
+                draw.ellipse((238, 82, 322, 166), fill=(255, 211, 112))
+                draw.polygon([(0, 390), (95, 300), (175, 365), (260, 265), (360, 345), (360, 520), (0, 520)], fill=(53, 124, 104))
+                for step in range(5):
+                    y = 480 - step * 43
+                    x = 24 + step * 48
+                    draw.rectangle((x, y, x + 88, y + 25), fill=(220, 194, 143), outline=(245, 229, 195), width=3)
+                draw.ellipse((178, 218, 218, 258), fill=(29, 35, 39))
+                draw.line((198, 258, 193, 342), fill=(29, 35, 39), width=17)
+                draw.line((195, 282, 158, 315), fill=(29, 35, 39), width=11)
+                draw.line((196, 282, 232, 300), fill=(29, 35, 39), width=11)
+                draw.line((193, 340, 164, 382), fill=(29, 35, 39), width=12)
+                draw.line((194, 340, 224, 375), fill=(29, 35, 39), width=12)
+            elif variant == 1:
+                # A learner or worker concentrating at a desk: effort and practice.
+                draw.rectangle((0, 430, 360, 640), fill=(74, 83, 104))
+                draw.rectangle((38, 385, 322, 410), fill=(177, 128, 82))
+                draw.rectangle((62, 410, 78, 575), fill=(113, 78, 54))
+                draw.rectangle((282, 410, 298, 575), fill=(113, 78, 54))
+                draw.ellipse((135, 170, 225, 260), fill=(30, 36, 43))
+                draw.polygon([(124, 255), (236, 255), (270, 390), (92, 390)], fill=(38, 91, 125))
+                draw.line((160, 300, 125, 378), fill=(30, 36, 43), width=16)
+                draw.line((208, 300, 246, 378), fill=(30, 36, 43), width=16)
+                draw.rectangle((108, 350, 250, 377), fill=(242, 229, 193), outline=(255, 255, 255), width=3)
+                draw.line((145, 360, 215, 360), fill=(80, 95, 105), width=3)
+                draw.rectangle((258, 280, 290, 365), fill=(24, 30, 42), outline=(235, 240, 245), width=4)
+                draw.rectangle((265, 290, 283, 345), fill=(110, 184, 207))
+            else:
+                # A person walking forward on a road toward the morning light.
+                draw.ellipse((238, 82, 322, 166), fill=(255, 211, 112))
+                draw.polygon([(0, 350), (120, 290), (240, 350), (360, 290), (360, 640), (0, 640)], fill=(42, 112, 91))
+                draw.polygon([(130, 640), (170, 370), (205, 370), (270, 640)], fill=(92, 96, 100))
+                draw.line((187, 410, 190, 470), fill=(245, 229, 195), width=5)
+                draw.line((178, 520, 170, 570), fill=(245, 229, 195), width=5)
+                draw.ellipse((162, 225, 202, 265), fill=(29, 35, 39))
+                draw.line((182, 265, 190, 365), fill=(29, 35, 39), width=17)
+                draw.line((185, 292, 145, 335), fill=(29, 35, 39), width=11)
+                draw.line((188, 292, 226, 325), fill=(29, 35, 39), width=11)
+                draw.line((190, 365, 155, 420), fill=(29, 35, 39), width=12)
+                draw.line((190, 365, 230, 410), fill=(29, 35, 39), width=12)
         elif theme_name == "rail":
             # Simple train body, windows, wheels and tracks; no text or map-like graphics.
             draw.rectangle((42, 260, 318, 405), fill=(214, 222, 230), outline=(255, 255, 255), width=6)
