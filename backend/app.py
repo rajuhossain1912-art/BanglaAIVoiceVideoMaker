@@ -1152,6 +1152,25 @@ def find_generated_image(script: str, folder: Path, model_visual_prompt: Optiona
             executor.shutdown(wait=False, cancel_futures=True)
     return None, ""
 
+def _vary_visual_prompt(base_prompt: Optional[str], variation_seed: int = 0):
+    """Keep the scene subject fixed while varying camera composition between repeated slots."""
+    prompt = (base_prompt or "").strip()
+    if not prompt:
+        return prompt
+    compositions = (
+        "Use a wide establishing documentary shot, showing the subject within its real environment.",
+        "Use a medium eye-level documentary shot, showing the subject actively doing the stated task.",
+        "Use an over-the-shoulder documentary angle, with the relevant object clearly visible.",
+        "Use a side-angle documentary shot, capturing a different moment of the same activity.",
+        "Use a detailed environmental shot, showing the subject and important surrounding objects together.",
+        "Use a natural candid moment from slightly farther away, with a clear uncluttered background.",
+        "Use a three-quarter camera angle and a different subject position within the frame.",
+        "Use a contextual documentary photograph with foreground and background depth."
+    )
+    cue = compositions[max(0, int(variation_seed)) % len(compositions)]
+    return (prompt[:850].rstrip() + " " + cue)[:1100]
+
+
 def make_background(script: str, folder: Path, model_visual_prompt: Optional[str] = None, force_topic_graphic: bool = False, variation_seed: int = 0, scene_index: Optional[int] = None):
     # Small canvas is intentional: keep peak memory below Render Free's 512 MiB limit.
     width, height = 360, 640
@@ -1161,14 +1180,16 @@ def make_background(script: str, folder: Path, model_visual_prompt: Optional[str
     # If a provider repeats an earlier scene, request a genuinely new composition
     # before falling back to vector artwork. This keeps the video photo-led when
     # free image providers are available, while preserving a safe offline fallback.
-    retry_prompt = model_visual_prompt
+    base_prompt = model_visual_prompt or _english_visual_prompt(script)
+    # Every visual slot gets a distinct photographic composition, even when a long
+    # sentence is intentionally repeated to fill the selected image interval.
+    retry_prompt = _vary_visual_prompt(base_prompt, variation_seed)
     if force_topic_graphic:
-        base_prompt = model_visual_prompt or _english_visual_prompt(script)
         retry_prompt = (
-            base_prompt
+            retry_prompt
             + " Create a visibly different photograph from earlier scenes: change the camera angle, "
               "background, people placement and moment of action. Do not reuse a previous composition."
-        )[:700]
+        )[:1100]
         print("IMAGE_PROVIDER retry=distinct_composition reason=duplicate_scene_image", flush=True)
     source_image, credit = find_generated_image(script, folder, retry_prompt)
     if source_image:
