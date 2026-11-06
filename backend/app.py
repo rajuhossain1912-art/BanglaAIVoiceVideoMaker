@@ -1918,6 +1918,38 @@ def _parse_scene_match_response(raw):
     }
 
 
+def _extract_vision_response_text(value):
+    """Extract Moondream text across documented and nested Workers AI response envelopes."""
+    if isinstance(value, str):
+        return value.strip()
+    if isinstance(value, (int, float)):
+        return str(value)
+    if isinstance(value, list):
+        parts = [_extract_vision_response_text(item) for item in value]
+        return " ".join(part for part in parts if part).strip()
+    if isinstance(value, dict):
+        for key in (
+            "answer", "response", "description", "text", "output",
+            "content", "generated_text", "caption", "result",
+        ):
+            candidate = value.get(key)
+            if candidate is not None:
+                extracted = _extract_vision_response_text(candidate)
+                if extracted:
+                    return extracted
+        choices = value.get("choices")
+        if choices is not None:
+            extracted = _extract_vision_response_text(choices)
+            if extracted:
+                return extracted
+        message = value.get("message")
+        if message is not None:
+            extracted = _extract_vision_response_text(message)
+            if extracted:
+                return extracted
+    return ""
+
+
 def _should_semantically_review_image_source(source: str):
     """Spend vision-review inference only on photographic AI or contextual images."""
     return str(source or "").strip() in (
@@ -1975,16 +2007,17 @@ def _review_generated_image_against_scene(image_path: Path, narration: str, visu
             print(f"IMAGE_REVIEW unavailable model={model} reason=provider_error detail={detail}", flush=True)
             return None
         result = data.get("result") or {}
-        if isinstance(result, dict):
-            raw = (
-                result.get("answer") or result.get("response") or result.get("description")
-                or result.get("text") or result.get("output") or data.get("response") or ""
-            )
-        else:
-            raw = result
+        raw = _extract_vision_response_text(result)
+        if not raw:
+            raw = _extract_vision_response_text(data.get("response") or data.get("output"))
         review = _parse_scene_match_response(raw)
         if not review:
-            print("IMAGE_REVIEW unavailable reason=unstructured_vision_response", flush=True)
+            result_keys = ",".join(sorted(str(key) for key in result.keys())) if isinstance(result, dict) else type(result).__name__
+            print(
+                f"IMAGE_REVIEW unavailable reason=unstructured_vision_response "
+                f"result_shape={result_keys[:180]} raw_type={type(raw).__name__} raw_length={len(raw)}",
+                flush=True,
+            )
             return None
         confidence = review["confidence"]
         accepted = review["match"] and confidence >= 0.62
