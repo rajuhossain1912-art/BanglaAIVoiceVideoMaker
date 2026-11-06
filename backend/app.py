@@ -2024,7 +2024,7 @@ def _review_generated_image_against_scene(image_path: Path, narration: str, visu
             "abstract shapes, or unrelated objects are MISMATCH for a specific narrated subject."
         )
         model_path = urllib.parse.quote(model, safe="@/-")
-        payload = {"task": "query", "image": image_data, "question": question}
+        payload = {"task": "query", "image": image_data, "question": question, "stream": False, "reasoning": False, "max_tokens": 64}
         request = urllib.request.Request(
             f"https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/run/{model_path}",
             data=json.dumps(payload).encode("utf-8"),
