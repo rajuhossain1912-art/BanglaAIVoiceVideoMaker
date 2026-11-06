@@ -112,7 +112,7 @@ jobs:
       - name: Verify vision review response parsing
         run: |
           set -e
-          docker exec bangla-video-api python -c 'from app import _parse_scene_match_response as parse; assert parse("MATCH")["match"] is True; assert parse("MISMATCH")["match"] is False; assert parse("MATCH.")["match"] is True; assert parse("{\\"match\\":true,\\"confidence\\":0.91}")["confidence"] == 0.91; assert parse({"match":"mismatch","confidence":0.88})["match"] is False; assert parse("I cannot determine") is None; print("Vision review accepts strict labels and JSON while rejecting ambiguous responses")'
+          docker exec bangla-video-api python -c 'from app import _parse_scene_match_response as parse; assert parse("MATCH")["match"] is True; assert parse("MISMATCH")["match"] is False; assert parse("MATCH.")["match"] is True; assert parse({"match":True,"confidence":0.91})["confidence"] == 0.91; assert parse({"match":"mismatch","confidence":0.88})["match"] is False; assert parse("I cannot determine") is None; print("Vision review accepts strict labels and JSON while rejecting ambiguous responses")'
       - name: Show backend logs on failure
         if: failure()
         run: docker logs bangla-video-api || true
