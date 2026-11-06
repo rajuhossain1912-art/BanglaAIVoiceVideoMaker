@@ -1143,23 +1143,30 @@ def make_background(script: str, folder: Path, model_visual_prompt: Optional[str
     # Track the final source for this scene separately from provider-level attempt logs.
     scene_source = "topic_graphic" if force_topic_graphic else "unknown"
     scene_provider = ""
-    # When a provider repeats an earlier scene, use a topic-aware graphic instead of reusing one still image.
+    # If a provider repeats an earlier scene, request a genuinely new composition
+    # before falling back to vector artwork. This keeps the video photo-led when
+    # free image providers are available, while preserving a safe offline fallback.
+    retry_prompt = model_visual_prompt
     if force_topic_graphic:
-        source_image, credit = None, ""
-        print("IMAGE_PROVIDER fallback=topic_graphic reason=duplicate_scene_image", flush=True)
-    else:
-        source_image, credit = find_generated_image(script, folder, model_visual_prompt)
+        base_prompt = model_visual_prompt or _english_visual_prompt(script)
+        retry_prompt = (
+            base_prompt
+            + " Create a visibly different photograph from earlier scenes: change the camera angle, "
+              "background, people placement and moment of action. Do not reuse a previous composition."
+        )[:700]
+        print("IMAGE_PROVIDER retry=distinct_composition reason=duplicate_scene_image", flush=True)
+    source_image, credit = find_generated_image(script, folder, retry_prompt)
+    if source_image:
+        scene_source = "ai_generated"
+        match = re.search(r"AI-generated with ([A-Za-z0-9_.-]+)", str(credit or ""))
+        scene_provider = match.group(1)[:48] if match else "provider_unspecified"
+    if not source_image and ALLOW_LICENSED_IMAGE_FALLBACK:
+        source_image, credit = find_contextual_image(script, folder)
         if source_image:
-            scene_source = "ai_generated"
-            match = re.search(r"AI-generated with ([A-Za-z0-9_.-]+)", str(credit or ""))
-            scene_provider = match.group(1)[:48] if match else "provider_unspecified"
-        if not source_image and ALLOW_LICENSED_IMAGE_FALLBACK:
-            source_image, credit = find_contextual_image(script, folder)
-            if source_image:
-                scene_source = "licensed_contextual"
-                scene_provider = "openverse_or_wikimedia"
-        elif not source_image:
-            print("IMAGE_PROVIDER all_ai_models_failed licensed_fallback=disabled", flush=True)
+            scene_source = "licensed_contextual"
+            scene_provider = "openverse_or_wikimedia"
+    elif not source_image:
+        print("IMAGE_PROVIDER all_ai_models_failed licensed_fallback=disabled", flush=True)
     if source_image:
         try:
             with Image.open(source_image) as source:
