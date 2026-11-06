@@ -217,6 +217,26 @@ class SceneImageSimilarityTests(unittest.TestCase):
                 output.getvalue()
             )
 
+    def test_scene_splitter_keeps_short_sentences_intact(self):
+        first = "একজন কৃষক সবুজ ধানক্ষেতে কাজ করছেন।"
+        second = "তিনি জমির পরিচর্যা করছেন।"
+        scenes = video_app._split_script_into_scenes(
+            first + " " + second, target_words=4
+        )
+        self.assertEqual(scenes, [first, second])
+
+    def test_scene_splitter_preserves_all_words_in_long_sentences(self):
+        script = (
+            "বাংলাদেশের একজন পরিশ্রমী কৃষক সকালে মাঠে গিয়ে "
+            "ধানের চারা রোপণ করেন এবং যত্ন নিয়ে ফসলের পরিচর্যা করেন।"
+        )
+        scenes = video_app._split_script_into_scenes(script, target_words=4)
+        self.assertEqual(
+            " ".join(" ".join(scenes).split()),
+            " ".join(script.split())
+        )
+        self.assertTrue(all(len(scene.split()) <= 8 for scene in scenes))
+
 
 if __name__ == "__main__":
     unittest.main()
