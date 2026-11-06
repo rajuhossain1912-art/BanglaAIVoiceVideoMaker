@@ -21,7 +21,7 @@ class SceneIntervalDiagnosticsTests(unittest.TestCase):
         scenes = ["আসসালামু আলাইকুম এটি বাংলা ভিডিও তৈরির পরীক্ষা"]
         result = video_app._visual_scenes_for_interval(scenes, 5.1, 3, 32)
         self.assertEqual(len(result), 2)
-        self.assertEqual(" ".join(result), scenes[0])
+        self.assertTrue(all(item == scenes[0] for item in result))
 
     def test_visual_scene_count_expands_long_sentence_without_fragmenting_it(self):
         words = [f"শব্দ{i}" for i in range(170)]
