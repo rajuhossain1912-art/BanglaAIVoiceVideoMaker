@@ -4,13 +4,10 @@ on:
     branches: [main]
     paths:
       - 'app/**'
-      - 'backend/**'
-      - 'Dockerfile'
-      - 'render.yaml'
       - 'build.gradle.kts'
       - 'settings.gradle.kts'
       - 'gradle.properties'
-      - '.github/workflows/android-apk.yml'
+      - 'gradle/**'
   workflow_dispatch:
 permissions:
   contents: write
