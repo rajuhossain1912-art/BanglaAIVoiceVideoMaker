@@ -47,7 +47,7 @@ jobs:
       - name: Verify duration-based visual scene count has no fixed ceiling
         run: |
           set -e
-          docker exec bangla-video-api python -c 'from app import _visual_scenes_for_interval as plan; scenes=[f"Scene {i}" for i in range(100)]; result=plan(scenes,153.1,3); assert len(result)==52, len(result); assert result[0]=="Scene 0" and result[-1]=="Scene 51", (result[0],result[-1]); unlimited=plan(scenes,150.1,3,max_scenes=0); assert len(unlimited)==51, len(unlimited); print("Duration-based visual planning passed: 52 scenes for 153.1 seconds at 3-second intervals; zero cap remains uncapped")'
+          docker exec bangla-video-api python -c 'from app import _visual_scenes_for_interval as plan; scenes=[f"Scene {i}" for i in range(100)]; result=plan(scenes,153.1,3); assert len(result)==52, len(result); assert result[0]=="Scene 0" and result[-1]=="Scene 99", (result[0],result[-1]); unlimited=plan(scenes,150.1,3,max_scenes=0); assert len(unlimited)==51, len(unlimited); print("Duration-based visual planning passed: 52 scenes for 153.1 seconds at 3-second intervals; zero cap remains uncapped")'
       - name: Verify scene-aware visual planning
         run: |
           set -e
