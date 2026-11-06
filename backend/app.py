@@ -972,10 +972,10 @@ def _plan_scene_visual_prompts(scenes, context_scenes=None, context_offset=0):
     scene_payload = [
         {
             "scene": context_offset + i + 1,
-            "context_before": re.sub(r"\\s+", " ", full_context[context_offset + i - 1]).strip()[:180]
+            "context_before": re.sub(r"\s+", " ", full_context[context_offset + i - 1]).strip()[:180]
                 if context_offset + i > 0 else "",
-            "text": re.sub(r"\\s+", " ", text).strip()[:300],
-            "context_after": re.sub(r"\\s+", " ", full_context[context_offset + i + 1]).strip()[:180]
+            "text": re.sub(r"\s+", " ", text).strip()[:300],
+            "context_after": re.sub(r"\s+", " ", full_context[context_offset + i + 1]).strip()[:180]
                 if context_offset + i + 1 < len(full_context) else "",
         }
         for i, text in enumerate(scenes)
