@@ -602,17 +602,26 @@ def _matched_visual_concepts(script: str, limit: int = 2):
             break
     return selected
 
-def _image_keywords(script: str):
-    """Create a focused image-search query from the dominant topic(s) of one scene."""
+def _image_keywords(script: str, model_visual_prompt: Optional[str] = None):
+    """Build image-search terms from both Bangla topic matches and the AI's scene description."""
     concepts = _matched_visual_concepts(script, limit=2)
-    if concepts:
-        phrase = " ".join(concepts)
-        tokens = re.findall(r"[A-Za-z]{3,}", phrase.lower())
-        return list(dict.fromkeys(tokens))[:8]
-    # For text without a known Bangla topic, use a few meaningful Latin words if present.
-    tokens = re.findall(r"[A-Za-z]{3,}", (script or "")[:500].lower())
-    stopwords = {"the", "and", "for", "with", "this", "that", "from", "your", "you", "are", "was", "were", "have", "has", "had", "will", "would", "can", "could", "about", "into", "over", "under", "then", "than", "when", "where", "what", "why", "how", "not", "but", "or", "as", "is", "am", "be"}
-    return [word for word in dict.fromkeys(tokens) if word not in stopwords][:8]
+    # Bangla narration may have no local keyword match. In that case the storyboard
+    # model's English description is the best available semantic search query.
+    phrase = " ".join(concepts)
+    if model_visual_prompt:
+        phrase += " " + re.sub(r"\\s+", " ", str(model_visual_prompt)).strip()
+    if not phrase.strip():
+        phrase = (script or "")[:500]
+    tokens = re.findall(r"[A-Za-z]{3,}", phrase.lower())
+    stopwords = {
+        "the", "and", "for", "with", "this", "that", "from", "your", "you", "are",
+        "was", "were", "have", "has", "had", "will", "would", "can", "could",
+        "about", "into", "over", "under", "then", "than", "when", "where", "what",
+        "why", "how", "not", "but", "or", "as", "is", "am", "be", "one", "scene",
+        "show", "showing", "real", "person", "photograph", "photographic", "documentary",
+        "image", "photo", "natural", "light", "clear", "focus", "vertical", "bangladeshi",
+    }
+    return list(dict.fromkeys(word for word in tokens if word not in stopwords))[:8]
 
 
 def _download_checked_image(image_url: str, folder: Path, filename: str, credit: str):
@@ -642,9 +651,9 @@ def _download_checked_image(image_url: str, folder: Path, filename: str, credit:
         return None, ""
 
 
-def find_openverse_image(script: str, folder: Path):
+def find_openverse_image(script: str, folder: Path, model_visual_prompt: Optional[str] = None):
     """Try Openverse's anonymous endpoint; only use CC0, public-domain, CC BY or CC BY-SA results."""
-    keywords = _image_keywords(script)
+    keywords = _image_keywords(script, model_visual_prompt)
     if not keywords:
         return None, ""
     params = urllib.parse.urlencode({
@@ -681,12 +690,12 @@ def find_openverse_image(script: str, folder: Path):
     return None, ""
 
 
-def find_contextual_image(script: str, folder: Path):
-    """Try Openverse then Wikimedia Commons; use licensed reusable thumbnails only."""
-    image, credit = find_openverse_image(script, folder)
+def find_contextual_image(script: str, folder: Path, model_visual_prompt: Optional[str] = None):
+    """Try Openverse then Wikimedia using the storyboard's concrete scene description."""
+    image, credit = find_openverse_image(script, folder, model_visual_prompt)
     if image:
         return image, credit
-    keywords = _image_keywords(script)
+    keywords = _image_keywords(script, model_visual_prompt)
     if not keywords:
         return None, ""
     params = urllib.parse.urlencode({
@@ -1408,7 +1417,7 @@ def make_background(script: str, folder: Path, model_visual_prompt: Optional[str
         match = re.search(r"AI-generated with ([A-Za-z0-9_.-]+)", str(credit or ""))
         scene_provider = match.group(1)[:48] if match else "provider_unspecified"
     if not source_image and not force_topic_graphic and ALLOW_LICENSED_IMAGE_FALLBACK:
-        source_image, credit = find_contextual_image(script, folder)
+        source_image, credit = find_contextual_image(script, folder, model_visual_prompt or base_prompt)
         if source_image:
             scene_source = "licensed_contextual"
             scene_provider = "openverse_or_wikimedia"
@@ -1436,7 +1445,7 @@ def make_background(script: str, folder: Path, model_visual_prompt: Optional[str
             # before falling back to a vector illustration. The previous flow skipped this
             # fallback because the initial provider lookup had already returned a file.
             if ALLOW_LICENSED_IMAGE_FALLBACK:
-                fallback_image, fallback_credit = find_contextual_image(script, folder)
+                fallback_image, fallback_credit = find_contextual_image(script, folder, model_visual_prompt or base_prompt)
                 if fallback_image:
                     try:
                         with Image.open(fallback_image) as fallback_source:
