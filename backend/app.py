@@ -1806,7 +1806,7 @@ def make_scene_backgrounds(script: str, folder: Path, progress_callback=None, du
     backgrounds = []
     semantic_review = {
         "reviewed": 0, "matched": 0, "mismatched": 0,
-        "retried": 0, "retry_matched": 0, "unavailable": 0,
+        "retried": 0, "retry_matched": 0, "retry_mismatched": 0, "unavailable": 0,
     }
     try:
         review_limit = max(0, int(os.getenv("IMAGE_SEMANTIC_REVIEW_MAX_SCENES", "12")))
@@ -1859,6 +1859,7 @@ def make_scene_backgrounds(script: str, folder: Path, progress_callback=None, du
                     background = retry_background
                     print(f"IMAGE_REVIEW action=accepted_retry scene={index + 1}", flush=True)
                 else:
+                    semantic_review["retry_mismatched"] += 1
                     print(f"IMAGE_REVIEW action=retry_still_mismatch scene={index + 1}", flush=True)
         if any(_scene_images_too_similar(background, prior) for prior in backgrounds):
             print(f"IMAGE_SCENE repeated_image index={index + 1} action=regenerate_topic_graphic", flush=True)
@@ -2553,7 +2554,14 @@ def video_quality_report(job_id: str):
         except Exception:
             pass
 
+    semantic_review = snapshot.get("semantic_review") or {}
+    semantic_review = {
+        key: int(semantic_review.get(key, 0) or 0)
+        for key in ("reviewed", "matched", "mismatched", "retried", "retry_matched", "retry_mismatched", "unavailable")
+    }
+
     checks = {
+        "semantic_image_review": semantic_review,
         "file_exists": True,
         "video_track": video_stream is not None,
         "audio_track": audio_stream is not None,
@@ -2602,6 +2610,21 @@ def video_quality_report(job_id: str):
     narration_scene_count = snapshot.get("narration_scene_count")
     if isinstance(image_count, int) and image_count > 0:
         report_text += f"ভিডিওতে {image_count}টি পটভূমির ছবি ব্যবহার করা হয়েছে। "
+    if semantic_review["reviewed"] > 0:
+        report_text += (
+            f"ছবির বিষয়বস্তু যাচাইয়ে {semantic_review['reviewed']}টি নির্বাচিত ছবি পরীক্ষা করা হয়েছে। "
+            f"প্রথম পরীক্ষায় {semantic_review['matched']}টি মিলেছে এবং "
+            f"{semantic_review['mismatched']}টি মেলেনি। "
+            f"{semantic_review['retried']}টি ছবির জন্য নতুন ছবি তৈরির চেষ্টা হয়েছে; "
+            f"পুনরায় যাচাইয়ে {semantic_review['retry_matched']}টি মিলেছে এবং "
+            f"{semantic_review['retry_mismatched']}টি এখনো মেলেনি। "
+        )
+        if semantic_review["unavailable"]:
+            report_text += f"{semantic_review['unavailable']}টি যাচাইয়ের উত্তর পাওয়া যায়নি। "
+        report_text += "এটি নির্বাচিত ছবির নমুনা যাচাই, সব ছবির শতভাগ নিশ্চয়তা নয়। "
+    else:
+        report_text += "এই ভিডিওতে ছবির অর্থগত AI যাচাইয়ের ফল পাওয়া যায়নি। "
+
     if isinstance(narration_scene_count, int) and narration_scene_count > 0:
         report_text += f"লেখা থেকে {narration_scene_count}টি বাক্যভিত্তিক দৃশ্য তৈরি হয়েছে। "
     if isinstance(scene_interval, int) and scene_interval > 0:
@@ -2632,7 +2655,7 @@ def video_quality_report(job_id: str):
         "limitations": [
             "কণ্ঠে লেখা হুবহু পড়া হয়েছে কি না স্বয়ংক্রিয়ভাবে নিশ্চিত করা হয়নি।",
             "সাবটাইটেলের বানান ও সময়ের সঙ্গে কণ্ঠের মিল OCR বা মানুষের পর্যালোচনা ছাড়া নিশ্চিত নয়।",
-            "দৃশ্য নমুনা পরীক্ষা দৃশ্যের বিষয়বস্তু সঠিক কি না যাচাই করে না।"
+            "ছবির অর্থগত AI যাচাই কেবল নির্বাচিত নমুনায় করা হয়; সব ছবির শতভাগ নির্ভুলতা নিশ্চিত করে না।"
         ],
     }
 
