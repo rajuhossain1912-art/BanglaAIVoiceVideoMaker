@@ -1,3 +1,4 @@
+import base64
 import json
 import math
 import os
@@ -805,6 +806,76 @@ def _parse_scene_visual_prompts(raw: str, expected_count: int):
             return None
         cleaned.append(value)
     return cleaned
+
+
+def _parse_cloudflare_transcription_response(data):
+    """Extract a non-empty transcript from a Workers AI Whisper response."""
+    if not isinstance(data, dict) or data.get("success") is False:
+        raise RuntimeError("কথার অডিও বোঝার মডেল সঠিক উত্তর দেয়নি।")
+    result = data.get("result") or {}
+    transcript = re.sub(r"\\s+", " ", str(result.get("text") or "")).strip()
+    if not transcript:
+        raise RuntimeError("অডিওতে বোঝার মতো কথা পাওয়া যায়নি।")
+    return transcript
+
+
+def transcribe_uploaded_audio(audio_path: Path, folder: Path, progress_callback=None):
+    """Transcribe audio-only uploads with Cloudflare Whisper in manageable two-minute chunks."""
+    account_id = os.getenv("CLOUDFLARE_ACCOUNT_ID", "").strip()
+    api_token = os.getenv("CLOUDFLARE_AI_API_TOKEN", os.getenv("CLOUDFLARE_API_TOKEN", "")).strip()
+    if not account_id or not api_token:
+        raise RuntimeError("অডিও থেকে লেখা বোঝার জন্য Cloudflare AI সংযোগ পাওয়া যায়নি। লেখা লিখে আবার চেষ্টা করুন।")
+    chunk_dir = folder / "transcription-chunks"
+    chunk_dir.mkdir(parents=True, exist_ok=True)
+    pattern = chunk_dir / "speech-%04d.mp3"
+    run([
+        "ffmpeg", "-y", "-i", str(audio_path), "-vn", "-ac", "1", "-ar", "16000",
+        "-c:a", "libmp3lame", "-b:a", "48k", "-f", "segment", "-segment_time", "120",
+        "-reset_timestamps", "1", str(pattern)
+    ], 180)
+    chunks = sorted(chunk_dir.glob("speech-*.mp3"))
+    if not chunks:
+        raise RuntimeError("অডিওকে ছোট অংশে ভাগ করা যায়নি।")
+    endpoint = (
+        "https://api.cloudflare.com/client/v4/accounts/"
+        + urllib.parse.quote(account_id, safe="")
+        + "/ai/run/@cf/openai/whisper-large-v3-turbo"
+    )
+    transcripts = []
+    for index, chunk_path in enumerate(chunks):
+        if progress_callback:
+            progress_callback(
+                12 + int(12 * index / max(1, len(chunks))),
+                f"কথা থেকে লেখা বোঝা হচ্ছে: {index + 1}/{len(chunks)}"
+            )
+        payload = {
+            "audio": base64.b64encode(chunk_path.read_bytes()).decode("ascii"),
+            "task": "transcribe",
+            "vad_filter": True,
+            "initial_prompt": "বাংলা ও ইংরেজি কথার সঠিক প্রতিলিপি লিখুন। নাম, স্থান ও প্রযুক্তিগত শব্দ যতটা সম্ভব ঠিক রাখুন।"
+        }
+        request = urllib.request.Request(
+            endpoint,
+            data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+            headers={
+                "Authorization": "Bearer " + api_token,
+                "Content-Type": "application/json",
+                "User-Agent": "BanglaAIVoiceVideoMaker/1.0"
+            },
+            method="POST"
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=55) as response:
+                data = json.loads(response.read(2_000_000).decode("utf-8"))
+            transcripts.append(_parse_cloudflare_transcription_response(data))
+        except Exception as exc:
+            raise RuntimeError(
+                f"অডিওর {index + 1} নম্বর অংশের কথা বোঝা যায়নি: {type(exc).__name__}"
+            ) from exc
+    transcript = " ".join(transcripts).strip()
+    if len(transcript) > MAX_SCRIPT_CHARS:
+        raise RuntimeError(f"অডিওর লেখা {MAX_SCRIPT_CHARS} অক্ষরের সীমা অতিক্রম করেছে।")
+    return transcript
 
 
 def _plan_scene_visual_prompts(scenes):
@@ -1902,6 +1973,16 @@ def render(job_id: str, script: str, mode: str, audio_path: Optional[Path], capt
             JOBS[job_id]["status"] = "processing"
             JOBS[job_id]["progress"] = 10
             JOBS[job_id]["message"] = "ভয়েস ও দৃশ্য প্রস্তুত করা হচ্ছে"
+        if mode == "audio" and not script.strip():
+            def update_transcription_progress(progress, message):
+                with LOCK:
+                    if job_id in JOBS and JOBS[job_id].get("status") == "processing":
+                        JOBS[job_id]["progress"] = progress
+                        JOBS[job_id]["message"] = message
+            if audio_path is None:
+                raise RuntimeError("কথার অডিও নির্বাচন করুন।")
+            script = transcribe_uploaded_audio(audio_path, folder, update_transcription_progress)
+            print(f"TRANSCRIPTION_PROVIDER=Cloudflare-Whisper characters={len(script)}", flush=True)
         if mode == "clone":
             reference_audio = audio_path
             if reference_audio is None:
@@ -2052,14 +2133,14 @@ def capabilities():
 
 
 @app.post("/api/jobs", status_code=202)
-async def create_job(script: str = Form(...), mode: str = Form("auto"), audio: Optional[UploadFile] = File(None), voice_clone_consent: bool = Form(False), caption_offset: float = Form(0.0), scene_interval: int = Form(3)):
+async def create_job(script: str = Form(""), mode: str = Form("auto"), audio: Optional[UploadFile] = File(None), voice_clone_consent: bool = Form(False), caption_offset: float = Form(0.0), scene_interval: int = Form(3)):
     script = script.strip()
-    if not script:
-        raise HTTPException(400, "আগে বাংলা বা ইংরেজি লেখা যোগ করুন।")
-    if len(script) > MAX_SCRIPT_CHARS:
-        raise HTTPException(413, f"লেখা সর্বোচ্চ {MAX_SCRIPT_CHARS} অক্ষরের হতে পারবে।")
     if mode not in ("auto", "audio", "clone"):
         raise HTTPException(400, "ভিডিও তৈরির পদ্ধতি সঠিক নয়।")
+    if not script and not (mode == "audio" and audio is not None):
+        raise HTTPException(400, "লেখা দিন অথবা অডিওসহ অডিও মোড নির্বাচন করুন।")
+    if len(script) > MAX_SCRIPT_CHARS:
+        raise HTTPException(413, f"লেখা সর্বোচ্চ {MAX_SCRIPT_CHARS} অক্ষরের হতে পারবে।")
     if not -1.5 <= caption_offset <= 1.5:
         raise HTTPException(400, "সাবটাইটেলের সময় -১.৫ থেকে +১.৫ সেকেন্ডের মধ্যে দিন।")
     if scene_interval not in (3, 5, 10, 15, 20):
