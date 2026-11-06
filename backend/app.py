@@ -1380,7 +1380,7 @@ def make_background(script: str, folder: Path, model_visual_prompt: Optional[str
     return target
 
 def _split_script_into_scenes(script: str, max_scenes: Optional[int] = None, target_words: int = 8):
-    """Split the complete script into ordered topic-sized scenes; cap only when explicitly requested."""
+    """Split narration into meaningful sentence-sized scenes without losing words."""
     text = (script or "").strip()
     if not text:
         return ["বাংলা ভিডিও"]
@@ -1390,26 +1390,35 @@ def _split_script_into_scenes(script: str, max_scenes: Optional[int] = None, tar
         paragraphs = [text]
 
     chunks = []
+    # Preserve sentence context: fixed eight-word cuts can separate a subject
+    # from its action and leave the visual planner with incomplete information.
+    max_sentence_words = max(4, target_words * 2)
     for paragraph in paragraphs:
         sentences = [part.strip() for part in re.split(r"(?<=[.!?।;])\s+", paragraph) if part.strip()]
         if not sentences:
             sentences = [paragraph]
-        current = []
+        current_sentences = []
+        current_word_count = 0
+
+        def flush_current():
+            nonlocal current_sentences, current_word_count
+            if current_sentences:
+                chunks.append(" ".join(current_sentences))
+                current_sentences = []
+                current_word_count = 0
+
         for sentence in sentences:
             words = sentence.split()
-            while words:
-                room = target_words - len(current)
-                if room <= 0:
-                    chunks.append(" ".join(current))
-                    current = []
-                    room = target_words
-                current.extend(words[:room])
-                words = words[room:]
-                if len(current) >= target_words:
-                    chunks.append(" ".join(current))
-                    current = []
-        if current:
-            chunks.append(" ".join(current))
+            if len(words) > max_sentence_words:
+                flush_current()
+                for offset in range(0, len(words), max_sentence_words):
+                    chunks.append(" ".join(words[offset:offset + max_sentence_words]))
+                continue
+            if current_sentences and current_word_count + len(words) > max_sentence_words:
+                flush_current()
+            current_sentences.append(sentence)
+            current_word_count += len(words)
+        flush_current()
 
     if not chunks:
         chunks = [text]
@@ -1422,13 +1431,13 @@ def _split_script_into_scenes(script: str, max_scenes: Optional[int] = None, tar
         current = []
         remaining_scenes = max_scenes
         remaining_words = total_words
-        for index, words in enumerate(all_words):
+        for words in all_words:
             current.extend(words)
             remaining_words -= len(words)
             should_close = (
                 len(merged) < max_scenes - 1
                 and len(current) >= target_size
-                and (remaining_words > 0)
+                and remaining_words > 0
             )
             if should_close:
                 merged.append(" ".join(current))
