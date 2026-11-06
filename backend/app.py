@@ -1704,6 +1704,70 @@ def _visual_scenes_for_interval(scenes, duration: float, interval: int, max_scen
     return result[:target_count]
 
 
+
+def _review_generated_image_against_scene(image_path: Path, narration: str, visual_prompt: Optional[str] = None):
+    """Ask Moondream to inspect a generated image and judge whether it depicts this narration."""
+    account_id = os.getenv("CLOUDFLARE_ACCOUNT_ID", "").strip()
+    api_token = os.getenv("CLOUDFLARE_AI_API_TOKEN", os.getenv("CLOUDFLARE_API_TOKEN", "")).strip()
+    if not account_id or not api_token or not image_path or not image_path.is_file():
+        return None
+    model = os.getenv("CLOUDFLARE_VISION_REVIEW_MODEL", "@cf/moondream/moondream3.1-9B-A2B").strip()
+    try:
+        with Image.open(image_path) as source:
+            preview = source.convert("RGB")
+            preview.thumbnail((448, 768), Image.Resampling.LANCZOS)
+            buffer = io.BytesIO()
+            preview.save(buffer, format="JPEG", quality=78, optimize=True)
+        image_data = "data:image/jpeg;base64," + base64.b64encode(buffer.getvalue()).decode("ascii")
+        question = (
+            "Judge whether this image visibly depicts the narration, not merely its general mood. "
+            "Narration: " + re.sub(r"\\s+", " ", str(narration)).strip()[:420] +
+            ". Intended visual: " + re.sub(r"\\s+", " ", str(visual_prompt or "")).strip()[:300] +
+            ". Return JSON only: {\\"match\\":true or false, \\"confidence\\":number from 0 to 1, "
+            "\\"description\\":\\"short factual description of visible contents\\", "
+            "\\"reason\\":\\"short reason\\\"}. Reject generic landscapes, icons, cartoons, "
+            "abstract shapes, and unrelated objects when narration describes a specific person, action, or object."
+        )
+        model_path = urllib.parse.quote(model, safe="@/-")
+        payload = {"task": "query", "image": image_data, "question": question}
+        request = urllib.request.Request(
+            f"https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/run/{model_path}",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={
+                "Authorization": "Bearer " + api_token,
+                "Content-Type": "application/json",
+                "User-Agent": "BanglaAIVoiceVideoMaker/1.0",
+            },
+            method="POST",
+        )
+        with urllib.request.urlopen(request, timeout=18) as response:
+            data = json.loads(response.read(180_000).decode("utf-8"))
+        result = data.get("result") or {}
+        raw = result.get("answer") or result.get("response") or result.get("description") or ""
+        if isinstance(raw, dict):
+            review = raw
+        else:
+            text = str(raw).strip()
+            match = re.search(r"\\{.*\\}", text, flags=re.S)
+            review = json.loads(match.group(0)) if match else None
+        if not isinstance(review, dict) or not isinstance(review.get("match"), bool):
+            print("IMAGE_REVIEW unavailable reason=unstructured_vision_response", flush=True)
+            return None
+        confidence = float(review.get("confidence", 0.0))
+        description = re.sub(r"\\s+", " ", str(review.get("description") or "")).strip()[:240]
+        reason = re.sub(r"\\s+", " ", str(review.get("reason") or "")).strip()[:180]
+        accepted = bool(review["match"]) and confidence >= 0.62
+        print(
+            f"IMAGE_REVIEW model={model} match={accepted} confidence={confidence:.2f} "
+            f"description={description[:120]} reason={reason[:100]}",
+            flush=True,
+        )
+        return {"match": accepted, "confidence": confidence, "description": description, "reason": reason}
+    except Exception as exc:
+        print(f"IMAGE_REVIEW unavailable model={model} error={type(exc).__name__}: {str(exc)[:140]}", flush=True)
+        return None
+
+
 def make_scene_backgrounds(script: str, folder: Path, progress_callback=None, duration: float = 0.0, scene_interval: int = 5):
     """Plan as many visual scenes as the duration and selected interval require."""
     scenes = _split_script_into_scenes(script, max_scenes=None, target_words=8)
@@ -1727,7 +1791,42 @@ def make_scene_backgrounds(script: str, folder: Path, progress_callback=None, du
         scene_dir = folder / f"scene-{index:02d}"
         scene_dir.mkdir(parents=True, exist_ok=True)
         print(f"IMAGE_SCENE index={index + 1}/{len(scenes)} words={len(scene_text.split())}", flush=True)
-        background = make_background(scene_text, scene_dir, visual_prompts[index] if visual_prompts else None, variation_seed=index, scene_index=index + 1)
+        scene_visual_prompt = visual_prompts[index] if visual_prompts else None
+        background = make_background(scene_text, scene_dir, scene_visual_prompt, variation_seed=index, scene_index=index + 1)
+        # To protect the free-tier allowance, inspect a bounded, evenly distributed
+        # sample by default. Set the environment limit higher to review more scenes.
+        try:
+            review_limit = max(0, int(os.getenv("IMAGE_SEMANTIC_REVIEW_MAX_SCENES", "12")))
+        except (TypeError, ValueError):
+            review_limit = 12
+        review_indices = set()
+        if review_limit > 0 and len(visual_scenes) <= review_limit:
+            review_indices = set(range(len(visual_scenes)))
+        elif review_limit > 0 and len(visual_scenes) > review_limit:
+            review_indices = {
+                round(slot * (len(visual_scenes) - 1) / max(1, review_limit - 1))
+                for slot in range(review_limit)
+            }
+        if index in review_indices:
+            review = _review_generated_image_against_scene(background, scene_text, scene_visual_prompt)
+            if review and not review["match"]:
+                print(f"IMAGE_REVIEW action=regenerate scene={index + 1}", flush=True)
+                correction = (
+                    (scene_visual_prompt or _english_visual_prompt(scene_text))
+                    + " Strictly depict this exact narration: " + scene_text[:220]
+                    + ". Avoid the rejected image content: " + review["description"][:140]
+                    + ". Use a clearly recognizable real-life subject and action."
+                )[:1050]
+                retry_background = make_background(
+                    scene_text, scene_dir, correction, variation_seed=index + len(visual_scenes),
+                    scene_index=index + 1
+                )
+                retry_review = _review_generated_image_against_scene(retry_background, scene_text, correction)
+                if retry_review and retry_review["match"]:
+                    background = retry_background
+                    print(f"IMAGE_REVIEW action=accepted_retry scene={index + 1}", flush=True)
+                elif retry_review:
+                    print(f"IMAGE_REVIEW action=retry_still_mismatch scene={index + 1}", flush=True)
         if any(_scene_images_too_similar(background, prior) for prior in backgrounds):
             print(f"IMAGE_SCENE repeated_image index={index + 1} action=regenerate_topic_graphic", flush=True)
             background = make_background(scene_text, scene_dir, force_topic_graphic=True, variation_seed=index, scene_index=index + 1)
