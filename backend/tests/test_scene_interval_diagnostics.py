@@ -75,6 +75,20 @@ class SceneIntervalDiagnosticsTests(unittest.TestCase):
         result = video_app._visual_scenes_for_interval(scenes, 150.1, 3, 0)
         self.assertEqual(len(result), 51)
 
+    def test_whisper_transcript_parser_normalizes_bangla_and_english_speech(self):
+        result = video_app._parse_cloudflare_transcription_response({
+            "success": True,
+            "result": {"text": "  আজ   একটি   ভিডিও।  Make it clear.  "}
+        })
+        self.assertEqual(result, "আজ একটি ভিডিও। Make it clear.")
+
+    def test_whisper_transcript_parser_rejects_empty_audio_result(self):
+        with self.assertRaises(RuntimeError):
+            video_app._parse_cloudflare_transcription_response({
+                "success": True,
+                "result": {"text": "   "}
+            })
+
     def test_handles_missing_image_count(self):
         result = video_app._scene_interval_diagnostics(30.0, 0, 3)
         self.assertEqual(result["expected_images"], 10)
