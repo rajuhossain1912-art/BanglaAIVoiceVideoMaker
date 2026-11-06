@@ -71,7 +71,7 @@ jobs:
       - name: Verify licensed photo candidates are ranked by storyboard relevance
         run: |
           set -e
-          docker exec bangla-video-api python -c 'from app import _image_title_relevance_score as score; terms=["farmer","rice","seedlings","paddy","field"]; relevant=score("Bangladeshi farmer planting rice seedlings in paddy field",terms); generic=score("Beautiful green landscape at sunrise",terms); partial=score("Rice field landscape",terms); assert relevant > partial > generic, (relevant,partial,generic); assert score("A city skyline",terms) == 0; print("Licensed photo ranking prioritizes concrete storyboard subjects over generic scenery")'
+          docker exec bangla-video-api python -c 'from app import _image_title_relevance_score as score, _licensed_photo_title_is_relevant as relevant_title; terms=["farmer","rice","seedlings","paddy","field"]; relevant=score("Bangladeshi farmers planting rice seedling in paddy fields",terms); generic=score("Beautiful green landscape at sunrise",terms); partial=score("Rice field landscape",terms); assert relevant > partial > generic, (relevant,partial,generic); assert score("A city skyline",terms) == 0; assert relevant_title("Bangladeshi farmers planting rice seedlings",terms); assert not relevant_title("Beautiful green landscape at sunrise",terms); assert relevant_title("Rice field landscape",terms); print("Licensed photo ranking handles plural forms and rejects generic titles without scene-subject matches")'
       - name: Verify voice cloning requires explicit consent
         run: |
           set -e
