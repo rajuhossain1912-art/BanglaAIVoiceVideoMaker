@@ -809,7 +809,7 @@ def _parse_scene_visual_prompts(raw: str, expected_count: int):
         cleaned.append(value)
     return cleaned
 
-def _review_scene_visual_prompts(scenes, prompts, model_names, planner_model):
+def _review_scene_visual_prompts(scenes, prompts, model_names, planner_model, context_scenes=None, context_offset=0):
     """Use a second, different language model to critique scene-to-image prompt alignment."""
     account_id = os.getenv("CLOUDFLARE_ACCOUNT_ID", "").strip()
     api_token = os.getenv("CLOUDFLARE_AI_API_TOKEN", os.getenv("CLOUDFLARE_API_TOKEN", "")).strip()
@@ -818,19 +818,25 @@ def _review_scene_visual_prompts(scenes, prompts, model_names, planner_model):
     reviewer_models = [name for name in model_names if name != planner_model]
     if not reviewer_models:
         return prompts
+    full_context = context_scenes if context_scenes is not None else scenes
     review_items = [
         {
-            "scene": index + 1,
+            "scene": context_offset + index + 1,
+            "context_before": re.sub(r"\s+", " ", str(full_context[context_offset + index - 1])).strip()[:180]
+                if context_offset + index > 0 else "",
             "narration": re.sub(r"\s+", " ", str(scene)).strip()[:300],
+            "context_after": re.sub(r"\s+", " ", str(full_context[context_offset + index + 1])).strip()[:180]
+                if context_offset + index + 1 < len(full_context) else "",
             "proposed_visual_prompt": prompt,
         }
         for index, (scene, prompt) in enumerate(zip(scenes, prompts))
     ]
     review_prompt = (
         "You are an independent quality reviewer for a Bangladeshi educational video storyboard. "
-        "Check each proposed visual prompt against its exact narration. Reject generic scenery, "
-        "symbols, cartoons, vague silhouettes, unrelated objects, and details not supported by the narration. "
-        "Keep the actual subject and action explicit. Use nearby scene context only when needed to resolve references. "
+        "Check each proposed visual prompt against its exact narration. Use context_before and context_after only "
+        "to resolve pronouns and continuity; never replace the current scene subject with a neighboring scene. "
+        "Reject generic scenery, symbols, cartoons, vague silhouettes, unrelated objects, and details not supported "
+        "by the narration. Keep the actual subject and action explicit. "
         "Rewrite weak prompts as concise, photorealistic documentary photography prompts. "
         "Do not invent facts, people, places, or actions. Preserve one prompt for each scene in the same order. "
         "Return ONLY a JSON array with keys scene and visual_prompt; each prompt must be 40 to 220 characters. "
@@ -1046,7 +1052,7 @@ def _plan_scene_visual_prompts(scenes, context_scenes=None, context_offset=0):
                 prompts = _parse_scene_visual_prompts(raw, len(scenes))
                 if prompts:
                     # Cross-check with a different model before accepting the storyboard.
-                    prompts = _review_scene_visual_prompts(scenes, prompts, model_names, model)
+                    prompts = _review_scene_visual_prompts(scenes, prompts, model_names, model, full_context, context_offset)
                     LANGUAGE_MODEL_VISUAL_CACHE[cache_key] = prompts
                     print("LANGUAGE_MODEL selected=Cloudflare-Workers-AI model=" + model, flush=True)
                     return prompts
