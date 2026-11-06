@@ -1801,6 +1801,11 @@ def _should_semantically_review_image_source(source: str):
     )
 
 
+def _should_review_duplicate_retry(index: int, review_indices, source: str):
+    """Review a replacement photo only when its scene is in the selected QA sample."""
+    return index in review_indices and _should_semantically_review_image_source(source)
+
+
 def _review_generated_image_against_scene(image_path: Path, narration: str, visual_prompt: Optional[str] = None):
     """Ask Moondream to inspect a generated image and judge whether it depicts this narration."""
     account_id = os.getenv("CLOUDFLARE_ACCOUNT_ID", "").strip()
@@ -1882,6 +1887,8 @@ def make_scene_backgrounds(script: str, folder: Path, progress_callback=None, du
     semantic_review = {
         "reviewed": 0, "matched": 0, "mismatched": 0,
         "retried": 0, "retry_matched": 0, "retry_mismatched": 0, "unavailable": 0,
+        "duplicate_retry_reviewed": 0, "duplicate_retry_matched": 0,
+        "duplicate_retry_mismatched": 0, "duplicate_retry_unavailable": 0,
         "image_sources": {"ai_generated": 0, "licensed_contextual": 0, "topic_graphic": 0, "unknown": 0},
     }
     try:
@@ -1971,8 +1978,35 @@ def make_scene_backgrounds(script: str, folder: Path, progress_callback=None, du
                     variation_seed=index, scene_index=index + 1
                 )
             else:
-                background = distinct_background
-                print(f"IMAGE_SCENE repeated_image index={index + 1} action=accepted_new_composition", flush=True)
+                distinct_source_info = {}
+                try:
+                    distinct_source_info = json.loads((scene_dir / "scene-source.json").read_text(encoding="utf-8"))
+                except Exception:
+                    pass
+                distinct_source = str(distinct_source_info.get("source") or "unknown")
+                if _should_review_duplicate_retry(index, review_indices, distinct_source):
+                    semantic_review["duplicate_retry_reviewed"] += 1
+                    distinct_review = _review_generated_image_against_scene(
+                        distinct_background, scene_text, distinct_prompt
+                    )
+                    if distinct_review is None:
+                        semantic_review["duplicate_retry_unavailable"] += 1
+                        print(f"IMAGE_REVIEW duplicate_retry=unavailable scene={index + 1} action=keep_distinct_photo", flush=True)
+                        background = distinct_background
+                    elif distinct_review["match"]:
+                        semantic_review["duplicate_retry_matched"] += 1
+                        print(f"IMAGE_REVIEW duplicate_retry=match scene={index + 1} action=accept", flush=True)
+                        background = distinct_background
+                    else:
+                        semantic_review["duplicate_retry_mismatched"] += 1
+                        print(f"IMAGE_REVIEW duplicate_retry=mismatch scene={index + 1} action=use_topic_graphic", flush=True)
+                        background = make_background(
+                            scene_text, scene_dir, force_topic_graphic=True,
+                            variation_seed=index, scene_index=index + 1
+                        )
+                else:
+                    background = distinct_background
+                    print(f"IMAGE_SCENE repeated_image index={index + 1} action=accepted_new_composition", flush=True)
         try:
             source_info = json.loads((scene_dir / "scene-source.json").read_text(encoding="utf-8"))
             source_name = str(source_info.get("source") or "unknown")
@@ -2674,7 +2708,10 @@ def video_quality_report(job_id: str):
     semantic_review = snapshot.get("semantic_review") or {}
     semantic_review = {
         key: int(semantic_review.get(key, 0) or 0)
-        for key in ("reviewed", "matched", "mismatched", "retried", "retry_matched", "retry_mismatched", "unavailable")
+        for key in (
+            "reviewed", "matched", "mismatched", "retried", "retry_matched", "retry_mismatched", "unavailable",
+            "duplicate_retry_reviewed", "duplicate_retry_matched", "duplicate_retry_mismatched", "duplicate_retry_unavailable"
+        )
     }
     raw_image_sources = snapshot.get("semantic_review") or {}
     raw_image_sources = raw_image_sources.get("image_sources") or {}
@@ -2751,6 +2788,13 @@ def video_quality_report(job_id: str):
         )
         if semantic_review["unavailable"]:
             report_text += f"{semantic_review['unavailable']}টি যাচাইয়ের উত্তর পাওয়া যায়নি। "
+        if semantic_review["duplicate_retry_reviewed"]:
+            report_text += (
+                f"একই ছবি এড়িয়ে তৈরি নতুন {semantic_review['duplicate_retry_reviewed']}টি ছবিও যাচাই করা হয়েছে। "
+                f"এর মধ্যে {semantic_review['duplicate_retry_matched']}টি মিলেছে, "
+                f"{semantic_review['duplicate_retry_mismatched']}টি মেলেনি এবং "
+                f"{semantic_review['duplicate_retry_unavailable']}টির যাচাইয়ের উত্তর পাওয়া যায়নি। "
+            )
         report_text += "এটি নির্বাচিত ছবির নমুনা যাচাই, সব ছবির শতভাগ নিশ্চয়তা নয়। "
     else:
         report_text += "এই ভিডিওতে ছবির অর্থগত AI যাচাইয়ের ফল পাওয়া যায়নি। "
