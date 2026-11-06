@@ -787,7 +787,7 @@ LANGUAGE_MODEL_VISUAL_PLANNER_ENABLED = os.getenv("LANGUAGE_MODEL_VISUAL_PLANNER
 LANGUAGE_MODEL_VISUAL_CACHE = {}
 
 
-def _parse_scene_visual_prompts(raw: str, expected_count: int):
+def _parse_scene_visual_prompts(raw: str, expected_count: int, scene_offset: int = 0):
     """Accept only correctly indexed JSON objects with concise scene-matched prompts."""
     text = (raw or "").strip()
     text = re.sub(r"^\x60\x60\x60(?:json)?\s*|\s*\x60\x60\x60$", "", text, flags=re.I)
@@ -801,7 +801,7 @@ def _parse_scene_visual_prompts(raw: str, expected_count: int):
     cleaned = []
     for index, item in enumerate(parsed, start=1):
         # Prevent reordered model output from assigning one scene another scene's image.
-        if not isinstance(item, dict) or item.get("scene") != index:
+        if not isinstance(item, dict) or item.get("scene") != scene_offset + index:
             return None
         value = re.sub(r"\s+", " ", str(item.get("visual_prompt") or "")).strip().strip('"')
         if not 40 <= len(value) <= 220 or re.search(r"[\x00-\x1f]", value):
@@ -872,7 +872,7 @@ def _review_scene_visual_prompts(scenes, prompts, model_names, planner_model, co
                 data = json.loads(response.read(250_000).decode("utf-8"))
             result = data.get("result") or {}
             raw = result.get("response") or result.get("choices", [{}])[0].get("message", {}).get("content", "")
-            reviewed = _parse_scene_visual_prompts(raw, len(scenes))
+            reviewed = _parse_scene_visual_prompts(raw, len(scenes), context_offset)
             if reviewed:
                 print(
                     "LANGUAGE_MODEL review=passed planner=" + planner_model
