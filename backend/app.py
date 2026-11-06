@@ -1946,8 +1946,27 @@ def make_scene_backgrounds(script: str, folder: Path, progress_callback=None, du
         elif index in review_indices:
             print(f"IMAGE_REVIEW skipped scene={index + 1} reason=non_photographic_source source={review_source}", flush=True)
         if any(_scene_images_too_similar(background, prior) for prior in backgrounds):
-            print(f"IMAGE_SCENE repeated_image index={index + 1} action=regenerate_topic_graphic", flush=True)
-            background = make_background(scene_text, scene_dir, force_topic_graphic=True, variation_seed=index, scene_index=index + 1)
+            print(f"IMAGE_SCENE repeated_image index={index + 1} action=try_new_photo_composition", flush=True)
+            distinct_prompt = (
+                (scene_visual_prompt or _english_visual_prompt(scene_text))
+                + ". Create a clearly different photographic composition from previous scenes. "
+                + "Change camera angle, setting, subject position, lighting, and moment of action. "
+                + "Do not reuse the same stock-photo composition or background."
+            )[:1050]
+            distinct_background = make_background(
+                scene_text, scene_dir, distinct_prompt,
+                variation_seed=index + len(visual_scenes) * 3 + 17,
+                scene_index=index + 1
+            )
+            if any(_scene_images_too_similar(distinct_background, prior) for prior in backgrounds):
+                print(f"IMAGE_SCENE repeated_image index={index + 1} action=use_topic_graphic_after_retry", flush=True)
+                background = make_background(
+                    scene_text, scene_dir, force_topic_graphic=True,
+                    variation_seed=index, scene_index=index + 1
+                )
+            else:
+                background = distinct_background
+                print(f"IMAGE_SCENE repeated_image index={index + 1} action=accepted_new_composition", flush=True)
         try:
             source_info = json.loads((scene_dir / "scene-source.json").read_text(encoding="utf-8"))
             source_name = str(source_info.get("source") or "unknown")
