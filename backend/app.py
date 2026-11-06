@@ -1877,13 +1877,13 @@ def _parse_scene_match_response(raw):
                 candidate = None
         if candidate is None:
             normalized = re.sub(r"\s+", " ", text).strip().lower()
-            label = re.fullmatch(r"(match|mismatch)[.!]?", normalized)
+            label = re.match(r"^(mismatch|match)\\b", normalized)
             if label:
                 return {
                     "match": label.group(1) == "match",
                     "confidence": 0.70,
                     "description": "",
-                    "reason": "Vision model returned a strict scene-match label",
+                    "reason": "Vision model returned a scene-match label with optional explanation",
                 }
             match_word = re.search(r"\bmatch(?:es)?\s*[:=]?\s*(true|false|yes|no)\b", normalized)
             confidence_word = re.search(r"\bconfidence\s*[:=]?\s*(0(?:\.\d+)?|1(?:\.0+)?)", normalized)
