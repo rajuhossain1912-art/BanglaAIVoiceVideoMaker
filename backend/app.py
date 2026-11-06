@@ -1906,8 +1906,6 @@ def make_scene_backgrounds(script: str, folder: Path, progress_callback=None, du
         if index in review_indices and _should_semantically_review_image_source(review_source):
             semantic_review["reviewed"] += 1
             review = _review_generated_image_against_scene(background, scene_text, scene_visual_prompt)
-        elif index in review_indices:
-            print(f"IMAGE_REVIEW skipped scene={index + 1} reason=non_photographic_source source={review_source}", flush=True)
             if review is None:
                 semantic_review["unavailable"] += 1
             elif review["match"]:
@@ -1945,6 +1943,8 @@ def make_scene_backgrounds(script: str, folder: Path, progress_callback=None, du
                         scene_text, scene_dir, force_topic_graphic=True,
                         variation_seed=index, scene_index=index + 1
                     )
+        elif index in review_indices:
+            print(f"IMAGE_REVIEW skipped scene={index + 1} reason=non_photographic_source source={review_source}", flush=True)
         if any(_scene_images_too_similar(background, prior) for prior in backgrounds):
             print(f"IMAGE_SCENE repeated_image index={index + 1} action=regenerate_topic_graphic", flush=True)
             background = make_background(scene_text, scene_dir, force_topic_graphic=True, variation_seed=index, scene_index=index + 1)
