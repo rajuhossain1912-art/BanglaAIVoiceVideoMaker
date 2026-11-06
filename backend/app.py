@@ -504,6 +504,7 @@ VISUAL_CONCEPTS = [
     (("কৃষক", "ধানচাষ", "ধানক্ষেত", "চাষাবাদ", "কৃষিকাজ", "farmer", "rice field"), "a Bangladeshi farmer working in a green rice field, showing the farmer and crops clearly"),
     (("সাদাছড়ি", "সাদাছড়ি", "দৃষ্টিপ্রতিবন্ধী", "প্রতিবন্ধী", "অন্ধ", "দৃষ্টিহীন"), "a visually impaired person using a white cane in an accessible Bangladeshi setting"),
     (("কর্মসংস্থান", "চাকরি", "নিয়োগ", "নিয়োগ", "কর্মী", "কারখানা", "অফিস"), "Bangladeshi people working in a workplace or factory"),
+    (("ব্রেইল", "braille", "ব্রেইল বই", "ব্রেইল লেখা"), "a visually impaired Bangladeshi student reading a Braille book with fingertips clearly touching the raised Braille dots, close-up in an accessible classroom"),
     (("ব্রেইল", "শিক্ষার্থী", "শিক্ষা", "স্কুল", "কলেজ", "বিশ্ববিদ্যালয়", "বিশ্ববিদ্যালয়", "শিক্ষক", "পড়াশোনা", "পড়াশোনা"), "Bangladeshi students learning in an accessible classroom"),
     (("হাসপাতাল", "চিকিৎসা", "ডাক্তার", "রোগী", "ওষুধ", "স্বাস্থ্য", "ক্লিনিক"), "a doctor consulting a patient in a clean clinic"),
     (("মোবাইল", "ফোন", "ইন্টারনেট", "প্রযুক্তি", "কম্পিউটার", "অ্যাপ", "স্ক্রিন রিডার"), "a person using a smartphone and accessible digital technology"),
@@ -1476,20 +1477,50 @@ def _scene_images_too_similar(first: Path, second: Path) -> bool:
         return False
 
 
-def make_scene_backgrounds(script: str, folder: Path, progress_callback=None):
-    """Keep every narration scene while sampling images to respect free-tier resource limits."""
+def _visual_scenes_for_interval(scenes, duration: float, interval: int, max_scenes: int):
+    """Create one focused visual prompt per requested interval, within the free-tier scene cap."""
+    if not scenes:
+        return ["বাংলা ভিডিও"]
+    try:
+        seconds = max(0.1, float(duration))
+        cadence = int(interval)
+    except (TypeError, ValueError):
+        return list(scenes[:max(1, max_scenes)])
+    if cadence not in (3, 5, 10, 15, 20):
+        cadence = 5
+    target_count = max(1, min(max(1, int(max_scenes)), int(math.ceil(seconds / cadence))))
+    if len(scenes) >= target_count:
+        if len(scenes) == target_count:
+            return list(scenes)
+        if target_count == 1:
+            return [scenes[0]]
+        indices = sorted({round(i * (len(scenes) - 1) / (target_count - 1)) for i in range(target_count)})
+        return [scenes[i] for i in indices]
+    # A long sentence or a small number of sentences must not force one image
+    # to cover a much longer video interval. Split in narration order without
+    # dropping or reordering any words; the model then plans each segment alone.
+    words = [word for scene in scenes for word in scene.split()]
+    if not words:
+        return list(scenes)
+    target_count = min(target_count, len(words))
+    result = []
+    for index in range(target_count):
+        start = round(index * len(words) / target_count)
+        end = round((index + 1) * len(words) / target_count)
+        segment = " ".join(words[start:end]).strip()
+        if segment:
+            result.append(segment)
+    return result or list(scenes)
+
+
+def make_scene_backgrounds(script: str, folder: Path, progress_callback=None, duration: float = 0.0, scene_interval: int = 5):
+    """Plan visual scenes from the selected image-change interval, within free-tier limits."""
     scenes = _split_script_into_scenes(script, max_scenes=None, target_words=8)
     try:
         max_visual_scenes = max(1, min(48, int(os.getenv("MAX_VISUAL_SCENES", "32"))))
     except (TypeError, ValueError):
         max_visual_scenes = 32
-    if len(scenes) <= max_visual_scenes:
-        visual_scenes = scenes
-    elif max_visual_scenes == 1:
-        visual_scenes = [scenes[0]]
-    else:
-        indices = sorted({round(i * (len(scenes) - 1) / (max_visual_scenes - 1)) for i in range(max_visual_scenes)})
-        visual_scenes = [scenes[i] for i in indices]
+    visual_scenes = _visual_scenes_for_interval(scenes, duration, scene_interval, max_visual_scenes)
     # Prompts are batched in groups of eight; every narration scene is retained for subtitles/timing.
     if progress_callback:
         progress_callback(35, "ভিডিওর প্রতিটি দৃশ্যের জন্য উপযুক্ত ছবি পরিকল্পনা করা হচ্ছে।")
@@ -1507,7 +1538,7 @@ def make_scene_backgrounds(script: str, folder: Path, progress_callback=None):
             print(f"IMAGE_SCENE repeated_image index={index + 1} action=regenerate_topic_graphic", flush=True)
             background = make_background(scene_text, scene_dir, force_topic_graphic=True, variation_seed=index, scene_index=index + 1)
         backgrounds.append(background)
-    print(f"IMAGE_SCENE unique_backgrounds={len(backgrounds)} total_narration_scenes={len(scenes)} visual_budget={max_visual_scenes}", flush=True)
+    print(f"IMAGE_SCENE unique_backgrounds={len(backgrounds)} total_narration_scenes={len(scenes)} interval={scene_interval}s duration={duration:.1f}s visual_budget={max_visual_scenes}", flush=True)
     if progress_callback:
         progress_callback(40, f"{len(backgrounds)}টি দৃশ্যের ছবি প্রস্তুত হয়েছে।")
     return backgrounds, scenes
@@ -1853,7 +1884,7 @@ def render(job_id: str, script: str, mode: str, audio_path: Optional[Path], capt
                 if job_id in JOBS and JOBS[job_id].get("status") == "processing":
                     JOBS[job_id]["progress"] = max(JOBS[job_id].get("progress", 0), progress)
                     JOBS[job_id]["message"] = message
-        backgrounds, visual_scene_texts = make_scene_backgrounds(script, folder, update_visual_progress)
+        backgrounds, visual_scene_texts = make_scene_backgrounds(script, folder, update_visual_progress, duration=duration, scene_interval=scene_interval)
         provider_order = ",".join(AI_IMAGE_PROVIDER_ORDER) or "none"
         licensed_fallback = "enabled" if ALLOW_LICENSED_IMAGE_FALLBACK else "disabled"
         print(
