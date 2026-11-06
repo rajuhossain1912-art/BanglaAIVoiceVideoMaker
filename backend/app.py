@@ -1722,12 +1722,12 @@ def _review_generated_image_against_scene(image_path: Path, narration: str, visu
         image_data = "data:image/jpeg;base64," + base64.b64encode(buffer.getvalue()).decode("ascii")
         question = (
             "Judge whether this image visibly depicts the narration, not merely its general mood. "
-            "Narration: " + re.sub(r"\s+", " ", str(narration)).strip()[:420] +
-            ". Intended visual: " + re.sub(r"\s+", " ", str(visual_prompt or "")).strip()[:300] +
-            ". Return JSON only: {\\"match\\":true or false, \\"confidence\\":number from 0 to 1, "
-            "\\"description\\":\\"short factual description of visible contents\\", "
-            "\\"reason\\":\\"short reason\\\"}. Reject generic landscapes, icons, cartoons, "
-            "abstract shapes, and unrelated objects when narration describes a specific person, action, or object."
+            "Narration: " + re.sub(r"\\s+", " ", str(narration)).strip()[:420] +
+            ". Intended visual: " + re.sub(r"\\s+", " ", str(visual_prompt or "")).strip()[:300] +
+            ". Return one JSON object with keys match (boolean), confidence (number from 0 to 1), "
+            "description (short factual description of visible contents), and reason (short explanation). "
+            "Reject generic landscapes, icons, cartoons, abstract shapes, and unrelated objects when "
+            "the narration describes a specific person, action, or object."
         )
         model_path = urllib.parse.quote(model, safe="@/-")
         payload = {"task": "query", "image": image_data, "question": question}
@@ -1744,13 +1744,32 @@ def _review_generated_image_against_scene(image_path: Path, narration: str, visu
         with urllib.request.urlopen(request, timeout=18) as response:
             data = json.loads(response.read(180_000).decode("utf-8"))
         result = data.get("result") or {}
-        raw = result.get("answer") or result.get("response") or result.get("description") or ""
+        raw = (
+            result.get("answer") or result.get("response") or result.get("description")
+            or result.get("text") or data.get("response") or ""
+        ) if isinstance(result, dict) else result
         if isinstance(raw, dict):
             review = raw
         else:
-            text = str(raw).strip()
-            match = re.search(r"\\{.*\\}", text, flags=re.S)
-            review = json.loads(match.group(0)) if match else None
+            response_text = str(raw).strip()
+            object_match = re.search(r"\\{.*?\\}", response_text, flags=re.S)
+            review = None
+            if object_match:
+                try:
+                    review = json.loads(object_match.group(0))
+                except (TypeError, ValueError):
+                    review = None
+            if not isinstance(review, dict):
+                normalized = response_text.lower()
+                match_word = re.search(r"\\b(match|matches)\\s*[:=]?\\s*(true|false|yes|no)\\b", normalized)
+                confidence_word = re.search(r"\\bconfidence\\s*[:=]?\\s*(0(?:\\.\\d+)?|1(?:\\.0+)?)", normalized)
+                if match_word:
+                    review = {
+                        "match": match_word.group(2) in ("true", "yes"),
+                        "confidence": float(confidence_word.group(1)) if confidence_word else 0.65,
+                        "description": "",
+                        "reason": response_text[:180],
+                    }
         if not isinstance(review, dict) or not isinstance(review.get("match"), bool):
             print("IMAGE_REVIEW unavailable reason=unstructured_vision_response", flush=True)
             return None
