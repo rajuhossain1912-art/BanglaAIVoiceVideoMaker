@@ -1995,7 +1995,8 @@ def render(job_id: str, script: str, mode: str, audio_path: Optional[Path], capt
                 audio_path = synthesize_cloned_voice(script, reference_audio, folder, update_voice_progress)
             finally:
                 try:
-                    reference_audio.unlink(missing_ok=True)                except Exception:
+                    reference_audio.unlink(missing_ok=True)
+                except Exception:
                     pass
         elif audio_path is None:
             audio_path = synthesize_mixed_speech(script, folder)
