@@ -1335,26 +1335,23 @@ def make_background(script: str, folder: Path, model_visual_prompt: Optional[str
     # Track the final source for this scene separately from provider-level attempt logs.
     scene_source = "topic_graphic" if force_topic_graphic else "unknown"
     scene_provider = ""
-    # If a provider repeats an earlier scene, request a genuinely new composition
-    # before falling back to vector artwork. This keeps the video photo-led when
-    # free image providers are available, while preserving a safe offline fallback.
-    base_prompt = model_visual_prompt or _english_visual_prompt(script)
-    # Every visual slot gets a distinct photographic composition, even when a long
-    # sentence is intentionally repeated to fill the selected image interval.
-    retry_prompt = _vary_visual_prompt(base_prompt, variation_seed)
+    # A forced topic graphic is the conservative fallback for a scene that has
+    # already failed semantic review or repeated another image. Do not call an image
+    # provider again here: that could return another unrelated photograph.
     if force_topic_graphic:
-        retry_prompt = (
-            retry_prompt
-            + " Create a visibly different photograph from earlier scenes: change the camera angle, "
-              "background, people placement and moment of action. Do not reuse a previous composition."
-        )[:1100]
-        print("IMAGE_PROVIDER retry=distinct_composition reason=duplicate_scene_image", flush=True)
-    source_image, credit = find_generated_image(script, folder, retry_prompt)
+        source_image, credit = None, ""
+        print("IMAGE_PROVIDER skipped=all reason=force_topic_graphic", flush=True)
+    else:
+        base_prompt = model_visual_prompt or _english_visual_prompt(script)
+        # Every visual slot gets a distinct photographic composition, even when a long
+        # sentence is intentionally repeated to fill the selected image interval.
+        retry_prompt = _vary_visual_prompt(base_prompt, variation_seed)
+        source_image, credit = find_generated_image(script, folder, retry_prompt)
     if source_image:
         scene_source = "ai_generated"
         match = re.search(r"AI-generated with ([A-Za-z0-9_.-]+)", str(credit or ""))
         scene_provider = match.group(1)[:48] if match else "provider_unspecified"
-    if not source_image and ALLOW_LICENSED_IMAGE_FALLBACK:
+    if not source_image and not force_topic_graphic and ALLOW_LICENSED_IMAGE_FALLBACK:
         source_image, credit = find_contextual_image(script, folder)
         if source_image:
             scene_source = "licensed_contextual"
@@ -1854,13 +1851,22 @@ def make_scene_backgrounds(script: str, folder: Path, progress_callback=None, du
                 retry_review = _review_generated_image_against_scene(retry_background, scene_text, correction)
                 if retry_review is None:
                     semantic_review["unavailable"] += 1
+                    print(f"IMAGE_REVIEW action=replace_unverified_retry scene={index + 1}", flush=True)
+                    background = make_background(
+                        scene_text, scene_dir, force_topic_graphic=True,
+                        variation_seed=index, scene_index=index + 1
+                    )
                 elif retry_review["match"]:
                     semantic_review["retry_matched"] += 1
                     background = retry_background
                     print(f"IMAGE_REVIEW action=accepted_retry scene={index + 1}", flush=True)
                 else:
                     semantic_review["retry_mismatched"] += 1
-                    print(f"IMAGE_REVIEW action=retry_still_mismatch scene={index + 1}", flush=True)
+                    print(f"IMAGE_REVIEW action=replace_rejected_retry_with_topic_graphic scene={index + 1}", flush=True)
+                    background = make_background(
+                        scene_text, scene_dir, force_topic_graphic=True,
+                        variation_seed=index, scene_index=index + 1
+                    )
         if any(_scene_images_too_similar(background, prior) for prior in backgrounds):
             print(f"IMAGE_SCENE repeated_image index={index + 1} action=regenerate_topic_graphic", flush=True)
             background = make_background(scene_text, scene_dir, force_topic_graphic=True, variation_seed=index, scene_index=index + 1)
