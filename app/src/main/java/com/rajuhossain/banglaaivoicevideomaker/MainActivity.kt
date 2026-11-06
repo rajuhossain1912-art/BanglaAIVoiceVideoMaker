@@ -418,8 +418,8 @@ private fun VideoMakerScreen() {
         OutlinedTextField(
             value = script, onValueChange = { script = it },
             modifier = Modifier.fillMaxWidth().height(210.dp),
-            label = { Text(if (mode == "clone") "নিজের কণ্ঠে পড়ার লেখা (সর্বোচ্চ ৩০০০ অক্ষর)" else "বাংলা বা ইংরেজি লেখা") },
-            placeholder = { Text("এখানে সম্পূর্ণ স্ক্রিপ্ট পেস্ট করুন") },
+            label = { Text(if (mode == "clone") "নিজের কণ্ঠে পড়ার লেখা (সর্বোচ্চ ৩০০০ অক্ষর)" else if (mode == "audio") "বাংলা বা ইংরেজি লেখা (ঐচ্ছিক)" else "বাংলা বা ইংরেজি লেখা") },
+            placeholder = { Text(if (mode == "audio") "লেখা থাকলে এখানে দিন। ফাঁকা রাখলে অডিওর কথা থেকে লেখা তৈরি হবে।" else "এখানে সম্পূর্ণ স্ক্রিপ্ট পেস্ট করুন") },
             minLines = 5, enabled = !running && !isRecording,
         )
         if (mode == "audio") {
@@ -427,6 +427,7 @@ private fun VideoMakerScreen() {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("অডিও ভয়েস ইনপুট", fontWeight = FontWeight.SemiBold)
                     Text(if (audioName.isBlank()) "ভিডিওর জন্য ফোন থেকে একটি অডিও ফাইল বেছে নিন।" else "নির্বাচিত অডিও: $audioName")
+                    Text("লেখা না দিলেও হবে। অডিওর বাংলা বা ইংরেজি কথা AI শুনে লিখে নেবে এবং সেই অর্থ অনুযায়ী ছবি পরিকল্পনা করবে।")
                     OutlinedButton(onClick = { audioPicker.launch("audio/*") }, modifier = Modifier.fillMaxWidth(), enabled = !running) {
                         Text(if (audioName.isBlank()) "অডিও ফাইল নির্বাচন করুন" else "অন্য অডিও নির্বাচন করুন")
                     }
@@ -561,7 +562,7 @@ private fun VideoMakerScreen() {
                 online = isInternetAvailable(context)
                 val baseUrl = BuildConfig.API_BASE_URL.trim().trimEnd('/')
                 when {
-                    script.isBlank() -> status = "আগে বাংলা বা ইংরেজি লেখা যোগ করুন।"
+                    script.isBlank() && !(mode == "audio" && audioUri != null) -> status = "বাংলা বা ইংরেজি লেখা দিন, অথবা অডিও মোডে একটি অডিও ফাইল নির্বাচন করুন।"
                     mode == "clone" && script.trim().length > 3000 -> status = "নিজের কণ্ঠে একবারে সর্বোচ্চ ৩০০০ অক্ষর দিন।"
                     mode == "clone" && !cloneConsent -> status = "আগে বাহ্যিক সার্ভারে কণ্ঠ পাঠানোর সতর্কতা পড়ে সম্মতি দিন।"
                     !online -> status = "ভিডিও তৈরি করতে ইন্টারনেট সংযোগ দিন।"
