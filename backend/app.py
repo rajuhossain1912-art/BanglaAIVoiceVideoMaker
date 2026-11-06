@@ -1783,6 +1783,13 @@ def _parse_scene_match_response(raw):
     }
 
 
+def _should_semantically_review_image_source(source: str):
+    """Spend vision-review inference only on photographic AI or contextual images."""
+    return str(source or "").strip() in (
+        "ai_generated", "licensed_contextual", "licensed_contextual_after_rejected_ai"
+    )
+
+
 def _review_generated_image_against_scene(image_path: Path, narration: str, visual_prompt: Optional[str] = None):
     """Ask Moondream to inspect a generated image and judge whether it depicts this narration."""
     account_id = os.getenv("CLOUDFLARE_ACCOUNT_ID", "").strip()
@@ -1887,10 +1894,20 @@ def make_scene_backgrounds(script: str, folder: Path, progress_callback=None, du
         print(f"IMAGE_SCENE index={index + 1}/{len(scenes)} words={len(scene_text.split())}", flush=True)
         scene_visual_prompt = visual_prompts[index] if visual_prompts else None
         background = make_background(scene_text, scene_dir, scene_visual_prompt, variation_seed=index, scene_index=index + 1)
-        # Inspect an evenly distributed sample to protect free-tier inference allowance.
-        if index in review_indices:
+        # Inspect an evenly distributed sample only when it is a real generated or
+        # contextual photograph. Local topic graphics cannot pass a vision comparison,
+        # so reviewing them would waste the limited vision-model allocation.
+        source_info_for_review = {}
+        try:
+            source_info_for_review = json.loads((scene_dir / "scene-source.json").read_text(encoding="utf-8"))
+        except Exception:
+            pass
+        review_source = str(source_info_for_review.get("source") or "unknown")
+        if index in review_indices and _should_semantically_review_image_source(review_source):
             semantic_review["reviewed"] += 1
             review = _review_generated_image_against_scene(background, scene_text, scene_visual_prompt)
+        elif index in review_indices:
+            print(f"IMAGE_REVIEW skipped scene={index + 1} reason=non_photographic_source source={review_source}", flush=True)
             if review is None:
                 semantic_review["unavailable"] += 1
             elif review["match"]:
