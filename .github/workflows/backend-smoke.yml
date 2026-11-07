@@ -40,6 +40,27 @@ jobs:
           fi
           cat health.json
           python -c 'import json; d=json.load(open("health.json")); assert d["status"] == "ok", d'
+      - name: Verify bounded licensed image search cache
+        run: |
+          set -e
+          docker exec bangla-video-api python - <<'PY'
+          from unittest.mock import patch
+          import app
+          app._IMAGE_SEARCH_CACHE.clear()
+          app._image_search_cache_set("openverse", "train railway", [])
+          assert app._image_search_cache_get("openverse", "train railway") == []
+          with patch.object(app.time, "monotonic", return_value=100.0):
+              app._image_search_cache_set("wikimedia", "farmer rice", [{"id": 1}])
+          with patch.object(app.time, "monotonic", return_value=100.0 + app.IMAGE_SEARCH_CACHE_TTL_SECONDS + 1):
+              assert app._image_search_cache_get("wikimedia", "farmer rice") is None
+          app._IMAGE_SEARCH_CACHE.clear()
+          for index in range(app.IMAGE_SEARCH_CACHE_MAX_ENTRIES + 5):
+              app._image_search_cache_set("openverse", str(index), [])
+          assert len(app._IMAGE_SEARCH_CACHE) == app.IMAGE_SEARCH_CACHE_MAX_ENTRIES
+          assert app._image_search_cache_get("openverse", "0") is None
+          app._IMAGE_SEARCH_CACHE.clear()
+          print("Licensed image cache passed: successful empty results, expiry, and bounded entry count")
+          PY
       - name: Verify sampled scene timeline mapping
         run: |
           set -e
