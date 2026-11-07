@@ -635,6 +635,9 @@ def _image_keywords(script: str, model_visual_prompt: Optional[str] = None):
         "exact", "actual", "depict", "depicting", "prefer", "activity", "activities", "action",
         "actions", "objects", "current", "neighboring", "context", "narration", "unless",
         "discussed", "working", "beside", "flooded",
+        # Camera/composition wording describes the photograph, not the narrated subject.
+        "close", "wide", "shot", "camera", "angle", "view", "background", "foreground",
+        "frame", "composition", "portrait", "detail", "detailed", "lens", "lighting",
     }
     return list(dict.fromkeys(word for word in tokens if word not in stopwords))[:8]
 
