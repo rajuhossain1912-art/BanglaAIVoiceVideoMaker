@@ -680,8 +680,13 @@ def _image_metadata_relevance_score(title: str, tags, keywords):
 
 
 def _image_metadata_is_relevant(title: str, tags, keywords):
-    """Accept a candidate only when its title or tags identify a requested scene subject."""
-    return _image_metadata_relevance_score(title, tags, keywords) >= 10
+    """Require multiple independent subject matches for broad scene queries."""
+    terms = list(dict.fromkeys(
+        str(word).lower() for word in (keywords or [])
+        if re.fullmatch(r"[A-Za-z]{3,}", str(word))
+    ))
+    minimum_score = 20 if len(terms) >= 3 else 10
+    return _image_metadata_relevance_score(title, tags, terms) >= minimum_score
 
 
 def _download_checked_image(image_url: str, folder: Path, filename: str, credit: str):
