@@ -40,6 +40,9 @@ jobs:
           fi
           cat health.json
           python -c 'import json; d=json.load(open("health.json")); assert d["status"] == "ok", d'
+      - name: Verify Bangla and English audio transcript comparison
+        run: |
+          docker exec bangla-video-api python -c 'from app import _compare_script_transcript as compare; bn="বাংলাদেশের কৃষক ধান চাষ করেন"; assert compare(bn,bn)["status"]=="matched"; assert compare(bn,"বাংলাদেশের কৃষক ধান চাষ করেন।")["status"]=="matched"; assert compare(bn,"ধান চাষ করেন বাংলাদেশের কৃষক")["status"]=="mismatch"; assert compare("The farmer grows rice","The farmer grows rice")["status"]=="matched"; assert compare(bn,"")["status"]=="unavailable"; partial=compare(bn,"বাংলাদেশের কৃষক ধান কাটেন"); assert partial["status"] in ("review_required","mismatch"), partial; print("Bangla/English transcript comparison, punctuation normalization, word-order mismatch and unavailable states passed")'
       - name: Verify bounded licensed image search cache
         run: |
           set -e
