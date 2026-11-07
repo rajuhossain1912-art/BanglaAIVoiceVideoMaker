@@ -3357,6 +3357,7 @@ def video_quality_report(job_id: str):
             "status": "unavailable", "verified": False, "word_timestamps_from_asr": False
         },
         "image_source_counts": image_source_counts,
+        "scene_audit": scene_audit,
         "file_exists": True,
         "video_track": video_stream is not None,
         "audio_track": audio_stream is not None,
@@ -3533,6 +3534,7 @@ def video_quality_report(job_id: str):
         "caption_alignment": caption_alignment,
         "summary": summary,
         "report_text": report_text,
+        "scene_audit": scene_audit,
         "checks": checks,
         "audio_check": audio_check,
         "scene_check": scene_check,
