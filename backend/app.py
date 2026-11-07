@@ -2918,7 +2918,6 @@ def render(job_id: str, script: str, mode: str, audio_path: Optional[Path], capt
         else:
             audio_verification["reason"] = "সার্ভার সেটিংসে চূড়ান্ত অডিও যাচাই বন্ধ আছে।"
         with LOCK:
-        with LOCK:
             JOBS[job_id].update(status="completed", progress=100, message="ভিডিও তৈরি হয়েছে", download_url=f"/api/jobs/{job_id}/download", duration=round(duration, 2), scene_count=len(backgrounds), narration_scene_count=len(visual_scene_texts), scene_interval_seconds=scene_interval, caption_frame_count=frame_count, semantic_review=semantic_review, audio_verification=audio_verification, script_characters=len(script), video_mode=mode, completed_at=time.time())
     except Exception as exc:
         print(f"VIDEO_STAGE job={job_id} stage=failed error={type(exc).__name__}: {str(exc)[:500]}", flush=True)
