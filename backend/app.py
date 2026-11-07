@@ -3283,10 +3283,15 @@ def video_quality_report(job_id: str):
         + semantic_review["retry_mismatched"]
         + semantic_review["duplicate_retry_mismatched"]
     )
+    audio_verification = snapshot.get("audio_verification") or {"status": "unavailable", "similarity": None}
+    audio_verification_status = audio_verification.get("status", "unavailable")
     publication_reasons = []
     if semantic_mismatches:
         publication_status = "blocked"
         publication_reasons.append("এক বা একাধিক ছবির সঙ্গে বর্ণনার অমিল পাওয়া গেছে।")
+    elif audio_verification_status == "mismatch":
+        publication_status = "blocked"
+        publication_reasons.append("তৈরি অডিওর কথা অনুমোদিত লেখার সঙ্গে যথেষ্ট মেলেনি। ভিডিওটি প্রকাশের আগে আবার তৈরি করতে হবে।")
     elif overall == "problem" or (
         dark_sample_count is not None
         and visual_sample_count
@@ -3298,12 +3303,19 @@ def video_quality_report(job_id: str):
         publication_status = "review_required"
     if semantic_review["reviewed"] < (image_count or 0) or semantic_review["unavailable"]:
         publication_reasons.append("সব পটভূমির ছবির অর্থগত মিল যাচাই করা হয়নি।")
-    publication_reasons.append("তৈরি অডিওকে মূল লেখার সঙ্গে মিলিয়ে প্রতিলিপি যাচাই করা হয়নি।")
+    if audio_verification_status == "matched":
+        publication_reasons.append("Whisper প্রতিলিপির সঙ্গে মূল লেখার মিল ভালো পাওয়া গেছে; এটি শতভাগ শব্দ-পর্যায়ের নিশ্চয়তা নয়।")
+    elif audio_verification_status == "review_required":
+        publication_reasons.append("অডিও ও মূল লেখার মিল আংশিক; মানুষের পর্যালোচনা প্রয়োজন।")
+    else:
+        publication_reasons.append(str(audio_verification.get("reason") or "তৈরি অডিওর প্রতিলিপি যাচাই করা যায়নি।"))
     publication_reasons.append("সাবটাইটেলের বানান ও সময় অডিওর সঙ্গে আলাদাভাবে মিলিয়ে দেখা হয়নি।")
 
     report_text = "ভিডিও পরীক্ষার প্রতিবেদন। " + summary + " "
     report_text += "প্রকাশের উপযোগিতা: " + ("প্রকাশ বন্ধ রাখা হয়েছে। " if publication_status == "blocked" else "আরও যাচাই প্রয়োজন। ")
     report_text += "কারণ: " + " ".join(publication_reasons) + " "
+    if audio_verification.get("similarity") is not None:
+        report_text += f"অডিও ও মূল লেখার স্বয়ংক্রিয় শব্দ-মিল {round(audio_verification[\"similarity\"] * 100)} শতাংশ। "
     report_text += f"ভিডিওর দৈর্ঘ্য {round(duration, 1)} সেকেন্ড। "
     report_text += f"ফাইলের আকার {round(size_bytes / (1024 * 1024), 2)} মেগাবাইট। "
     report_text += ("ভিডিও ট্র্যাক আছে। " if video_stream else "ভিডিও ট্র্যাক নেই। ")
@@ -3364,6 +3376,7 @@ def video_quality_report(job_id: str):
         "overall": overall,
         "publication_status": publication_status,
         "publication_reasons": publication_reasons,
+        "audio_verification": audio_verification,
         "summary": summary,
         "report_text": report_text,
         "checks": checks,
