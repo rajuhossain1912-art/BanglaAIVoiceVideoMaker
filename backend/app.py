@@ -1112,18 +1112,54 @@ def _review_scene_visual_prompts(scenes, prompts, model_names, planner_model, co
     return prompts
 
 
-def _parse_cloudflare_transcription_response(data):
-    """Extract a non-empty transcript from a Workers AI Whisper response."""
+def _extract_whisper_word_timestamps(result, offset_seconds=0.0):
+    """Read word timestamps only when the provider actually returns explicit word entries."""
+    if not isinstance(result, dict):
+        return []
+    entries = result.get("words")
+    if not isinstance(entries, list):
+        entries = []
+        segments = result.get("segments")
+        if isinstance(segments, list):
+            for segment in segments:
+                if isinstance(segment, dict) and isinstance(segment.get("words"), list):
+                    entries.extend(segment["words"])
+    timestamps = []
+    for item in entries:
+        if not isinstance(item, dict):
+            continue
+        word = str(item.get("word") or item.get("text") or "").strip()
+        try:
+            start = float(item.get("start"))
+            end = float(item.get("end"))
+        except (TypeError, ValueError):
+            continue
+        if word and math.isfinite(start) and math.isfinite(end) and 0 <= start < end:
+            timestamps.append({
+                "word": word,
+                "start": round(start + offset_seconds, 4),
+                "end": round(end + offset_seconds, 4),
+            })
+    return timestamps
+
+
+def _parse_cloudflare_transcription_response(data, return_details=False, offset_seconds=0.0):
+    """Extract transcript and optional explicit word timestamps from Workers AI Whisper."""
     if not isinstance(data, dict) or data.get("success") is False:
         raise RuntimeError("কথার অডিও বোঝার মডেল সঠিক উত্তর দেয়নি।")
     result = data.get("result") or {}
     transcript = re.sub(r"\s+", " ", str(result.get("text") or "")).strip()
     if not transcript:
         raise RuntimeError("অডিওতে বোঝার মতো কথা পাওয়া যায়নি।")
+    if return_details:
+        return {
+            "text": transcript,
+            "word_timestamps": _extract_whisper_word_timestamps(result, offset_seconds),
+        }
     return transcript
 
 
-def transcribe_uploaded_audio(audio_path: Path, folder: Path, progress_callback=None):
+def transcribe_uploaded_audio(audio_path: Path, folder: Path, progress_callback=None, return_details=False):
     """Transcribe audio-only uploads with Cloudflare Whisper in manageable two-minute chunks."""
     account_id = os.getenv("CLOUDFLARE_ACCOUNT_ID", "").strip()
     api_token = os.getenv("CLOUDFLARE_AI_API_TOKEN", os.getenv("CLOUDFLARE_API_TOKEN", "")).strip()
@@ -1146,6 +1182,7 @@ def transcribe_uploaded_audio(audio_path: Path, folder: Path, progress_callback=
         + "/ai/run/@cf/openai/whisper-large-v3-turbo"
     )
     transcripts = []
+    all_word_timestamps = []
     for index, chunk_path in enumerate(chunks):
         if progress_callback:
             progress_callback(
@@ -1171,7 +1208,9 @@ def transcribe_uploaded_audio(audio_path: Path, folder: Path, progress_callback=
         try:
             with urllib.request.urlopen(request, timeout=55) as response:
                 data = json.loads(response.read(2_000_000).decode("utf-8"))
-            transcripts.append(_parse_cloudflare_transcription_response(data))
+            parsed = _parse_cloudflare_transcription_response(data, return_details=True, offset_seconds=index * 120.0)
+            transcripts.append(parsed["text"])
+            all_word_timestamps.extend(parsed["word_timestamps"])
         except Exception as exc:
             raise RuntimeError(
                 f"অডিওর {index + 1} নম্বর অংশের কথা বোঝা যায়নি: {type(exc).__name__}"
@@ -2614,7 +2653,7 @@ def _scene_index_to_background_index(scene_index: int, scene_count: int, backgro
     return min(background_count - 1, int(scene_index * background_count / scene_count))
 
 
-def make_caption_frames(script: str, duration: float, background: Path, folder: Path, caption_offset: float = 0.0, audio_path: Optional[Path] = None, job_id: Optional[str] = None, scene_interval: int = 5, visual_scene_texts=None):
+def make_caption_frames(script: str, duration: float, background: Path, folder: Path, caption_offset: float = 0.0, audio_path: Optional[Path] = None, job_id: Optional[str] = None, scene_interval: int = 5, visual_scene_texts=None, word_timestamps=None):
     """Render small Pillow caption cards with per-word highlighting, avoiding FFmpeg's memory-heavy libass filter."""
     frame_dir = folder / "caption-frames"
     frame_dir.mkdir(parents=True, exist_ok=True)
@@ -2630,13 +2669,33 @@ def make_caption_frames(script: str, duration: float, background: Path, folder: 
     sentence_spans, sentence_timing_method = sentence_timing_spans(
         audio_path, sentences, duration, return_method=True
     )
+    script_tokens = _normalize_transcript_tokens(script)
+    timed_entries = list(word_timestamps or [])
+    timed_tokens = [_normalize_transcript_tokens(item.get("word", "")) for item in timed_entries if isinstance(item, dict)]
+    flat_timed_tokens = [token for group in timed_tokens for token in group]
+    timed_map = {}
+    alignment_ratio = 0.0
+    if script_tokens and flat_timed_tokens and len(timed_entries) == len(flat_timed_tokens):
+        matcher = difflib.SequenceMatcher(None, script_tokens, flat_timed_tokens, autojunk=False)
+        alignment_ratio = matcher.ratio()
+        if alignment_ratio >= 0.92 and len(flat_timed_tokens) >= len(script_tokens) * 0.90:
+            for block in matcher.get_matching_blocks():
+                for offset in range(block.size):
+                    source_index = block.a + offset
+                    timed_index = block.b + offset
+                    if timed_index < len(timed_entries):
+                        timed_map[source_index] = timed_entries[timed_index]
+    use_asr_word_times = len(timed_map) >= max(1, int(len(script_tokens) * 0.90))
     alignment_report = {
-        "status": "estimated",
+        "status": "asr_word_timestamps" if use_asr_word_times else "estimated",
         "sentence_timing_method": sentence_timing_method,
-        "word_timing_method": "estimated_proportional_within_sentence",
-        "word_timestamps_from_asr": False,
+        "word_timing_method": "cloudflare_whisper_explicit_word_timestamps" if use_asr_word_times else "estimated_proportional_within_sentence",
+        "word_timestamps_from_asr": bool(use_asr_word_times),
+        "matched_word_timestamps": len(timed_map),
+        "script_word_count": len(script_tokens),
+        "transcript_alignment_similarity": round(alignment_ratio, 4),
         "verified": False,
-        "note": "প্রতিটি শব্দের প্রকৃত শুরুর ও শেষের সময় ASR থেকে পাওয়া যায়নি; বাক্যের সময়ের মধ্যে শব্দের দৈর্ঘ্য অনুযায়ী সময় ভাগ করা হয়েছে।",
+        "note": "Whisper-এর দেওয়া শব্দের সময় স্ক্রিপ্টের সঙ্গে মিলিয়ে ব্যবহার করা হয়েছে; এটি স্বাধীন মানব যাচাই নয়।" if use_asr_word_times else "Whisper প্রতিক্রিয়ায় ব্যবহারযোগ্য শব্দ-সময় পাওয়া যায়নি বা স্ক্রিপ্টের সঙ্গে যথেষ্ট মেলেনি; তাই বাক্যের সময়ের মধ্যে শব্দের দৈর্ঘ্য অনুযায়ী সময় ভাগ করা হয়েছে।",
     }
     if job_id:
         with LOCK:
@@ -2717,6 +2776,11 @@ def make_caption_frames(script: str, duration: float, background: Path, folder: 
             start = cursor
             word_duration = sentence_duration * word_weight / word_total
             end = sentence_end if word_index == len(words) - 1 else min(sentence_end, cursor + word_duration)
+            timed_word = timed_map.get(script_word_index) if use_asr_word_times else None
+            if timed_word:
+                start = max(0.0, min(duration, float(timed_word["start"]) + safe_offset))
+                end = max(start + 0.03, min(duration, float(timed_word["end"]) + safe_offset))
+            script_word_index += 1
             slot_index = min(slot_count - 1, max(0, int(start / interval)))
             base = bases[slot_backgrounds[slot_index] % len(bases)]
             # Smooth Ken Burns motion: zoom in toward the sentence midpoint, then ease out.
@@ -2893,7 +2957,10 @@ def render(job_id: str, script: str, mode: str, audio_path: Optional[Path], capt
             JOBS[job_id]["progress"] = 40
             JOBS[job_id]["message"] = "বাক্যভিত্তিক দৃশ্য ও পটভূমি তৈরি হয়েছে"
         print(f"VIDEO_STAGE job={job_id} stage=subtitles_start", flush=True)
-        frame_list, frame_count = make_caption_frames(script, duration, backgrounds, folder, caption_offset, audio_path, job_id, scene_interval, visual_scene_texts)
+        caption_word_timestamps = []
+        if mode == "audio" and isinstance(locals().get("uploaded_transcription"), dict):
+            caption_word_timestamps = uploaded_transcription.get("word_timestamps") or []
+        frame_list, frame_count = make_caption_frames(script, duration, backgrounds, folder, caption_offset, audio_path, job_id, scene_interval, visual_scene_texts, caption_word_timestamps)
         print(f"VIDEO_STAGE job={job_id} stage=subtitles_done frames={frame_count} method=pillow_word_highlight", flush=True)
         with LOCK:
             JOBS[job_id]["progress"] = 49
