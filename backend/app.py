@@ -2481,14 +2481,42 @@ def make_scene_backgrounds(script: str, folder: Path, progress_callback=None, du
                 scene_index=index + 1
             )
             if any(_scene_images_too_similar(distinct_background, prior) for prior in backgrounds):
-                duplicate_retry_action = "topic_graphic_after_duplicate_retry"
-                final_visual_status = "topic_graphic_unreviewed"
-                final_visual_description = ""
-                print(f"IMAGE_SCENE repeated_image index={index + 1} action=use_topic_graphic_after_retry", flush=True)
-                background = make_background(
-                    scene_text, scene_dir, force_topic_graphic=True,
-                    variation_seed=index, scene_index=index + 1
+                # Before falling back to a vector graphic, make one independent
+                # attempt to obtain a licensed, scene-relevant documentary photo.
+                duplicate_retry_action = "try_licensed_photo_after_duplicate"
+                print(f"IMAGE_SCENE repeated_image index={index + 1} action=try_licensed_photo", flush=True)
+                licensed_background = make_background(
+                    scene_text, scene_dir, distinct_prompt,
+                    force_licensed_contextual=True,
+                    variation_seed=index + len(visual_scenes) * 5 + 29,
+                    scene_index=index + 1
                 )
+                licensed_source_info = {}
+                try:
+                    licensed_source_info = json.loads(
+                        (scene_dir / "scene-source.json").read_text(encoding="utf-8")
+                    )
+                except Exception:
+                    pass
+                licensed_source = str(licensed_source_info.get("source") or "unknown")
+                licensed_is_distinct = not any(
+                    _scene_images_too_similar(licensed_background, prior) for prior in backgrounds
+                )
+                if licensed_source == "licensed_contextual" and licensed_is_distinct:
+                    background = licensed_background
+                    duplicate_retry_action = "accepted_licensed_photo_unverified"
+                    final_visual_status = "not_reviewed"
+                    final_visual_description = ""
+                    print(f"IMAGE_SCENE repeated_image index={index + 1} action=accepted_distinct_licensed_photo", flush=True)
+                else:
+                    duplicate_retry_action = "topic_graphic_after_duplicate_retry"
+                    final_visual_status = "topic_graphic_unreviewed"
+                    final_visual_description = ""
+                    print(f"IMAGE_SCENE repeated_image index={index + 1} action=use_topic_graphic_after_licensed_retry", flush=True)
+                    background = make_background(
+                        scene_text, scene_dir, force_topic_graphic=True,
+                        variation_seed=index, scene_index=index + 1
+                    )
             else:
                 distinct_source_info = {}
                 try:
