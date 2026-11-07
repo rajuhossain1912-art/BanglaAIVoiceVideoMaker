@@ -3167,7 +3167,29 @@ def chat(payload: dict):
                 return {"reply": answer, "model": model, "provider": "Cloudflare Workers AI"}
         except Exception as exc:
             print(f"VOICE_CHAT fallback=next_model model={model} error={type(exc).__name__}: {str(exc)[:160]}", flush=True)
-    raise HTTPException(503, "এই মুহূর্তে AI উত্তর দিতে পারছে না। কিছুক্ষণ পর আবার কথা বলুন।")
+            # A 429 means the account allocation is throttled; trying more models
+            # immediately only creates extra failed requests. For simple greetings,
+            # provide a transparent local response instead of failing the whole turn.
+            if isinstance(exc, urllib.error.HTTPError) and exc.code == 429:
+                last_text = safe_messages[-1]["content"].strip().lower()
+                normalized = re.sub(r"[\\s\\W_]+", "", last_text, flags=re.UNICODE)
+                greetings = {
+                    "হাইকেমনআছো", "হাইকেমনআছেন", "কেমনআছো", "কেমনআছেন",
+                    "আসসালামুআলাইকুম", "সালাম", "হ্যালো", "হ্যালোবন্ধু",
+                    "hello", "hellohowareyou", "howareyou", "hi", "hey",
+                }
+                if normalized in greetings:
+                    if "আসসালামু" in last_text or "সালাম" in last_text:
+                        reply = "ওয়ালাইকুম আসসালাম। আলহামদুলিল্লাহ, আমি ভালো আছি। আপনাকে কীভাবে সাহায্য করতে পারি?"
+                    elif "কেমন" in last_text or "howareyou" in normalized:
+                        reply = "হ্যালো। আমি ভালো আছি, ধন্যবাদ। আপনি কেমন আছেন? কীভাবে সাহায্য করতে পারি?"
+                    else:
+                        reply = "হ্যালো। আপনাকে স্বাগতম। কীভাবে সাহায্য করতে পারি?"
+                    return {"reply": reply, "model": "local_greeting_fallback", "provider": "অফলাইন বিকল্প উত্তর"}
+                # Cloudflare has already rate-limited the account; stop the model
+                # chain rather than sending two more requests that will also fail.
+                break
+    raise HTTPException(503, "এই মুহূর্তে AI উত্তর দিতে পারছে না। Cloudflare-এর বিনামূল্যের AI সীমা সাময়িকভাবে পূর্ণ বা ব্যস্ত। পরে আবার চেষ্টা করুন।")
 
 
 @app.get("/")
