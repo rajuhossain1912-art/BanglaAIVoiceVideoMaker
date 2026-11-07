@@ -1271,6 +1271,21 @@ IMAGE_PROVIDER_COOLDOWN_SECONDS = 900
 IMAGE_PROVIDER_COOLDOWN_LOCK = threading.Lock()
 
 
+def _image_provider_cooldown_seconds(error=None):
+    """Use long cooldowns for quota/auth failures and short ones for transient errors."""
+    if isinstance(error, urllib.error.HTTPError):
+        if error.code in (401, 403, 402, 429):
+            return 900
+        if error.code == 400:
+            return 180
+        return 60
+    if isinstance(error, (TimeoutError, socket.timeout)):
+        return 90
+    if error is None:
+        return 90
+    return 60
+
+
 def _decode_cloudflare_image_response(image_bytes: bytes, content_type: str = ""):
     """Decode either raw image bytes or Workers AI JSON containing a base64 image."""
     if "json" in (content_type or "").lower() or image_bytes.lstrip().startswith(b"{"):
@@ -1376,8 +1391,9 @@ def find_cloudflare_generated_image(script: str, folder: Path, model_visual_prom
                 except Exception:
                     pass
             with IMAGE_PROVIDER_COOLDOWN_LOCK:
-                IMAGE_PROVIDER_COOLDOWN_UNTIL[provider_key] = time.time() + IMAGE_PROVIDER_COOLDOWN_SECONDS
-            print(f"IMAGE_PROVIDER failed provider={provider_key} cooldown_seconds={IMAGE_PROVIDER_COOLDOWN_SECONDS} error={type(exc).__name__}: {detail}", flush=True)
+                cooldown_seconds = _image_provider_cooldown_seconds(exc)
+                IMAGE_PROVIDER_COOLDOWN_UNTIL[provider_key] = time.time() + cooldown_seconds
+            print(f"IMAGE_PROVIDER failed provider={provider_key} cooldown_seconds={cooldown_seconds} error={type(exc).__name__}: {detail}", flush=True)
     return None, ""
 
 
@@ -1410,8 +1426,8 @@ def find_generated_image(script: str, folder: Path, model_visual_prompt: Optiona
         pollinations_image, pollinations_credit = find_pollinations_image(script, folder, model_visual_prompt)
         if not pollinations_image:
             with IMAGE_PROVIDER_COOLDOWN_LOCK:
-                IMAGE_PROVIDER_COOLDOWN_UNTIL["Pollinations-Flux"] = time.time() + IMAGE_PROVIDER_COOLDOWN_SECONDS
-            print(f"IMAGE_PROVIDER cooldown provider=Pollinations-Flux seconds={IMAGE_PROVIDER_COOLDOWN_SECONDS}", flush=True)
+                IMAGE_PROVIDER_COOLDOWN_UNTIL["Pollinations-Flux"] = time.time() + 90
+            print("IMAGE_PROVIDER cooldown provider=Pollinations-Flux seconds=90 reason=no_image", flush=True)
     if pollinations_image:
         return pollinations_image, pollinations_credit
     from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
@@ -1485,14 +1501,16 @@ def find_generated_image(script: str, folder: Path, model_visual_prompt: Optiona
                     print(f"IMAGE_PROVIDER selected={provider_name}", flush=True)
                     return target, credit
             print(f"IMAGE_PROVIDER no_image provider={provider_name}", flush=True)
-        except FutureTimeout:
+        except FutureTimeout as exc:
+            cooldown_seconds = _image_provider_cooldown_seconds(exc)
             with IMAGE_PROVIDER_COOLDOWN_LOCK:
-                IMAGE_PROVIDER_COOLDOWN_UNTIL[provider_name] = time.time() + IMAGE_PROVIDER_COOLDOWN_SECONDS
-            print(f"IMAGE_PROVIDER timeout provider={provider_name} cooldown_seconds={IMAGE_PROVIDER_COOLDOWN_SECONDS}", flush=True)
+                IMAGE_PROVIDER_COOLDOWN_UNTIL[provider_name] = time.time() + cooldown_seconds
+            print(f"IMAGE_PROVIDER timeout provider={provider_name} cooldown_seconds={cooldown_seconds}", flush=True)
         except Exception as exc:
+            cooldown_seconds = _image_provider_cooldown_seconds(exc)
             with IMAGE_PROVIDER_COOLDOWN_LOCK:
-                IMAGE_PROVIDER_COOLDOWN_UNTIL[provider_name] = time.time() + IMAGE_PROVIDER_COOLDOWN_SECONDS
-            print(f"IMAGE_PROVIDER failed provider={provider_name} cooldown_seconds={IMAGE_PROVIDER_COOLDOWN_SECONDS} error={type(exc).__name__}: {str(exc)[:180]}", flush=True)
+                IMAGE_PROVIDER_COOLDOWN_UNTIL[provider_name] = time.time() + cooldown_seconds
+            print(f"IMAGE_PROVIDER failed provider={provider_name} cooldown_seconds={cooldown_seconds} error={type(exc).__name__}: {str(exc)[:180]}", flush=True)
         finally:
             executor.shutdown(wait=False, cancel_futures=True)
     return None, ""
