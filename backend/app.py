@@ -705,7 +705,8 @@ def _download_checked_image(image_url: str, folder: Path, filename: str, credit:
         if not _image_has_visible_content(target):
             raise ValueError("Downloaded image is blank or near-black")
         return target, credit[:180]
-    except Exception:
+    except Exception as exc:
+        print(f"IMAGE_SEARCH download_failed source={filename[:40]} error={type(exc).__name__}: {str(exc)[:120]}", flush=True)
         try:
             (folder / filename).unlink(missing_ok=True)
         except Exception:
@@ -755,8 +756,12 @@ def find_openverse_image(script: str, folder: Path, model_visual_prompt: Optiona
             image, attribution = _download_checked_image(image_url, folder, "openverse-context-image", credit)
             if image:
                 return image, attribution
-    except Exception:
-        pass
+    except Exception as exc:
+        detail = str(exc)[:180]
+        if isinstance(exc, urllib.error.HTTPError):
+            detail = f"HTTP {exc.code}: {detail}"
+        print(f"IMAGE_SEARCH openverse_failed error={type(exc).__name__}: {detail}", flush=True)
+    print(f"IMAGE_SEARCH openverse_no_match candidates={len(results) if 'results' in locals() else 0}", flush=True)
     return None, ""
 
 
@@ -821,8 +826,12 @@ def find_contextual_image(script: str, folder: Path, model_visual_prompt: Option
             image, attribution = _download_checked_image(image_url, folder, "commons-context-image", credit)
             if image:
                 return image, attribution
-    except Exception:
-        pass
+    except Exception as exc:
+        detail = str(exc)[:180]
+        if isinstance(exc, urllib.error.HTTPError):
+            detail = f"HTTP {exc.code}: {detail}"
+        print(f"IMAGE_SEARCH wikimedia_failed error={type(exc).__name__}: {detail}", flush=True)
+    print(f"IMAGE_SEARCH wikimedia_no_match candidates={len(pages) if 'pages' in locals() else 0}", flush=True)
     return None, ""
 
 
@@ -1552,12 +1561,16 @@ def make_background(script: str, folder: Path, model_visual_prompt: Optional[str
         match = re.search(r"AI-generated with ([A-Za-z0-9_.-]+)", str(credit or ""))
         scene_provider = match.group(1)[:48] if match else "provider_unspecified"
     if not source_image and not force_topic_graphic and not force_licensed_contextual and ALLOW_LICENSED_IMAGE_FALLBACK:
+        print("IMAGE_PROVIDER action=search_licensed_contextual_after_ai_failure", flush=True)
         source_image, credit = find_contextual_image(script, folder, model_visual_prompt or base_prompt)
         if source_image:
             scene_source = "licensed_contextual"
             scene_provider = "openverse_or_wikimedia"
-    elif not source_image:
-        print("IMAGE_PROVIDER all_ai_models_failed licensed_fallback=disabled", flush=True)
+            print("IMAGE_PROVIDER selected=licensed_contextual_after_ai_failure", flush=True)
+        else:
+            print("IMAGE_PROVIDER licensed_contextual_unavailable=true", flush=True)
+    elif not source_image and not ALLOW_LICENSED_IMAGE_FALLBACK and not force_topic_graphic:
+        print("IMAGE_PROVIDER all_ai_models_failed licensed_fallback=disabled_by_setting", flush=True)
     if source_image:
         try:
             with Image.open(source_image) as source:
