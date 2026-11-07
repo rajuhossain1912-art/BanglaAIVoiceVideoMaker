@@ -247,5 +247,15 @@ class SceneImageSimilarityTests(unittest.TestCase):
         self.assertTrue(all(len(scene.split()) <= 8 for scene in scenes))
 
 
+    def test_image_keywords_preserve_important_scene_descriptors(self):
+        keywords = video_app._image_keywords(
+            "বাংলাদেশের সবুজ গ্রাম ও গাছপালা",
+            "green rural village with plants beside a river"
+        )
+        self.assertIn("green", keywords)
+        self.assertIn("rural", keywords)
+        self.assertIn("plants", keywords)
+
+
 if __name__ == "__main__":
     unittest.main()
