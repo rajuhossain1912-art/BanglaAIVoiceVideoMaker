@@ -2499,14 +2499,17 @@ def make_scene_backgrounds(script: str, folder: Path, progress_callback=None, du
                     )
                     if distinct_review is None:
                         semantic_review["duplicate_retry_unavailable"] += 1
+                        duplicate_retry_action = "accepted_distinct_photo_unverified"
                         print(f"IMAGE_REVIEW duplicate_retry=unavailable scene={index + 1} action=keep_distinct_photo", flush=True)
                         background = distinct_background
                     elif distinct_review["match"]:
                         semantic_review["duplicate_retry_matched"] += 1
+                        duplicate_retry_action = "accepted_distinct_photo"
                         print(f"IMAGE_REVIEW duplicate_retry=match scene={index + 1} action=accept", flush=True)
                         background = distinct_background
                     else:
                         semantic_review["duplicate_retry_mismatched"] += 1
+                        duplicate_retry_action = "topic_graphic_after_duplicate_retry"
                         print(f"IMAGE_REVIEW duplicate_retry=mismatch scene={index + 1} action=use_topic_graphic", flush=True)
                         background = make_background(
                             scene_text, scene_dir, force_topic_graphic=True,
@@ -2514,7 +2517,10 @@ def make_scene_backgrounds(script: str, folder: Path, progress_callback=None, du
                         )
                 else:
                     background = distinct_background
-                    duplicate_retry_action = "accepted_distinct_photo"
+                    if _should_semantically_review_image_source(distinct_source):
+                        duplicate_retry_action = "accepted_distinct_photo_unreviewed"
+                    else:
+                        duplicate_retry_action = "accepted_distinct_visual"
                     print(f"IMAGE_SCENE repeated_image index={index + 1} action=accepted_new_composition", flush=True)
         try:
             source_info = json.loads((scene_dir / "scene-source.json").read_text(encoding="utf-8"))
