@@ -1260,7 +1260,13 @@ def find_pollinations_image(script: str, folder: Path, model_visual_prompt: Opti
         return target, "AI-generated with Pollinations | https://pollinations.ai"
     except Exception as exc:
         target.unlink(missing_ok=True)
-        cooldown_seconds = _image_provider_cooldown_seconds(exc)
+        error_detail = ""
+        if isinstance(exc, urllib.error.HTTPError):
+            try:
+                error_detail = exc.read(700).decode("utf-8", errors="replace")
+            except Exception:
+                pass
+        cooldown_seconds = _image_provider_cooldown_seconds(exc, error_detail)
         with IMAGE_PROVIDER_COOLDOWN_LOCK:
             IMAGE_PROVIDER_COOLDOWN_UNTIL["Pollinations-Flux"] = time.time() + cooldown_seconds
         detail = str(exc)[:140]
@@ -1281,9 +1287,17 @@ IMAGE_PROVIDER_COOLDOWN_SECONDS = 900
 IMAGE_PROVIDER_COOLDOWN_LOCK = threading.Lock()
 
 
-def _image_provider_cooldown_seconds(error=None):
-    """Use long cooldowns for quota/auth failures and short ones for transient errors."""
+def _image_provider_cooldown_seconds(error=None, response_detail=""):
+    """Avoid retrying exhausted daily quotas until the next UTC day."""
+    detail = str(response_detail or "").lower()
     if isinstance(error, urllib.error.HTTPError):
+        if error.code == 429 and (
+            "daily free allocation" in detail
+            or "used up your daily" in detail
+            or "daily allocation" in detail
+        ):
+            seconds_until_utc_midnight = 86400 - (time.time() % 86400)
+            return int(seconds_until_utc_midnight) + 300
         if error.code in (401, 403, 402, 429):
             return 900
         if error.code == 400:
@@ -1401,7 +1415,7 @@ def find_cloudflare_generated_image(script: str, folder: Path, model_visual_prom
                 except Exception:
                     pass
             with IMAGE_PROVIDER_COOLDOWN_LOCK:
-                cooldown_seconds = _image_provider_cooldown_seconds(exc)
+                cooldown_seconds = _image_provider_cooldown_seconds(exc, detail)
                 IMAGE_PROVIDER_COOLDOWN_UNTIL[provider_key] = time.time() + cooldown_seconds
             print(f"IMAGE_PROVIDER failed provider={provider_key} cooldown_seconds={cooldown_seconds} error={type(exc).__name__}: {detail}", flush=True)
     return None, ""
