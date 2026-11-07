@@ -2349,6 +2349,7 @@ def make_scene_backgrounds(script: str, folder: Path, progress_callback=None, du
         progress_callback(35, "ভিডিওর প্রতিটি দৃশ্যের জন্য উপযুক্ত ছবি পরিকল্পনা করা হচ্ছে।")
     visual_prompts = _plan_scene_visual_prompts(visual_scenes)
     backgrounds = []
+    scene_audit = []
     semantic_review = {
         "reviewed": 0, "matched": 0, "mismatched": 0,
         "retried": 0, "retry_matched": 0, "retry_mismatched": 0, "unavailable": 0,
@@ -2380,6 +2381,7 @@ def make_scene_backgrounds(script: str, folder: Path, progress_callback=None, du
         # Inspect an evenly distributed sample only when it is a real generated or
         # contextual photograph. Local topic graphics cannot pass a vision comparison,
         # so reviewing them would waste the limited vision-model allocation.
+        scene_review_status = "not_reviewed"
         source_info_for_review = {}
         try:
             source_info_for_review = json.loads((scene_dir / "scene-source.json").read_text(encoding="utf-8"))
@@ -2390,10 +2392,13 @@ def make_scene_backgrounds(script: str, folder: Path, progress_callback=None, du
             semantic_review["reviewed"] += 1
             review = _review_generated_image_against_scene(background, scene_text, scene_visual_prompt)
             if review is None:
+                scene_review_status = "unavailable"
                 semantic_review["unavailable"] += 1
             elif review["match"]:
+                scene_review_status = "matched"
                 semantic_review["matched"] += 1
             else:
+                scene_review_status = "mismatched"
                 semantic_review["mismatched"] += 1
                 semantic_review["retried"] += 1
                 print(f"IMAGE_REVIEW action=regenerate scene={index + 1}", flush=True)
@@ -2409,6 +2414,7 @@ def make_scene_backgrounds(script: str, folder: Path, progress_callback=None, du
                 )
                 retry_review = _review_generated_image_against_scene(retry_background, scene_text, correction)
                 if retry_review is None:
+                    scene_review_status = "retry_unavailable"
                     semantic_review["unavailable"] += 1
                     print(f"IMAGE_REVIEW action=replace_unverified_retry scene={index + 1}", flush=True)
                     background = make_background(
@@ -2416,10 +2422,12 @@ def make_scene_backgrounds(script: str, folder: Path, progress_callback=None, du
                         variation_seed=index, scene_index=index + 1
                     )
                 elif retry_review["match"]:
+                    scene_review_status = "retry_matched"
                     semantic_review["retry_matched"] += 1
                     background = retry_background
                     print(f"IMAGE_REVIEW action=accepted_retry scene={index + 1}", flush=True)
                 else:
+                    scene_review_status = "retry_mismatched"
                     semantic_review["retry_mismatched"] += 1
                     print(f"IMAGE_REVIEW action=try_licensed_recovery scene={index + 1}", flush=True)
                     licensed_background = make_background(
@@ -2505,7 +2513,19 @@ def make_scene_backgrounds(script: str, folder: Path, progress_callback=None, du
         except Exception:
             source_name = "unknown"
         semantic_review["image_sources"][source_name] += 1
+        scene_audit.append({
+            "scene_number": index + 1,
+            "narration": str(scene_text)[:500],
+            "image_source": source_name,
+            "semantic_status": scene_review_status,
+        })
         backgrounds.append(background)
+    try:
+        (folder / "scene-audit.json").write_text(
+            json.dumps(scene_audit, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+    except Exception as exc:
+        print(f"IMAGE_SCENE audit_save_failed error={type(exc).__name__}", flush=True)
     print(f"IMAGE_SCENE unique_backgrounds={len(backgrounds)} total_narration_scenes={len(scenes)} interval={scene_interval}s duration={duration:.1f}s visual_budget={max_visual_scenes or 'duration_based'}", flush=True)
     if progress_callback:
         progress_callback(40, f"{len(backgrounds)}টি দৃশ্যের ছবি প্রস্তুত হয়েছে।")
@@ -3234,6 +3254,15 @@ def video_quality_report(job_id: str):
     size_bytes = video_path.stat().st_size
     image_count = snapshot.get("scene_count")
     scene_interval = snapshot.get("scene_interval_seconds")
+    scene_audit = []
+    try:
+        audit_path = WORK_DIR / job_id / "scene-audit.json"
+        if audit_path.exists():
+            loaded_audit = json.loads(audit_path.read_text(encoding="utf-8"))
+            if isinstance(loaded_audit, list):
+                scene_audit = loaded_audit
+    except Exception as exc:
+        print(f"REPORT scene_audit_unavailable error={type(exc).__name__}", flush=True)
     interval_diagnostics = _scene_interval_diagnostics(duration, image_count, scene_interval)
 
     audio_check = "অডিও ট্র্যাক পাওয়া যায়নি।"
@@ -3447,6 +3476,28 @@ def video_quality_report(job_id: str):
 
     if isinstance(narration_scene_count, int) and narration_scene_count > 0:
         report_text += f"লেখা থেকে {narration_scene_count}টি বাক্যভিত্তিক দৃশ্য তৈরি হয়েছে। "
+    if scene_audit:
+        report_text += f"দৃশ্যভিত্তিক শ্রবণযোগ্য তালিকায় {len(scene_audit)}টি দৃশ্যের বর্ণনা ও ছবির উৎস রাখা হয়েছে। "
+        status_labels = {
+            "matched": "বিষয়ের সঙ্গে মিল পাওয়া গেছে",
+            "retry_matched": "নতুন ছবি দিয়ে পুনরায় যাচাইয়ে মিলেছে",
+            "mismatched": "প্রথম যাচাইয়ে অমিল",
+            "retry_mismatched": "পুনরায় যাচাইয়েও অমিল",
+            "unavailable": "যাচাইয়ের উত্তর পাওয়া যায়নি",
+            "retry_unavailable": "নতুন ছবির যাচাইয়ের উত্তর পাওয়া যায়নি",
+            "not_reviewed": "অর্থগত যাচাই করা হয়নি",
+        }
+        for scene in scene_audit[:8]:
+            scene_number = int(scene.get("scene_number", 0) or 0)
+            narration = re.sub(r"\s+", " ", str(scene.get("narration") or "")).strip()
+            source = str(scene.get("image_source") or "unknown")
+            status = status_labels.get(str(scene.get("semantic_status") or "not_reviewed"), "যাচাইয়ের অবস্থা অনির্দিষ্ট")
+            if narration:
+                report_text += f"দৃশ্য {scene_number}: {narration} ছবির উৎস {source}। {status}। "
+        if len(scene_audit) > 8:
+            report_text += f"আরও {len(scene_audit) - 8}টি দৃশ্যের তথ্য তালিকায় আছে; এই সংক্ষিপ্ত প্রতিবেদনে প্রথম ৮টি বলা হয়েছে। "
+    else:
+        report_text += "দৃশ্যভিত্তিক বর্ণনা ও ছবির উৎসের আলাদা তালিকা পাওয়া যায়নি। "
     if isinstance(scene_interval, int) and scene_interval > 0:
         report_text += f"নির্বাচিত ছবি পরিবর্তনের বিরতি ছিল {scene_interval} সেকেন্ড। "
     if interval_diagnostics["expected_images"] is not None and interval_diagnostics["average_seconds_per_image"] is not None:
