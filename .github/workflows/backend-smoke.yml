@@ -40,6 +40,25 @@ jobs:
           fi
           cat health.json
           python -c 'import json; d=json.load(open("health.json")); assert d["status"] == "ok", d'
+      - name: Verify voice chat reuses the existing AI token
+        run: |
+          docker exec bangla-video-api python - <<'PY'
+          import contextlib, io, json, os
+          from unittest.mock import patch
+          import app
+          payload = {"result": {"response": "আপনাকে কীভাবে সাহায্য করতে পারি?"}}
+          with patch.dict(os.environ, {"CLOUDFLARE_ACCOUNT_ID": "test-account", "CLOUDFLARE_AI_API_TOKEN": "existing-token", "CLOUDFLARE_AI_MODEL": "@cf/meta/llama-3.2-3b-instruct"}), patch.object(
+              app.urllib.request, "urlopen",
+              return_value=contextlib.nullcontext(io.BytesIO(json.dumps(payload, ensure_ascii=False).encode("utf-8")))
+          ) as mocked:
+              result = app.chat({"messages": [{"role": "user", "content": "তুমি কী করতে পারো?"}]})
+              assert result["reply"] == "আপনাকে কীভাবে সাহায্য করতে পারি?", result
+              request = mocked.call_args.args[0]
+              assert request.get_header("Authorization") == "Bearer existing-token"
+              sent = json.loads(request.data.decode("utf-8"))
+              assert sent["messages"][-1]["content"] == "তুমি কী করতে পারো?", sent
+          print("Voice chat uses the existing Cloudflare token and returns the model reply")
+          PY
       - name: Verify Bangla and English audio transcript comparison
         run: |
           docker exec bangla-video-api python -c 'from app import _compare_script_transcript as compare; bn="বাংলাদেশের কৃষক ধান চাষ করেন"; assert compare(bn,bn)["status"]=="matched"; assert compare(bn,"বাংলাদেশের কৃষক ধান চাষ করেন।")["status"]=="matched"; assert compare(bn,"ধান চাষ করেন বাংলাদেশের কৃষক")["status"]=="mismatch"; assert compare("The farmer grows rice","The farmer grows rice")["status"]=="matched"; assert compare(bn,"")["status"]=="unavailable"; partial=compare(bn,"বাংলাদেশের কৃষক ধান কাটেন"); assert partial["status"] in ("review_required","mismatch"), partial; print("Bangla/English transcript comparison, punctuation normalization, word-order mismatch and unavailable states passed")'
