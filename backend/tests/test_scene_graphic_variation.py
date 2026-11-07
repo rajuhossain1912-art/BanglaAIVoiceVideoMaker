@@ -300,5 +300,38 @@ class SceneImageSimilarityTests(unittest.TestCase):
         self.assertNotIn("community", keywords)
 
 
+    def test_openverse_provider_success_is_reused_across_scene_requests(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            folder = Path(temp_dir)
+            calls = []
+
+            def fake_urlopen(request, timeout=6):
+                calls.append(request.full_url)
+                return contextlib.nullcontext(io.BytesIO(b'{"results": []}'))
+
+            with patch.object(video_app, "_IMAGE_SEARCH_CACHE", {}), \\
+                 patch.object(video_app.urllib.request, "urlopen", side_effect=fake_urlopen):
+                first = video_app.find_openverse_image(
+                    "একজন কৃষক ধানক্ষেতে কাজ করছেন",
+                    folder,
+                    "farmer rice field harvesting",
+                )
+                first_call_count = len(calls)
+                second = video_app.find_openverse_image(
+                    "একজন কৃষক ধানক্ষেতে কাজ করছেন",
+                    folder,
+                    "farmer rice field harvesting",
+                )
+
+            self.assertEqual(first, (None, ""))
+            self.assertEqual(second, (None, ""))
+            self.assertGreater(first_call_count, 0)
+            self.assertEqual(
+                len(calls),
+                first_call_count,
+                "A successful empty Openverse response should be reused, not requested again",
+            )
+
+
 if __name__ == "__main__":
     unittest.main()
