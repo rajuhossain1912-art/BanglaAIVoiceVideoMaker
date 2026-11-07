@@ -1531,7 +1531,10 @@ def make_background(script: str, folder: Path, model_visual_prompt: Optional[str
         source_image, credit = None, ""
         print("IMAGE_PROVIDER skipped=all reason=force_topic_graphic", flush=True)
     elif force_licensed_contextual:
-        source_image, credit = find_contextual_image(script, folder, base_prompt)
+        if ALLOW_LICENSED_IMAGE_FALLBACK:
+            source_image, credit = find_contextual_image(script, folder, base_prompt)
+        else:
+            source_image, credit = None, ""
         if source_image:
             scene_source = "licensed_contextual"
             scene_provider = "openverse_or_wikimedia"
@@ -1544,7 +1547,7 @@ def make_background(script: str, folder: Path, model_visual_prompt: Optional[str
         # sentence is intentionally repeated to fill the selected image interval.
         retry_prompt = _vary_visual_prompt(base_prompt, variation_seed)
         source_image, credit = find_generated_image(script, folder, retry_prompt)
-    if source_image:
+    if source_image and scene_source != "licensed_contextual":
         scene_source = "ai_generated"
         match = re.search(r"AI-generated with ([A-Za-z0-9_.-]+)", str(credit or ""))
         scene_provider = match.group(1)[:48] if match else "provider_unspecified"
