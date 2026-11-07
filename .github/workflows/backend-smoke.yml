@@ -181,7 +181,7 @@ jobs:
       - name: Verify licensed image search broadens zero-result queries
         run: |
           set -e
-          docker exec bangla-video-api python -c 'from app import _image_search_query_variants as variants; q=variants(["farmer","rice","seedlings","paddy","field","planting"]); assert q[0]=="farmer rice seedlings paddy field planting", q; assert "farmer rice seedlings paddy" in q and "seedlings paddy field planting" in q, q; assert len(q)==3 and len(set(q))==3, q; print("Licensed photo search tries a full scene query and two narrower subject queries:", q)'
+          docker exec bangla-video-api python -c 'from app import _image_search_query_variants as variants; q=variants(["farmer","rice","seedlings","paddy","field","planting"]); assert q[0]=="farmer rice seedlings paddy field planting", q; assert q[1] == "farmer rice seedlings paddy" and "agriculture" in q[2], q; assert len(q)==3 and len(set(q))==3, q; print("Licensed photo search tries a full scene query and two narrower subject queries:", q)'
       - name: Verify Openverse continues after a failed photo download
         run: |
           set -e
