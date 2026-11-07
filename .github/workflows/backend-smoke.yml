@@ -153,6 +153,30 @@ jobs:
             curl --fail --silent --show-error "http://127.0.0.1:10000/api/jobs/$job_id/report" -o "$language-report.json"
             python -c 'import json,sys; d=json.load(open(sys.argv[1])); assert d["overall"] in ("passed_with_limits", "visual_warning"), d; assert d["checks"]["video_track"], d; assert d["checks"]["audio_track"], d; assert d["checks"]["duration_seconds"] > 0, d; assert d["checks"]["scene_count_from_generator"] > 0, d; assert d["checks"]["narration_scene_count"] > 0, d; assert d["checks"]["scene_interval_seconds"] == 3, d; assert isinstance(d["checks"]["semantic_image_review"], dict), d; assert all(k in d["checks"]["semantic_image_review"] for k in ("reviewed","matched","mismatched","retried","retry_matched","retry_mismatched","unavailable","duplicate_retry_reviewed","duplicate_retry_matched","duplicate_retry_mismatched","duplicate_retry_unavailable")), d; assert all(k in d["checks"]["image_source_counts"] for k in ("ai_generated","licensed_contextual","topic_graphic","unknown")), d; assert "AI-তৈরি ছবি" in d["report_text"], d; assert "পটভূমির ছবি" in d["report_text"], d; assert "বাক্যভিত্তিক দৃশ্য" in d["report_text"], d; assert "পরিবর্তনের বিরতি" in d["report_text"], d; assert "প্রতিবেদন" in d["report_text"], d; print("Accessible video quality report and scene details passed:", d["report_text"])' "$language-report.json"
           done
+      - name: Verify image provider cooldown classification and Pollinations rate-limit handling
+        run: |
+          set -e
+          docker exec bangla-video-api python - <<'PY'
+          import tempfile, urllib.error
+          from pathlib import Path
+          import app
+          assert app._image_provider_cooldown_seconds(urllib.error.HTTPError("https://example.invalid", 429, "rate limited", {}, None)) == 900
+          assert app._image_provider_cooldown_seconds(urllib.error.HTTPError("https://example.invalid", 400, "bad request", {}, None)) == 180
+          assert app._image_provider_cooldown_seconds(TimeoutError("provider timeout")) == 90
+          assert app._image_provider_cooldown_seconds(ValueError("invalid image")) == 60
+          original = app.urllib.request.urlopen
+          try:
+              app.urllib.request.urlopen = lambda *args, **kwargs: (_ for _ in ()).throw(
+                  urllib.error.HTTPError("https://image.pollinations.ai", 429, "rate limited", {}, None)
+              )
+              app.IMAGE_PROVIDER_COOLDOWN_UNTIL.pop("Pollinations-Flux", None)
+              app.find_pollinations_image("একজন কৃষক ধানক্ষেতে কাজ করছেন", Path(tempfile.mkdtemp()))
+              remaining = app.IMAGE_PROVIDER_COOLDOWN_UNTIL["Pollinations-Flux"]
+              assert remaining - app.time.time() > 850, remaining
+          finally:
+              app.urllib.request.urlopen = original
+          print("Image provider cooldown classification and Pollinations HTTP 429 handling passed")
+          PY
       - name: Verify Cloudflare image response decoding
         run: |
           set -e
