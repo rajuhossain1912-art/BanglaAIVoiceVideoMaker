@@ -723,9 +723,7 @@ def _image_search_query_variants(keywords):
     candidates = [
         terms,
         terms[:4],
-        terms[:2],
-        terms[2:4],
-        terms[4:6],
+        terms[2:6],
     ]
     queries = []
     for group in candidates:
