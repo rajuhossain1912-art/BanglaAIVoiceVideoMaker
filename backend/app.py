@@ -714,126 +714,161 @@ def _download_checked_image(image_url: str, folder: Path, filename: str, credit:
         return None, ""
 
 
+def _image_search_query_variants(keywords):
+    """Return a few progressively broader searches without losing scene-specific terms."""
+    terms = list(dict.fromkeys(
+        str(word).lower() for word in (keywords or [])
+        if re.fullmatch(r"[A-Za-z]{3,}", str(word))
+    ))
+    candidates = [
+        terms,
+        terms[:4],
+        terms[:2],
+        terms[2:4],
+        terms[4:6],
+    ]
+    queries = []
+    for group in candidates:
+        query = " ".join(group).strip()
+        if query and query not in queries:
+            queries.append(query)
+    return queries[:5]
+
+
 def find_openverse_image(script: str, folder: Path, model_visual_prompt: Optional[str] = None):
-    """Try Openverse's anonymous endpoint; only use CC0, public-domain, CC BY or CC BY-SA results."""
+    """Try several progressively broader Openverse searches; enforce licensing and scene relevance."""
     keywords = _image_keywords(script, model_visual_prompt)
     if not keywords:
         return None, ""
-    params = urllib.parse.urlencode({
-        "q": " ".join(keywords),
-        "license": "cc0,pdm,by,by-sa",
-        "page_size": str(IMAGE_SEARCH_CANDIDATE_LIMIT),
-        "mature": "false",
-    })
-    try:
-        request = urllib.request.Request(
-            "https://api.openverse.org/v1/images/?" + params,
-            headers={"User-Agent": "BanglaAIVoiceVideoMaker/0.4 (free educational video maker)"}
-        )
-        with urllib.request.urlopen(request, timeout=6) as response:
-            data = json.loads(response.read(1_500_000).decode("utf-8"))
-        results = data.get("results", [])
-        results = sorted(
-            enumerate(results),
-            key=lambda pair: (_image_metadata_relevance_score(pair[1].get("title", ""), pair[1].get("tags", []), keywords), -pair[0]),
-            reverse=True,
-        )
-        for _, item in results:
-            if not _image_metadata_is_relevant(item.get("title", ""), item.get("tags", []), keywords):
-                continue
-            license_code = str(item.get("license", "")).lower()
-            if license_code not in {"cc0", "pdm", "by", "by-sa"}:
-                continue
-            image_url = item.get("thumbnail") or item.get("url")
-            title = re.sub(r"\s+", " ", str(item.get("title") or "Openverse image")).strip()
-            creator = re.sub(r"\s+", " ", str(item.get("creator") or "Unknown creator")).strip()
-            if _is_unrelated_map_image(script, title):
-                print(f"IMAGE_FILTER rejected=unrelated_map source=openverse title={title[:90]}", flush=True)
-                continue
-            landing = str(item.get("foreign_landing_url") or "")
-            license_url = str(item.get("license_url") or "")
-            credit = f"{title[:55]} | {creator[:45]} | {license_code.upper()} {landing[:65]} {license_url[:55]}"
-            image, attribution = _download_checked_image(image_url, folder, "openverse-context-image", credit)
-            if image:
-                return image, attribution
-    except Exception as exc:
-        detail = str(exc)[:180]
-        if isinstance(exc, urllib.error.HTTPError):
-            detail = f"HTTP {exc.code}: {detail}"
-        print(f"IMAGE_SEARCH openverse_failed error={type(exc).__name__}: {detail}", flush=True)
-    print(f"IMAGE_SEARCH openverse_no_match candidates={len(results) if 'results' in locals() else 0}", flush=True)
+    results = []
+    seen = set()
+    for query in _image_search_query_variants(keywords):
+        params = urllib.parse.urlencode({
+            "q": query,
+            "license": "cc0,pdm,by,by-sa",
+            "page_size": str(IMAGE_SEARCH_CANDIDATE_LIMIT),
+            "mature": "false",
+        })
+        try:
+            request = urllib.request.Request(
+                "https://api.openverse.org/v1/images/?" + params,
+                headers={"User-Agent": "BanglaAIVoiceVideoMaker/0.4 (free educational video maker)"}
+            )
+            with urllib.request.urlopen(request, timeout=6) as response:
+                data = json.loads(response.read(1_500_000).decode("utf-8"))
+            for item in data.get("results", []):
+                identity = str(item.get("id") or item.get("url") or item.get("thumbnail") or "")
+                if identity and identity not in seen:
+                    seen.add(identity)
+                    results.append(item)
+            if results:
+                break
+        except Exception as exc:
+            detail = str(exc)[:180]
+            if isinstance(exc, urllib.error.HTTPError):
+                detail = f"HTTP {exc.code}: {detail}"
+            print(f"IMAGE_SEARCH openverse_failed query={query[:70]} error={type(exc).__name__}: {detail}", flush=True)
+    results = sorted(
+        enumerate(results),
+        key=lambda pair: (_image_metadata_relevance_score(pair[1].get("title", ""), pair[1].get("tags", []), keywords), -pair[0]),
+        reverse=True,
+    )
+    for _, item in results:
+        if not _image_metadata_is_relevant(item.get("title", ""), item.get("tags", []), keywords):
+            continue
+        license_code = str(item.get("license", "")).lower()
+        if license_code not in {"cc0", "pdm", "by", "by-sa"}:
+            continue
+        image_url = item.get("thumbnail") or item.get("url")
+        title = re.sub(r"\\s+", " ", str(item.get("title") or "Openverse image")).strip()
+        creator = re.sub(r"\\s+", " ", str(item.get("creator") or "Unknown creator")).strip()
+        if _is_unrelated_map_image(script, title):
+            print(f"IMAGE_FILTER rejected=unrelated_map source=openverse title={title[:90]}", flush=True)
+            continue
+        landing = str(item.get("foreign_landing_url") or "")
+        license_url = str(item.get("license_url") or "")
+        credit = f"{title[:55]} | {creator[:45]} | {license_code.upper()} {landing[:65]} {license_url[:55]}"
+        image, attribution = _download_checked_image(image_url, folder, "openverse-context-image", credit)
+        if image:
+            return image, attribution
+    print(f"IMAGE_SEARCH openverse_no_match candidates={len(results)} queries={len(_image_search_query_variants(keywords))}", flush=True)
     return None, ""
 
 
 def find_contextual_image(script: str, folder: Path, model_visual_prompt: Optional[str] = None):
-    """Try Openverse then Wikimedia using the storyboard's concrete scene description."""
+    """Try Openverse then progressively broader Wikimedia searches using the scene description."""
     image, credit = find_openverse_image(script, folder, model_visual_prompt)
     if image:
         return image, credit
     keywords = _image_keywords(script, model_visual_prompt)
     if not keywords:
         return None, ""
-    params = urllib.parse.urlencode({
-        "action": "query", "generator": "search",
-        "gsrsearch": "filetype:bitmap " + " ".join(keywords),
-        "gsrnamespace": "6", "gsrlimit": str(IMAGE_SEARCH_CANDIDATE_LIMIT),
-        "prop": "categories|imageinfo", "cllimit": "20", "iiprop": "url|extmetadata",
-        "iiurlwidth": "900", "format": "json"
-    })
-    request = urllib.request.Request(
-        "https://commons.wikimedia.org/w/api.php?" + params,
-        headers={"User-Agent": "BanglaAIVoiceVideoMaker/0.4 (free educational video maker)"}
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=8) as response:
-            data = json.loads(response.read(2_000_000).decode("utf-8"))
-        pages = list((data.get("query", {}).get("pages") or {}).values())
-        pages = sorted(
-            enumerate(pages),
-            key=lambda pair: (_image_metadata_relevance_score(
-                str(pair[1].get("title", "")).replace("File:", ""),
-                [{"name": str(category.get("title", "")).replace("Category:", "")}
-                 for category in pair[1].get("categories", [])],
-                keywords,
-            ), -pair[0]),
-            reverse=True,
+    pages_by_id = {}
+    for query in _image_search_query_variants(keywords):
+        params = urllib.parse.urlencode({
+            "action": "query", "generator": "search",
+            "gsrsearch": "filetype:bitmap " + query,
+            "gsrnamespace": "6", "gsrlimit": str(IMAGE_SEARCH_CANDIDATE_LIMIT),
+            "prop": "categories|imageinfo", "cllimit": "20", "iiprop": "url|extmetadata",
+            "iiurlwidth": "900", "format": "json"
+        })
+        request = urllib.request.Request(
+            "https://commons.wikimedia.org/w/api.php?" + params,
+            headers={"User-Agent": "BanglaAIVoiceVideoMaker/0.4 (free educational video maker)"}
         )
-        for _, page in pages:
-            page_title = str(page.get("title", "")).replace("File:", "")
-            page_categories = [
-                {"name": str(category.get("title", "")).replace("Category:", "")}
-                for category in page.get("categories", [])
-            ]
-            if not _image_metadata_is_relevant(page_title, page_categories, keywords):
-                continue
-            info = (page.get("imageinfo") or [{}])[0]
-            metadata = info.get("extmetadata") or {}
-            license_name = str((metadata.get("LicenseShortName") or {}).get("value", "")).strip()
-            license_upper = license_name.upper().replace("-", " ")
-            is_reusable = (
-                "PUBLIC DOMAIN" in license_upper or "CC0" in license_upper
-                or (license_upper.startswith("CC BY") and "NC" not in license_upper and "ND" not in license_upper)
-            )
-            image_url = info.get("thumburl") or info.get("url")
-            title = str(page.get("title", "Wikimedia Commons image")).replace("File:", "")
-            artist = re.sub(r"<[^>]+>", "", str((metadata.get("Artist") or {}).get("value", "")).strip())
-            if _is_unrelated_map_image(script, title):
-                print(f"IMAGE_FILTER rejected=unrelated_map source=wikimedia title={title[:90]}", flush=True)
-                continue
-            credit = f"{title[:55]} | {artist[:45]} | {license_name[:20]} https://commons.wikimedia.org/wiki/{urllib.parse.quote(str(page.get('title', '')))}"
-            if not is_reusable:
-                continue
-            image, attribution = _download_checked_image(image_url, folder, "commons-context-image", credit)
-            if image:
-                return image, attribution
-    except Exception as exc:
-        detail = str(exc)[:180]
-        if isinstance(exc, urllib.error.HTTPError):
-            detail = f"HTTP {exc.code}: {detail}"
-        print(f"IMAGE_SEARCH wikimedia_failed error={type(exc).__name__}: {detail}", flush=True)
-    print(f"IMAGE_SEARCH wikimedia_no_match candidates={len(pages) if 'pages' in locals() else 0}", flush=True)
+        try:
+            with urllib.request.urlopen(request, timeout=8) as response:
+                data = json.loads(response.read(2_000_000).decode("utf-8"))
+            for page_id, page in (data.get("query", {}).get("pages") or {}).items():
+                pages_by_id.setdefault(str(page_id), page)
+            if pages_by_id:
+                break
+        except Exception as exc:
+            detail = str(exc)[:180]
+            if isinstance(exc, urllib.error.HTTPError):
+                detail = f"HTTP {exc.code}: {detail}"
+            print(f"IMAGE_SEARCH wikimedia_failed query={query[:70]} error={type(exc).__name__}: {detail}", flush=True)
+    pages = list(pages_by_id.values())
+    pages = sorted(
+        enumerate(pages),
+        key=lambda pair: (_image_metadata_relevance_score(
+            str(pair[1].get("title", "")).replace("File:", ""),
+            [{"name": str(category.get("title", "")).replace("Category:", "")}
+             for category in pair[1].get("categories", [])],
+            keywords,
+        ), -pair[0]),
+        reverse=True,
+    )
+    for _, page in pages:
+        page_title = str(page.get("title", "")).replace("File:", "")
+        page_categories = [
+            {"name": str(category.get("title", "")).replace("Category:", "")}
+            for category in page.get("categories", [])
+        ]
+        if not _image_metadata_is_relevant(page_title, page_categories, keywords):
+            continue
+        info = (page.get("imageinfo") or [{}])[0]
+        metadata = info.get("extmetadata") or {}
+        license_name = str((metadata.get("LicenseShortName") or {}).get("value", "")).strip()
+        license_upper = license_name.upper().replace("-", " ")
+        is_reusable = (
+            "PUBLIC DOMAIN" in license_upper or "CC0" in license_upper
+            or (license_upper.startswith("CC BY") and "NC" not in license_upper and "ND" not in license_upper)
+        )
+        image_url = info.get("thumburl") or info.get("url")
+        title = str(page.get("title", "Wikimedia Commons image")).replace("File:", "")
+        artist = re.sub(r"<[^>]+>", "", str((metadata.get("Artist") or {}).get("value", "")).strip())
+        if _is_unrelated_map_image(script, title):
+            print(f"IMAGE_FILTER rejected=unrelated_map source=wikimedia title={title[:90]}", flush=True)
+            continue
+        credit = f"{title[:55]} | {artist[:45]} | {license_name[:20]} https://commons.wikimedia.org/wiki/{urllib.parse.quote(str(page.get('title', '')))}"
+        if not is_reusable:
+            continue
+        image, attribution = _download_checked_image(image_url, folder, "commons-context-image", credit)
+        if image:
+            return image, attribution
+    print(f"IMAGE_SEARCH wikimedia_no_match candidates={len(pages)} queries={len(_image_search_query_variants(keywords))}", flush=True)
     return None, ""
-
 
 def _compatible_gradio_client():
     """Work around public Spaces exposing valid boolean JSON-schema nodes."""
