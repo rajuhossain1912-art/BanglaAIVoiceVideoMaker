@@ -1518,20 +1518,28 @@ def _distinct_scene_retry_prompt(base_prompt: Optional[str], scene_text: str):
     return (prompt[:850].rstrip() + instruction)[:1050]
 
 
-def make_background(script: str, folder: Path, model_visual_prompt: Optional[str] = None, force_topic_graphic: bool = False, variation_seed: int = 0, scene_index: Optional[int] = None):
+def make_background(script: str, folder: Path, model_visual_prompt: Optional[str] = None, force_topic_graphic: bool = False, force_licensed_contextual: bool = False, variation_seed: int = 0, scene_index: Optional[int] = None):
     # Small canvas is intentional: keep peak memory below Render Free's 512 MiB limit.
     width, height = 360, 640
     # Track the final source for this scene separately from provider-level attempt logs.
     scene_source = "topic_graphic" if force_topic_graphic else "unknown"
     scene_provider = ""
-    # A forced topic graphic is the conservative fallback for a scene that has
-    # already failed semantic review or repeated another image. Do not call an image
-    # provider again here: that could return another unrelated photograph.
+    base_prompt = model_visual_prompt or _english_visual_prompt(script)
+    # A rejected generated photo gets one chance from independently licensed,
+    # subject-tagged photo sources before falling back to a local topic graphic.
     if force_topic_graphic:
         source_image, credit = None, ""
         print("IMAGE_PROVIDER skipped=all reason=force_topic_graphic", flush=True)
+    elif force_licensed_contextual:
+        source_image, credit = find_contextual_image(script, folder, base_prompt)
+        if source_image:
+            scene_source = "licensed_contextual"
+            scene_provider = "openverse_or_wikimedia"
+        print(
+            "IMAGE_PROVIDER licensed_recovery=" + ("selected" if source_image else "unavailable"),
+            flush=True,
+        )
     else:
-        base_prompt = model_visual_prompt or _english_visual_prompt(script)
         # Every visual slot gets a distinct photographic composition, even when a long
         # sentence is intentionally repeated to fill the selected image interval.
         retry_prompt = _vary_visual_prompt(base_prompt, variation_seed)
@@ -1540,7 +1548,7 @@ def make_background(script: str, folder: Path, model_visual_prompt: Optional[str
         scene_source = "ai_generated"
         match = re.search(r"AI-generated with ([A-Za-z0-9_.-]+)", str(credit or ""))
         scene_provider = match.group(1)[:48] if match else "provider_unspecified"
-    if not source_image and not force_topic_graphic and ALLOW_LICENSED_IMAGE_FALLBACK:
+    if not source_image and not force_topic_graphic and not force_licensed_contextual and ALLOW_LICENSED_IMAGE_FALLBACK:
         source_image, credit = find_contextual_image(script, folder, model_visual_prompt or base_prompt)
         if source_image:
             scene_source = "licensed_contextual"
@@ -2195,11 +2203,36 @@ def make_scene_backgrounds(script: str, folder: Path, progress_callback=None, du
                     print(f"IMAGE_REVIEW action=accepted_retry scene={index + 1}", flush=True)
                 else:
                     semantic_review["retry_mismatched"] += 1
-                    print(f"IMAGE_REVIEW action=replace_rejected_retry_with_topic_graphic scene={index + 1}", flush=True)
-                    background = make_background(
-                        scene_text, scene_dir, force_topic_graphic=True,
+                    print(f"IMAGE_REVIEW action=try_licensed_recovery scene={index + 1}", flush=True)
+                    licensed_background = make_background(
+                        scene_text, scene_dir, correction, force_licensed_contextual=True,
                         variation_seed=index, scene_index=index + 1
                     )
+                    licensed_source_info = {}
+                    try:
+                        licensed_source_info = json.loads(
+                            (scene_dir / "scene-source.json").read_text(encoding="utf-8")
+                        )
+                    except Exception:
+                        pass
+                    if licensed_source_info.get("source") == "licensed_contextual":
+                        licensed_review = _review_generated_image_against_scene(
+                            licensed_background, scene_text, correction
+                        )
+                    else:
+                        licensed_review = None
+                    if licensed_review and licensed_review["match"]:
+                        semantic_review["retry_matched"] += 1
+                        background = licensed_background
+                        print(f"IMAGE_REVIEW action=accepted_licensed_recovery scene={index + 1}", flush=True)
+                    else:
+                        if licensed_review is None and licensed_source_info.get("source") == "licensed_contextual":
+                            semantic_review["unavailable"] += 1
+                        print(f"IMAGE_REVIEW action=licensed_recovery_not_verified scene={index + 1}", flush=True)
+                        background = make_background(
+                            scene_text, scene_dir, force_topic_graphic=True,
+                            variation_seed=index, scene_index=index + 1
+                        )
         elif index in review_indices:
             print(f"IMAGE_REVIEW skipped scene={index + 1} reason=non_photographic_source source={review_source}", flush=True)
         if any(_scene_images_too_similar(background, prior) for prior in backgrounds):
