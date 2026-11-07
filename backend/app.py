@@ -2015,41 +2015,61 @@ def _review_generated_image_against_scene(image_path: Path, narration: str, visu
             buffer = io.BytesIO()
             preview.save(buffer, format="JPEG", quality=78, optimize=True)
         image_data = "data:image/jpeg;base64," + base64.b64encode(buffer.getvalue()).decode("ascii")
-        question = (
-            "Compare the visible image with this exact scene. Narration: "
-            + re.sub(r"\s+", " ", str(narration)).strip()[:420]
-            + ". Intended visual: " + re.sub(r"\s+", " ", str(visual_prompt or "")).strip()[:300]
-            + ". Reply with exactly one word: MATCH or MISMATCH. MATCH only if the main visible "
-            "subject and action clearly depict the scene. Generic landscapes, icons, cartoons, "
-            "abstract shapes, or unrelated objects are MISMATCH for a specific narrated subject."
-        )
+        narration_text = re.sub(r"\s+", " ", str(narration)).strip()[:420]
+        visual_text = re.sub(r"\s+", " ", str(visual_prompt or "")).strip()[:220]
+        # Keep the primary VQA request deliberately short. Retry once with simpler
+        # wording when Workers AI returns an empty or unparseable answer.
+        questions = [
+            "Does this image clearly depict the following scene: " + narration_text
+            + "? Intended visual: " + visual_text
+            + ". Reply with exactly MATCH or MISMATCH. Generic or unrelated images are MISMATCH.",
+            "Look at the image. Is its main visible subject clearly the same as this scene: "
+            + narration_text + "? Answer only MATCH or MISMATCH.",
+        ]
         model_path = urllib.parse.quote(model, safe="@/-")
-        payload = {"task": "query", "image": image_data, "question": question, "stream": False, "reasoning": False, "max_tokens": 64}
-        request = urllib.request.Request(
-            f"https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/run/{model_path}",
-            data=json.dumps(payload).encode("utf-8"),
-            headers={
-                "Authorization": "Bearer " + api_token,
-                "Content-Type": "application/json",
-                "User-Agent": "BanglaAIVoiceVideoMaker/1.0",
-            },
-            method="POST",
-        )
-        with urllib.request.urlopen(request, timeout=18) as response:
-            data = json.loads(response.read(180_000).decode("utf-8"))
-        if isinstance(data, dict) and data.get("success") is False:
-            errors = data.get("errors") or []
-            detail = "; ".join(
-                str(item.get("message") or item.get("code") or item)[:160]
-                for item in errors[:2]
-            ) or "Cloudflare returned success=false"
-            print(f"IMAGE_REVIEW unavailable model={model} reason=provider_error detail={detail}", flush=True)
-            return None
-        result = data.get("result") or {}
-        raw = _extract_vision_response_text(result)
-        if not raw:
-            raw = _extract_vision_response_text(data.get("response") or data.get("output"))
-        review = _parse_scene_match_response(raw)
+        raw = ""
+        review = None
+        result = {}
+        for attempt, question in enumerate(questions, start=1):
+            payload = {
+                "task": "query", "image": image_data, "question": question,
+                "stream": False, "reasoning": False, "temperature": 0.0,
+                "top_p": 0.1, "max_tokens": 128,
+            }
+            request = urllib.request.Request(
+                f"https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/run/{model_path}",
+                data=json.dumps(payload).encode("utf-8"),
+                headers={
+                    "Authorization": "Bearer " + api_token,
+                    "Content-Type": "application/json",
+                    "User-Agent": "BanglaAIVoiceVideoMaker/1.0",
+                },
+                method="POST",
+            )
+            with urllib.request.urlopen(request, timeout=25) as response:
+                data = json.loads(response.read(180_000).decode("utf-8"))
+            if isinstance(data, dict) and data.get("success") is False:
+                errors = data.get("errors") or []
+                detail = "; ".join(
+                    str(item.get("message") or item.get("code") or item)[:160]
+                    for item in errors[:2]
+                ) or "Cloudflare returned success=false"
+                print(f"IMAGE_REVIEW unavailable model={model} reason=provider_error detail={detail}", flush=True)
+                return None
+            result = data.get("result") or {}
+            raw = _extract_vision_response_text(result)
+            if not raw:
+                raw = _extract_vision_response_text(data.get("response") or data.get("output"))
+            review = _parse_scene_match_response(raw)
+            if review:
+                if attempt > 1:
+                    print(f"IMAGE_REVIEW retry=short_question attempt={attempt} response_received=true", flush=True)
+                break
+            print(
+                f"IMAGE_REVIEW retry=short_question attempt={attempt} "
+                f"reason=empty_or_unparseable raw_length={len(raw)}",
+                flush=True,
+            )
         if not review:
             result_keys = ",".join(sorted(str(key) for key in result.keys())) if isinstance(result, dict) else type(result).__name__
             print(
