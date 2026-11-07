@@ -2141,7 +2141,7 @@ def _parse_scene_match_response(raw):
             except (TypeError, ValueError):
                 candidate = None
         if candidate is None:
-                normalized = re.sub(r"[\s\W_]+", "", last_text, flags=re.UNICODE)
+            normalized = re.sub(r"\s+", " ", text).strip().lower()
             label = re.match(r"^(mismatch|match)\b", normalized)
             if label:
                 return {
