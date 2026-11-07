@@ -709,8 +709,22 @@ private fun VideoMakerScreen() {
                                             "retry_unavailable" -> "বিকল্প ছবির মিল যাচাই করা যায়নি"
                                             else -> "ছবির বিষয়বস্তু যাচাই করা হয়নি"
                                         }
-                                        append("। যাচাই: ")
+                                        append("। প্রাথমিক ছবির যাচাই: ")
                                         append(matchStatus)
+                                        val finalVisualStatus = when (scene.optString("final_visual_status")) {
+                                            "matched" -> "চূড়ান্ত ছবির সঙ্গে বিষয়ের মিল পাওয়া গেছে"
+                                            "unavailable" -> "চূড়ান্ত ছবির বিষয়ের মিল যাচাই করা যায়নি"
+                                            "not_reviewed" -> "চূড়ান্ত ছবির বিষয়ের মিল যাচাই করা হয়নি"
+                                            "topic_graphic_unreviewed" -> "শেষে বিষয়ভিত্তিক গ্রাফিক নেওয়া হয়েছে; এর ছবি-অর্থ যাচাই করা হয়নি"
+                                            else -> "চূড়ান্ত ছবির আলাদা যাচাইয়ের তথ্য নেই"
+                                        }
+                                        append("। চূড়ান্ত ছবির অবস্থা: ")
+                                        append(finalVisualStatus)
+                                        val finalDescription = scene.optString("final_visual_description")
+                                        if (finalDescription.isNotBlank()) {
+                                            append("। চূড়ান্ত ছবির বিবরণ: ")
+                                            append(finalDescription)
+                                        }
                                         if (scene.optBoolean("duplicate_detected")) {
                                             append("। আগের দৃশ্যের সঙ্গে একই রকম ছবি ধরা পড়েছিল")
                                             when (scene.optString("duplicate_retry_action")) {
