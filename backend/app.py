@@ -759,10 +759,6 @@ def find_openverse_image(script: str, folder: Path, model_visual_prompt: Optiona
                 if identity and identity not in seen:
                     seen.add(identity)
                     results.append(item)
-            if any(_image_metadata_is_relevant(
-                item.get("title", ""), item.get("tags", []), keywords
-            ) for item in results):
-                break
         except Exception as exc:
             detail = str(exc)[:180]
             if isinstance(exc, urllib.error.HTTPError):
@@ -821,13 +817,6 @@ def find_contextual_image(script: str, folder: Path, model_visual_prompt: Option
                 data = json.loads(response.read(2_000_000).decode("utf-8"))
             for page_id, page in (data.get("query", {}).get("pages") or {}).items():
                 pages_by_id.setdefault(str(page_id), page)
-            if any(_image_metadata_is_relevant(
-                str(page.get("title", "")).replace("File:", ""),
-                [{"name": str(category.get("title", "")).replace("Category:", "")}
-                 for category in page.get("categories", [])],
-                keywords,
-            ) for page in pages_by_id.values()):
-                break
         except Exception as exc:
             detail = str(exc)[:180]
             if isinstance(exc, urllib.error.HTTPError):
