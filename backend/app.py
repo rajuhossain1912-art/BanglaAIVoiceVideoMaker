@@ -761,7 +761,9 @@ def find_openverse_image(script: str, folder: Path, model_visual_prompt: Optiona
                 if identity and identity not in seen:
                     seen.add(identity)
                     results.append(item)
-            if results:
+            if any(_image_metadata_is_relevant(
+                item.get("title", ""), item.get("tags", []), keywords
+            ) for item in results):
                 break
         except Exception as exc:
             detail = str(exc)[:180]
@@ -780,8 +782,8 @@ def find_openverse_image(script: str, folder: Path, model_visual_prompt: Optiona
         if license_code not in {"cc0", "pdm", "by", "by-sa"}:
             continue
         image_url = item.get("thumbnail") or item.get("url")
-        title = re.sub(r"\\s+", " ", str(item.get("title") or "Openverse image")).strip()
-        creator = re.sub(r"\\s+", " ", str(item.get("creator") or "Unknown creator")).strip()
+        title = re.sub(r"\s+", " ", str(item.get("title") or "Openverse image")).strip()
+        creator = re.sub(r"\s+", " ", str(item.get("creator") or "Unknown creator")).strip()
         if _is_unrelated_map_image(script, title):
             print(f"IMAGE_FILTER rejected=unrelated_map source=openverse title={title[:90]}", flush=True)
             continue
@@ -821,7 +823,12 @@ def find_contextual_image(script: str, folder: Path, model_visual_prompt: Option
                 data = json.loads(response.read(2_000_000).decode("utf-8"))
             for page_id, page in (data.get("query", {}).get("pages") or {}).items():
                 pages_by_id.setdefault(str(page_id), page)
-            if pages_by_id:
+            if any(_image_metadata_is_relevant(
+                str(page.get("title", "")).replace("File:", ""),
+                [{"name": str(category.get("title", "")).replace("Category:", "")}
+                 for category in page.get("categories", [])],
+                keywords,
+            ) for page in pages_by_id.values()):
                 break
         except Exception as exc:
             detail = str(exc)[:180]
@@ -2203,7 +2210,7 @@ def _review_generated_image_against_scene(image_path: Path, narration: str, visu
         return {"match": accepted, "confidence": confidence, "description": description, "reason": reason}
     except urllib.error.HTTPError as exc:
         try:
-            detail = re.sub(r"\\s+", " ", exc.read(6000).decode("utf-8", errors="replace")).strip()
+            detail = re.sub(r"\s+", " ", exc.read(6000).decode("utf-8", errors="replace")).strip()
         except Exception:
             detail = ""
         print(
