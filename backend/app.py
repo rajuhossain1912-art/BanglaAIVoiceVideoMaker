@@ -2454,6 +2454,8 @@ def make_scene_backgrounds(script: str, folder: Path, progress_callback=None, du
                         licensed_review = None
                     if licensed_review and licensed_review["match"]:
                         semantic_review["retry_matched"] += 1
+                        scene_review_status = "retry_matched"
+                        scene_review_description = str(licensed_review.get("description") or "")
                         background = licensed_background
                         print(f"IMAGE_REVIEW action=accepted_licensed_recovery scene={index + 1}", flush=True)
                     else:
