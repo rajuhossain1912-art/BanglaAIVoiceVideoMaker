@@ -6,6 +6,8 @@ import os
 import re
 import shutil
 import subprocess
+import difflib
+import unicodedata
 import threading
 import time
 import uuid
@@ -2773,6 +2775,42 @@ def make_caption_frames(script: str, duration: float, background: Path, folder: 
     listing.write_text("".join(lines), encoding="utf-8")
     return listing, image_index
 
+def _normalize_transcript_tokens(text: str):
+    """Normalize Bangla/English transcript tokens without changing word order."""
+    normalized = unicodedata.normalize("NFKC", str(text or "")).casefold()
+    return re.findall(r"[^\W_]+", normalized, flags=re.UNICODE)
+
+
+def _compare_script_transcript(script: str, transcript: str):
+    """Return a conservative token-sequence similarity for script/audio QC."""
+    expected = _normalize_transcript_tokens(script)
+    observed = _normalize_transcript_tokens(transcript)
+    if not expected or not observed:
+        return {"status": "unavailable", "similarity": None, "expected_tokens": len(expected), "transcribed_tokens": len(observed)}
+    similarity = difflib.SequenceMatcher(None, expected, observed).ratio()
+    if similarity < 0.78:
+        status = "mismatch"
+    elif similarity < 0.92:
+        status = "review_required"
+    else:
+        status = "matched"
+    return {
+        "status": status,
+        "similarity": round(similarity, 4),
+        "expected_tokens": len(expected),
+        "transcribed_tokens": len(observed),
+    }
+
+
+def verify_rendered_audio_against_script(video_path: Path, script: str, folder: Path, progress_callback=None):
+    """Transcribe the final MP4 audio track and compare it with the approved script."""
+    transcript = transcribe_uploaded_audio(video_path, folder, progress_callback)
+    result = _compare_script_transcript(script, transcript)
+    result["transcript_preview"] = transcript[:1200]
+    result["provider"] = "Cloudflare Workers AI Whisper large-v3-turbo"
+    return result
+
+
 def render(job_id: str, script: str, mode: str, audio_path: Optional[Path], caption_offset: float = 0.0, scene_interval: int = 5):
     folder = WORK_DIR / job_id
     folder.mkdir(parents=True, exist_ok=True)
@@ -2854,8 +2892,34 @@ def render(job_id: str, script: str, mode: str, audio_path: Optional[Path], capt
             "-c:a", "aac", "-b:a", "96k", "-threads", "1", "-shortest", "-movflags", "+faststart", str(output)
         ], 240)
         print(f"VIDEO_STAGE job={job_id} stage=ffmpeg_done", flush=True)
+        audio_verification = {"status": "unavailable", "similarity": None, "reason": "অডিও প্রতিলিপি যাচাই সম্পন্ন হয়নি।"}
+        if os.getenv("ENABLE_FINAL_AUDIO_QC", "true").strip().lower() not in ("0", "false", "no", "off"):
+            try:
+                def update_audio_qc_progress(progress, message):
+                    with LOCK:
+                        if job_id in JOBS and JOBS[job_id].get("status") == "processing":
+                            JOBS[job_id]["progress"] = max(JOBS[job_id].get("progress", 0), progress)
+                            JOBS[job_id]["message"] = message
+                update_audio_qc_progress(90, "তৈরি ভিডিওর কণ্ঠ মূল লেখার সঙ্গে মিলিয়ে পরীক্ষা হচ্ছে।")
+                audio_verification = verify_rendered_audio_against_script(
+                    output, script, folder / "final-audio-qc", update_audio_qc_progress
+                )
+                print(
+                    "AUDIO_QC status=" + str(audio_verification.get("status"))
+                    + " similarity=" + str(audio_verification.get("similarity")),
+                    flush=True,
+                )
+            except Exception as qc_error:
+                audio_verification = {
+                    "status": "unavailable", "similarity": None,
+                    "reason": "অডিও প্রতিলিপি যাচাইয়ের সেবা পাওয়া যায়নি: " + type(qc_error).__name__,
+                }
+                print(f"AUDIO_QC status=unavailable error={type(qc_error).__name__}: {str(qc_error)[:180]}", flush=True)
+        else:
+            audio_verification["reason"] = "সার্ভার সেটিংসে চূড়ান্ত অডিও যাচাই বন্ধ আছে।"
         with LOCK:
-            JOBS[job_id].update(status="completed", progress=100, message="ভিডিও তৈরি হয়েছে", download_url=f"/api/jobs/{job_id}/download", duration=round(duration, 2), scene_count=len(backgrounds), narration_scene_count=len(visual_scene_texts), scene_interval_seconds=scene_interval, caption_frame_count=frame_count, semantic_review=semantic_review, script_characters=len(script), video_mode=mode, completed_at=time.time())
+        with LOCK:
+            JOBS[job_id].update(status="completed", progress=100, message="ভিডিও তৈরি হয়েছে", download_url=f"/api/jobs/{job_id}/download", duration=round(duration, 2), scene_count=len(backgrounds), narration_scene_count=len(visual_scene_texts), scene_interval_seconds=scene_interval, caption_frame_count=frame_count, semantic_review=semantic_review, audio_verification=audio_verification, script_characters=len(script), video_mode=mode, completed_at=time.time())
     except Exception as exc:
         print(f"VIDEO_STAGE job={job_id} stage=failed error={type(exc).__name__}: {str(exc)[:500]}", flush=True)
         with LOCK:
