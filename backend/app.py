@@ -3172,7 +3172,7 @@ def chat(payload: dict):
             # provide a transparent local response instead of failing the whole turn.
             if isinstance(exc, urllib.error.HTTPError) and exc.code == 429:
                 last_text = safe_messages[-1]["content"].strip().lower()
-                normalized = re.sub(r"[\\s\\W_]+", "", last_text, flags=re.UNICODE)
+                normalized = re.sub(r"[\s\W_]+", "", last_text, flags=re.UNICODE)
                 greetings = {
                     "হাইকেমনআছো", "হাইকেমনআছেন", "হায়কেমনআছো", "হায়কেমনআছো", "কেমনআছো", "কেমনআছেন",
                     "আসসালামুআলাইকুম", "সালাম", "হ্যালো", "হ্যালোবন্ধু",
