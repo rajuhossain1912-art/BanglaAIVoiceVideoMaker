@@ -2762,6 +2762,7 @@ def make_caption_frames(script: str, duration: float, background: Path, folder: 
         entries.append((blank_path, safe_offset))
 
     cursor = 0.0
+    script_word_index = 0
     for sentence_index, (sentence, words, span) in enumerate(zip(sentences, sentence_words, sentence_spans)):
         if not words:
             continue
