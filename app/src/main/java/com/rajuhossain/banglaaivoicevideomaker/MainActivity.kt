@@ -17,6 +17,10 @@ import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.Uri
 import android.os.Bundle
+import org.json.JSONArray
+import java.util.Locale
+import android.speech.tts.TextToSpeech
+import android.speech.RecognizerIntent
 import android.os.Environment
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
@@ -119,6 +123,63 @@ private fun VideoMakerScreen() {
     var currentJobId by remember { mutableStateOf("") }
     var reportRunning by remember { mutableStateOf(false) }
     var reportText by remember { mutableStateOf("") }
+
+    var chatInput by remember { mutableStateOf("") }
+    var chatBusy by remember { mutableStateOf(false) }
+    val chatMessages = remember { mutableStateListOf<String>() }
+    var speechOutput by remember { mutableStateOf<TextToSpeech?>(null) }
+    DisposableEffect(context) {
+        val engine = TextToSpeech(context) { result ->
+            if (result == TextToSpeech.SUCCESS) {
+                speechOutput?.language = Locale.forLanguageTag("bn-BD")
+            }
+        }
+        speechOutput = engine
+        onDispose {
+            engine.stop()
+            engine.shutdown()
+            speechOutput = null
+        }
+    }
+    val speechInputLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val spoken = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull().orEmpty()
+        if (result.resultCode == android.app.Activity.RESULT_OK && spoken.isNotBlank()) chatInput = spoken
+        else if (spoken.isBlank()) status = "কথা বোঝা যায়নি। আবার মাইক্রোফোনে বলুন অথবা লিখুন।"
+    }
+    val speechPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) {
+            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE, "bn-BD")
+                putExtra(RecognizerIntent.EXTRA_PROMPT, "আপনার কথা বলুন")
+            }
+            runCatching { speechInputLauncher.launch(intent) }
+                .onFailure { status = "এই ফোনে বাংলা Speech Recognition চালু করা যায়নি।" }
+        } else status = "কথা শুনতে মাইক্রোফোনের অনুমতি প্রয়োজন।"
+    }
+    fun sendChat() {
+        val message = chatInput.trim()
+        if (message.isBlank() || chatBusy) return
+        chatInput = ""
+        chatMessages.add("আপনি: " + message)
+        chatBusy = true
+        scope.launch {
+            try {
+                val answer = withContext(Dispatchers.IO) {
+                    sendChatMessage(BuildConfig.API_BASE_URL, chatMessages.toList().takeLast(10))
+                }
+                chatMessages.add("এআই: " + answer)
+                speechOutput?.let { tts ->
+                    val languageResult = tts.setLanguage(Locale.forLanguageTag("bn-BD"))
+                    if (languageResult >= TextToSpeech.LANG_AVAILABLE) tts.speak(answer, TextToSpeech.QUEUE_FLUSH, null, "bangla-ai-chat")
+                }
+            } catch (error: Exception) {
+                chatMessages.add("সমস্যা: " + (error.message ?: "এখন উত্তর পাওয়া যায়নি।"))
+            } finally {
+                chatBusy = false
+            }
+        }
+    }
 
     LaunchedEffect(mode, hasSavedVoiceProfile) {
         val profile = File(context.filesDir, "voice_profile_sample")
@@ -371,6 +432,53 @@ private fun VideoMakerScreen() {
             Text("বাংলা এআই ভিডিও মেকার", modifier = Modifier.weight(1f), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
             IconButton(onClick = { showSettings = true }, enabled = !running && !isRecording, modifier = Modifier.semantics { contentDescription = "সেটিংস খুলুন" }) {
                 Icon(Icons.Filled.Settings, contentDescription = "সেটিংস")
+            }
+        }
+
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                Text("এআই-এর সঙ্গে কথা বলুন", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text("লিখে অথবা মাইক্রোফোনে বাংলায় ও ইংরেজিতে প্রশ্ন করুন। উত্তর লেখা ও কণ্ঠে শোনানো হবে।")
+                if (chatMessages.isNotEmpty()) {
+                    Column(Modifier.fillMaxWidth().heightIn(max = 180.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        chatMessages.takeLast(10).forEach { line ->
+                            Text(line, modifier = Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite })
+                        }
+                    }
+                }
+                OutlinedTextField(
+                    value = chatInput,
+                    onValueChange = { chatInput = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("আপনার কথা বা প্রশ্ন") },
+                    placeholder = { Text("এখানে লিখুন অথবা মাইক্রোফোন চাপুন") },
+                    enabled = !chatBusy,
+                    minLines = 2,
+                    maxLines = 4
+                )
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(
+                        onClick = {
+                            if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                                val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                                    putExtra(RecognizerIntent.EXTRA_LANGUAGE, "bn-BD")
+                                    putExtra(RecognizerIntent.EXTRA_PROMPT, "আপনার কথা বলুন")
+                                }
+                                runCatching { speechInputLauncher.launch(intent) }
+                                    .onFailure { status = "এই ফোনে Speech Recognition চালু করা যায়নি।" }
+                            } else speechPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                        },
+                        modifier = Modifier.weight(1f),
+                        enabled = !chatBusy
+                    ) { Text("কথা বলুন") }
+                    Button(onClick = { sendChat() }, modifier = Modifier.weight(1f), enabled = !chatBusy && chatInput.isNotBlank()) {
+                        Text(if (chatBusy) "উত্তর আসছে" else "পাঠান")
+                    }
+                }
+                if (chatMessages.isNotEmpty()) {
+                    TextButton(onClick = { speechOutput?.stop() }) { Text("উত্তর পড়া বন্ধ করুন") }
+                }
             }
         }
 
@@ -968,6 +1076,41 @@ private fun makeTopicDraft(topic: String): String {
     }
     return listOf("আসসালামু আলাইকুম।", "আজকের ভিডিওর বিষয়: $clean।", body, "আপনার মতামত কমেন্টে জানাতে পারেন। তথ্যটি উপকারী মনে হলে অন্যদের সঙ্গেও শেয়ার করুন। ধন্যবাদ।").joinToString("\n\n")
 }
+private fun sendChatMessage(baseUrl: String, transcript: List<String>): String {
+    val messages = JSONArray()
+    transcript.forEach { line ->
+        val split = line.indexOf(": ")
+        if (split > 0) {
+            val label = line.substring(0, split)
+            val role = if (label == "আপনি") "user" else if (label == "এআই") "assistant" else ""
+            if (role.isNotEmpty()) messages.put(JSONObject().put("role", role).put("content", line.substring(split + 2)))
+        }
+    }
+    val payload = JSONObject().put("messages", messages).toString().toByteArray(Charsets.UTF_8)
+    val connection = (URL(baseUrl + "/api/chat").openConnection() as HttpURLConnection).apply {
+        requestMethod = "POST"
+        connectTimeout = 20000
+        readTimeout = 45000
+        doOutput = true
+        setRequestProperty("Content-Type", "application/json; charset=utf-8")
+    }
+    try {
+        connection.outputStream.use { it.write(payload) }
+        val code = connection.responseCode
+        val stream = if (code in 200..299) connection.inputStream else connection.errorStream
+        val body = stream?.use { it.readBytes().toString(Charsets.UTF_8) }.orEmpty()
+        if (code !in 200..299) {
+            val detail = runCatching { JSONObject(body).optString("detail") }.getOrNull().orEmpty()
+            throw IllegalStateException(detail.ifBlank { "AI সার্ভার উত্তর দেয়নি (HTTP $code)।" })
+        }
+        val answer = JSONObject(body).optString("reply").trim()
+        if (answer.isBlank()) throw IllegalStateException("AI খালি উত্তর দিয়েছে।")
+        return answer
+    } finally {
+        connection.disconnect()
+    }
+}
+
 private fun createJob(context: Context, baseUrl: String, script: String, mode: String, audioUri: Uri?, cloneConsent: Boolean, captionOffset: Float, sceneInterval: Int): JSONObject {
     val boundary = "----BanglaAI" + UUID.randomUUID().toString()
     val connection = (URL(baseUrl + "/api/jobs").openConnection() as HttpURLConnection).apply {
