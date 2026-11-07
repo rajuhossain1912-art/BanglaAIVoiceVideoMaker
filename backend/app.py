@@ -822,8 +822,8 @@ def find_openverse_image(script: str, folder: Path, model_visual_prompt: Optiona
         if license_code not in {"cc0", "pdm", "by", "by-sa"}:
             continue
         image_url = item.get("thumbnail") or item.get("url")
-        title = re.sub(r"\\s+", " ", str(item.get("title") or "Openverse image")).strip()
-        creator = re.sub(r"\\s+", " ", str(item.get("creator") or "Unknown creator")).strip()
+        title = re.sub(r"\s+", " ", str(item.get("title") or "Openverse image")).strip()
+        creator = re.sub(r"\s+", " ", str(item.get("creator") or "Unknown creator")).strip()
         if _is_unrelated_map_image(script, title):
             print(f"IMAGE_FILTER rejected=unrelated_map source=openverse title={title[:90]}", flush=True)
             continue
