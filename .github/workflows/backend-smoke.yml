@@ -43,6 +43,24 @@ jobs:
       - name: Verify Bangla and English audio transcript comparison
         run: |
           docker exec bangla-video-api python -c 'from app import _compare_script_transcript as compare; bn="বাংলাদেশের কৃষক ধান চাষ করেন"; assert compare(bn,bn)["status"]=="matched"; assert compare(bn,"বাংলাদেশের কৃষক ধান চাষ করেন।")["status"]=="matched"; assert compare(bn,"ধান চাষ করেন বাংলাদেশের কৃষক")["status"]=="mismatch"; assert compare("The farmer grows rice","The farmer grows rice")["status"]=="matched"; assert compare(bn,"")["status"]=="unavailable"; partial=compare(bn,"বাংলাদেশের কৃষক ধান কাটেন"); assert partial["status"] in ("review_required","mismatch"), partial; print("Bangla/English transcript comparison, punctuation normalization, word-order mismatch and unavailable states passed")'
+      - name: Verify subtitle timing diagnostics never claim word-level ASR alignment
+        run: |
+          docker exec bangla-video-api python - <<'PY'
+          from pathlib import Path
+          from types import SimpleNamespace
+          from unittest.mock import patch
+          import app
+          estimated, method = app.sentence_timing_spans(None, ["প্রথম বাক্য", "দ্বিতীয় বাক্য"], 10.0, return_method=True)
+          assert method == "estimated_proportional", method
+          assert len(estimated) == 2 and estimated[0][0] == 0.0 and estimated[-1][1] == 10.0, estimated
+          fake = SimpleNamespace(stderr=b"silence_start: 4.00\nsilence_end: 4.40\n")
+          with patch.object(app.subprocess, "run", return_value=fake):
+              aligned, method = app.sentence_timing_spans(Path("/tmp/audio.wav"), ["প্রথম বাক্য", "দ্বিতীয় বাক্য"], 10.0, return_method=True)
+          assert method == "audio_silence_boundaries", method
+          assert abs(aligned[0][1] - 4.2) < 0.01, aligned
+          assert app.sentence_timing_spans(None, ["একটি বাক্য"], 3.0, return_method=True)[1] == "estimated_proportional"
+          print("Subtitle timing reports distinguish silence-assisted sentence estimates from proportional estimates; neither claims ASR word timestamps")
+          PY
       - name: Verify bounded licensed image search cache
         run: |
           set -e
