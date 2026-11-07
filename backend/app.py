@@ -2806,7 +2806,7 @@ def verify_rendered_audio_against_script(video_path: Path, script: str, folder: 
     """Transcribe the final MP4 audio track and compare it with the approved script."""
     transcript = transcribe_uploaded_audio(video_path, folder, progress_callback)
     result = _compare_script_transcript(script, transcript)
-    result["transcript_preview"] = transcript[:1200]
+    result["transcript_characters"] = len(transcript)
     result["provider"] = "Cloudflare Workers AI Whisper large-v3-turbo"
     return result
 
@@ -3234,6 +3234,7 @@ def video_quality_report(job_id: str):
 
     checks = {
         "semantic_image_review": semantic_review,
+        "audio_verification": snapshot.get("audio_verification") or {"status": "unavailable", "similarity": None},
         "image_source_counts": image_source_counts,
         "file_exists": True,
         "video_track": video_stream is not None,
