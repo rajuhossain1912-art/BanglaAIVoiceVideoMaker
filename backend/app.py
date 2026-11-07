@@ -775,43 +775,41 @@ def _image_search_query_variants(keywords):
 
 
 def find_openverse_image(script: str, folder: Path, model_visual_prompt: Optional[str] = None):
-    """Try several progressively broader Openverse searches; enforce licensing and scene relevance."""
+    """Try cached Openverse searches; enforce licensing and scene relevance."""
     keywords = _image_keywords(script, model_visual_prompt)
     if not keywords:
         return None, ""
     results = []
     seen = set()
     for query in _image_search_query_variants(keywords):
-        cached_results = _image_search_cache_get("openverse", query)
-        if cached_results is not None:
-            query_results = cached_results
-        else:
+        query_results = _image_search_cache_get("openverse", query)
+        if query_results is None:
             params = urllib.parse.urlencode({
                 "q": query,
-            "license": "cc0,pdm,by,by-sa",
-            "page_size": str(IMAGE_SEARCH_CANDIDATE_LIMIT),
-            "mature": "false",
-        })
-        try:
-            request = urllib.request.Request(
-                "https://api.openverse.org/v1/images/?" + params,
-                headers={"User-Agent": "BanglaAIVoiceVideoMaker/0.4 (free educational video maker)"}
-            )
-            with urllib.request.urlopen(request, timeout=6) as response:
-                data = json.loads(response.read(1_500_000).decode("utf-8"))
-            query_results = data.get("results", [])
-            _image_search_cache_set("openverse", query, query_results)
-        try:
-            for item in query_results:
-                identity = str(item.get("id") or item.get("url") or item.get("thumbnail") or "")
-                if identity and identity not in seen:
-                    seen.add(identity)
-                    results.append(item)
-        except Exception as exc:
-            detail = str(exc)[:180]
-            if isinstance(exc, urllib.error.HTTPError):
-                detail = f"HTTP {exc.code}: {detail}"
-            print(f"IMAGE_SEARCH openverse_failed query={query[:70]} error={type(exc).__name__}: {detail}", flush=True)
+                "license": "cc0,pdm,by,by-sa",
+                "page_size": str(IMAGE_SEARCH_CANDIDATE_LIMIT),
+                "mature": "false",
+            })
+            try:
+                request = urllib.request.Request(
+                    "https://api.openverse.org/v1/images/?" + params,
+                    headers={"User-Agent": "BanglaAIVoiceVideoMaker/0.4 (free educational video maker)"}
+                )
+                with urllib.request.urlopen(request, timeout=6) as response:
+                    data = json.loads(response.read(1_500_000).decode("utf-8"))
+                query_results = data.get("results", [])
+                _image_search_cache_set("openverse", query, query_results)
+            except Exception as exc:
+                detail = str(exc)[:180]
+                if isinstance(exc, urllib.error.HTTPError):
+                    detail = f"HTTP {exc.code}: {detail}"
+                print(f"IMAGE_SEARCH openverse_failed query={query[:70]} error={type(exc).__name__}: {detail}", flush=True)
+                continue
+        for item in query_results:
+            identity = str(item.get("id") or item.get("url") or item.get("thumbnail") or "")
+            if identity and identity not in seen:
+                seen.add(identity)
+                results.append(item)
     results = sorted(
         enumerate(results),
         key=lambda pair: (_image_metadata_relevance_score(pair[1].get("title", ""), pair[1].get("tags", []), keywords), -pair[0]),
@@ -824,8 +822,8 @@ def find_openverse_image(script: str, folder: Path, model_visual_prompt: Optiona
         if license_code not in {"cc0", "pdm", "by", "by-sa"}:
             continue
         image_url = item.get("thumbnail") or item.get("url")
-        title = re.sub(r"\s+", " ", str(item.get("title") or "Openverse image")).strip()
-        creator = re.sub(r"\s+", " ", str(item.get("creator") or "Unknown creator")).strip()
+        title = re.sub(r"\\s+", " ", str(item.get("title") or "Openverse image")).strip()
+        creator = re.sub(r"\\s+", " ", str(item.get("creator") or "Unknown creator")).strip()
         if _is_unrelated_map_image(script, title):
             print(f"IMAGE_FILTER rejected=unrelated_map source=openverse title={title[:90]}", flush=True)
             continue
@@ -840,7 +838,7 @@ def find_openverse_image(script: str, folder: Path, model_visual_prompt: Optiona
 
 
 def find_contextual_image(script: str, folder: Path, model_visual_prompt: Optional[str] = None):
-    """Try Openverse then progressively broader Wikimedia searches using the scene description."""
+    """Try cached Openverse then Wikimedia searches using the scene description."""
     image, credit = find_openverse_image(script, folder, model_visual_prompt)
     if image:
         return image, credit
@@ -849,34 +847,32 @@ def find_contextual_image(script: str, folder: Path, model_visual_prompt: Option
         return None, ""
     pages_by_id = {}
     for query in _image_search_query_variants(keywords):
-        cached_pages = _image_search_cache_get("wikimedia", query)
-        if cached_pages is not None:
-            query_pages = cached_pages
-        else:
+        query_pages = _image_search_cache_get("wikimedia", query)
+        if query_pages is None:
             params = urllib.parse.urlencode({
                 "action": "query", "generator": "search",
-            "gsrsearch": "filetype:bitmap " + query,
-            "gsrnamespace": "6", "gsrlimit": str(IMAGE_SEARCH_CANDIDATE_LIMIT),
-            "prop": "categories|imageinfo", "cllimit": "20", "iiprop": "url|extmetadata",
-            "iiurlwidth": "900", "format": "json"
-        })
-        request = urllib.request.Request(
-            "https://commons.wikimedia.org/w/api.php?" + params,
-            headers={"User-Agent": "BanglaAIVoiceVideoMaker/0.4 (free educational video maker)"}
-        )
-        try:
-            with urllib.request.urlopen(request, timeout=8) as response:
-                data = json.loads(response.read(2_000_000).decode("utf-8"))
-            query_pages = data.get("query", {}).get("pages") or {}
-            _image_search_cache_set("wikimedia", query, query_pages)
-        try:
-            for page_id, page in query_pages.items():
-                pages_by_id.setdefault(str(page_id), page)
-        except Exception as exc:
-            detail = str(exc)[:180]
-            if isinstance(exc, urllib.error.HTTPError):
-                detail = f"HTTP {exc.code}: {detail}"
-            print(f"IMAGE_SEARCH wikimedia_failed query={query[:70]} error={type(exc).__name__}: {detail}", flush=True)
+                "gsrsearch": "filetype:bitmap " + query,
+                "gsrnamespace": "6", "gsrlimit": str(IMAGE_SEARCH_CANDIDATE_LIMIT),
+                "prop": "categories|imageinfo", "cllimit": "20", "iiprop": "url|extmetadata",
+                "iiurlwidth": "900", "format": "json"
+            })
+            try:
+                request = urllib.request.Request(
+                    "https://commons.wikimedia.org/w/api.php?" + params,
+                    headers={"User-Agent": "BanglaAIVoiceVideoMaker/0.4 (free educational video maker)"}
+                )
+                with urllib.request.urlopen(request, timeout=8) as response:
+                    data = json.loads(response.read(2_000_000).decode("utf-8"))
+                query_pages = data.get("query", {}).get("pages") or {}
+                _image_search_cache_set("wikimedia", query, query_pages)
+            except Exception as exc:
+                detail = str(exc)[:180]
+                if isinstance(exc, urllib.error.HTTPError):
+                    detail = f"HTTP {exc.code}: {detail}"
+                print(f"IMAGE_SEARCH wikimedia_failed query={query[:70]} error={type(exc).__name__}: {detail}", flush=True)
+                continue
+        for page_id, page in query_pages.items():
+            pages_by_id.setdefault(str(page_id), page)
     pages = list(pages_by_id.values())
     pages = sorted(
         enumerate(pages),
