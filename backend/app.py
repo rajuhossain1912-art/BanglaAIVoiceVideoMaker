@@ -3237,9 +3237,9 @@ def video_quality_report(job_id: str):
     publication_reasons.append("তৈরি অডিওকে মূল লেখার সঙ্গে মিলিয়ে প্রতিলিপি যাচাই করা হয়নি।")
     publication_reasons.append("সাবটাইটেলের বানান ও সময় অডিওর সঙ্গে আলাদাভাবে মিলিয়ে দেখা হয়নি।")
 
+    report_text = "ভিডিও পরীক্ষার প্রতিবেদন। " + summary + " "
     report_text += "প্রকাশের উপযোগিতা: " + ("প্রকাশ বন্ধ রাখা হয়েছে। " if publication_status == "blocked" else "আরও যাচাই প্রয়োজন। ")
     report_text += "কারণ: " + " ".join(publication_reasons) + " "
-    report_text = "ভিডিও পরীক্ষার প্রতিবেদন। " + summary + " "
     report_text += f"ভিডিওর দৈর্ঘ্য {round(duration, 1)} সেকেন্ড। "
     report_text += f"ফাইলের আকার {round(size_bytes / (1024 * 1024), 2)} মেগাবাইট। "
     report_text += ("ভিডিও ট্র্যাক আছে। " if video_stream else "ভিডিও ট্র্যাক নেই। ")
