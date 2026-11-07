@@ -73,25 +73,10 @@ jobs:
           path: BanglaAIVoiceVideoMaker-v${{ env.APP_VERSION_NAME }}.apk
           if-no-files-found: error
           retention-days: 90
-      - name: Publish GitHub Release with workflow token
-        id: publish_with_workflow_token
-        continue-on-error: true
+      - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          token: ${{ github.token }}
-          tag_name: v${{ env.APP_VERSION_NAME }}
-          name: Bangla AI Voice Video Maker v${{ env.APP_VERSION_NAME }}
-          target_commitish: ${{ github.sha }}
-          generate_release_notes: true
-          make_latest: true
-          files: |
-            BanglaAIVoiceVideoMaker-v${{ env.APP_VERSION_NAME }}.apk
-            BanglaAIVoiceVideoMaker-latest.apk
-      - name: Retry GitHub Release with repository release token
-        if: steps.publish_with_workflow_token.outcome == 'failure' && env.GH_RELEASE_TOKEN != ''
-        uses: softprops/action-gh-release@v2
-        with:
-          token: ${{ env.GH_RELEASE_TOKEN }}
+          token: ${{ secrets.GH_RELEASE_TOKEN != '' && secrets.GH_RELEASE_TOKEN || github.token }}
           tag_name: v${{ env.APP_VERSION_NAME }}
           name: Bangla AI Voice Video Maker v${{ env.APP_VERSION_NAME }}
           target_commitish: ${{ github.sha }}
