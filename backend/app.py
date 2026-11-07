@@ -629,7 +629,7 @@ def _image_keywords(script: str, model_visual_prompt: Optional[str] = None):
         "recognizable", "recognisable", "visible", "subject", "subjects", "main", "specific",
         "exact", "actual", "depict", "depicting", "prefer", "activity", "activities", "action",
         "actions", "objects", "current", "neighboring", "context", "narration", "unless",
-        "discussed", "working", "green", "rural", "plants", "beside", "flooded",
+        "discussed", "working", "beside", "flooded",
     }
     return list(dict.fromkeys(word for word in tokens if word not in stopwords))[:8]
 
