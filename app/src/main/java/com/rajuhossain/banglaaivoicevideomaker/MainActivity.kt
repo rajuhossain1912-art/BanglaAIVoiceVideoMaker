@@ -675,11 +675,11 @@ private fun VideoMakerScreen() {
                                 append(report.optString("report_text", "পরীক্ষার প্রতিবেদন পাওয়া যায়নি।"))
                                 val scenes = report.optJSONArray("scene_audit")
                                 if (scenes != null && scenes.length() > 0) {
-                                    append("\\n\\nদৃশ্য অনুযায়ী বিস্তারিত প্রতিবেদন। মোট দৃশ্য: ")
+                                    append("\n\nদৃশ্য অনুযায়ী বিস্তারিত প্রতিবেদন। মোট দৃশ্য: ")
                                     append(scenes.length())
                                     for (index in 0 until scenes.length()) {
                                         val scene = scenes.optJSONObject(index) ?: continue
-                                        append("\\n\\nদৃশ্য ")
+                                        append("\n\nদৃশ্য ")
                                         append(scene.optInt("scene_number", index + 1))
                                         val narration = scene.optString("narration").trim()
                                         if (narration.isNotBlank()) {
