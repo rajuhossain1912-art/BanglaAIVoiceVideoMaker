@@ -3174,7 +3174,7 @@ def chat(payload: dict):
                 last_text = safe_messages[-1]["content"].strip().lower()
                 normalized = re.sub(r"[\\s\\W_]+", "", last_text, flags=re.UNICODE)
                 greetings = {
-                    "হাইকেমনআছো", "হাইকেমনআছেন", "কেমনআছো", "কেমনআছেন",
+                    "হাইকেমনআছো", "হাইকেমনআছেন", "হায়কেমনআছো", "হায়কেমনআছো", "কেমনআছো", "কেমনআছেন",
                     "আসসালামুআলাইকুম", "সালাম", "হ্যালো", "হ্যালোবন্ধু",
                     "hello", "hellohowareyou", "howareyou", "hi", "hey",
                 }
