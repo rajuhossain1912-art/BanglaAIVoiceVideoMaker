@@ -89,6 +89,47 @@ class SceneIntervalDiagnosticsTests(unittest.TestCase):
                 "result": {"text": "   "}
             })
 
+
+    def test_whisper_parser_extracts_explicit_word_timestamps(self):
+        result = video_app._parse_cloudflare_transcription_response({
+            "success": True,
+            "result": {
+                "text": "আমি ভালো আছি",
+                "segments": [{
+                    "words": [
+                        {"word": "আমি", "start": 0.1, "end": 0.4},
+                        {"word": "ভালো", "start": 0.5, "end": 0.9},
+                        {"word": "আছি", "start": 1.0, "end": 1.3},
+                    ]
+                }]
+            }
+        }, return_details=True, offset_seconds=120.0)
+        self.assertEqual(result["text"], "আমি ভালো আছি")
+        self.assertEqual(len(result["word_timestamps"]), 3)
+        self.assertEqual(result["word_timestamps"][0]["start"], 120.1)
+        self.assertEqual(result["word_timestamps"][-1]["end"], 121.3)
+
+    def test_whisper_parser_keeps_empty_word_timestamps_when_not_provided(self):
+        result = video_app._parse_cloudflare_transcription_response({
+            "success": True,
+            "result": {"text": "কথার প্রতিলিপি"}
+        }, return_details=True)
+        self.assertEqual(result["text"], "কথার প্রতিলিপি")
+        self.assertEqual(result["word_timestamps"], [])
+
+    def test_caption_alignment_uses_asr_word_times_only_with_strong_text_match(self):
+        script = "আমি ভালো আছি"
+        timestamps = [
+            {"word": "আমি", "start": 0.1, "end": 0.4},
+            {"word": "ভালো", "start": 0.5, "end": 0.9},
+            {"word": "আছি", "start": 1.0, "end": 1.3},
+        ]
+        script_tokens = video_app._normalize_transcript_tokens(script)
+        timed_tokens = [video_app._normalize_transcript_tokens(item["word"])[0] for item in timestamps]
+        matcher = video_app.difflib.SequenceMatcher(None, script_tokens, timed_tokens, autojunk=False)
+        self.assertEqual(matcher.ratio(), 1.0)
+        self.assertEqual(len(timestamps), len(script_tokens))
+
     def test_handles_missing_image_count(self):
         result = video_app._scene_interval_diagnostics(30.0, 0, 3)
         self.assertEqual(result["expected_images"], 10)
