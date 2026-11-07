@@ -3314,8 +3314,9 @@ def video_quality_report(job_id: str):
     report_text = "ভিডিও পরীক্ষার প্রতিবেদন। " + summary + " "
     report_text += "প্রকাশের উপযোগিতা: " + ("প্রকাশ বন্ধ রাখা হয়েছে। " if publication_status == "blocked" else "আরও যাচাই প্রয়োজন। ")
     report_text += "কারণ: " + " ".join(publication_reasons) + " "
-    if audio_verification.get("similarity") is not None:
-        report_text += f"অডিও ও মূল লেখার স্বয়ংক্রিয় শব্দ-মিল {round(audio_verification[\"similarity\"] * 100)} শতাংশ। "
+    audio_similarity = audio_verification.get("similarity")
+    if audio_similarity is not None:
+        report_text += f"অডিও ও মূল লেখার স্বয়ংক্রিয় শব্দ-মিল {round(audio_similarity * 100)} শতাংশ। "
     report_text += f"ভিডিওর দৈর্ঘ্য {round(duration, 1)} সেকেন্ড। "
     report_text += f"ফাইলের আকার {round(size_bytes / (1024 * 1024), 2)} মেগাবাইট। "
     report_text += ("ভিডিও ট্র্যাক আছে। " if video_stream else "ভিডিও ট্র্যাক নেই। ")
