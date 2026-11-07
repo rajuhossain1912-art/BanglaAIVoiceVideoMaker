@@ -1260,7 +1260,17 @@ def find_pollinations_image(script: str, folder: Path, model_visual_prompt: Opti
         return target, "AI-generated with Pollinations | https://pollinations.ai"
     except Exception as exc:
         target.unlink(missing_ok=True)
-        print(f"IMAGE_PROVIDER failed provider=Pollinations-Flux error={type(exc).__name__}: {str(exc)[:140]}", flush=True)
+        cooldown_seconds = _image_provider_cooldown_seconds(exc)
+        with IMAGE_PROVIDER_COOLDOWN_LOCK:
+            IMAGE_PROVIDER_COOLDOWN_UNTIL["Pollinations-Flux"] = time.time() + cooldown_seconds
+        detail = str(exc)[:140]
+        if isinstance(exc, urllib.error.HTTPError):
+            detail = f"HTTP {exc.code}: {detail}"
+        print(
+            f"IMAGE_PROVIDER failed provider=Pollinations-Flux cooldown_seconds={cooldown_seconds} "
+            f"error={type(exc).__name__}: {detail}",
+            flush=True,
+        )
         return None, ""
 
 
@@ -1426,8 +1436,16 @@ def find_generated_image(script: str, folder: Path, model_visual_prompt: Optiona
         pollinations_image, pollinations_credit = find_pollinations_image(script, folder, model_visual_prompt)
         if not pollinations_image:
             with IMAGE_PROVIDER_COOLDOWN_LOCK:
-                IMAGE_PROVIDER_COOLDOWN_UNTIL["Pollinations-Flux"] = time.time() + 90
-            print("IMAGE_PROVIDER cooldown provider=Pollinations-Flux seconds=90 reason=no_image", flush=True)
+                cooldown_until = IMAGE_PROVIDER_COOLDOWN_UNTIL.get("Pollinations-Flux", 0)
+                if cooldown_until <= time.time():
+                    cooldown_until = time.time() + 90
+                    IMAGE_PROVIDER_COOLDOWN_UNTIL["Pollinations-Flux"] = cooldown_until
+                remaining = max(0, int(cooldown_until - time.time()))
+            print(
+                f"IMAGE_PROVIDER cooldown provider=Pollinations-Flux remaining_seconds={remaining} "
+                "reason=no_image",
+                flush=True,
+            )
     if pollinations_image:
         return pollinations_image, pollinations_credit
     from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
