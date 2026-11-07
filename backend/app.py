@@ -764,10 +764,31 @@ def _image_search_query_variants(keywords):
         str(word).lower() for word in (keywords or [])
         if re.fullmatch(r"[A-Za-z]{3,}", str(word))
     ))
+    # Keep the primary storyboard query, then add a short subject query.
+    # For common Bangladesh scenes, a few equivalent subject terms help find
+    # differently tagged licensed photographs without making the search generic.
+    subject_aliases = {
+        "farmer": ("agriculture", "farming"),
+        "rice": ("paddy", "harvest"),
+        "train": ("railway", "locomotive"),
+        "railway": ("train", "locomotive"),
+        "bus": ("transit", "passenger"),
+        "braille": ("tactile", "raised"),
+        "smartphone": ("mobile", "accessibility"),
+        "hospital": ("clinic", "doctor"),
+        "school": ("classroom", "student"),
+        "doctor": ("clinic", "patient"),
+        "flood": ("flooding", "monsoon"),
+    }
+    expanded = list(terms[:4])
+    for word in terms[:4]:
+        for alias in subject_aliases.get(word, ()):
+            if alias not in expanded:
+                expanded.append(alias)
     candidates = [
         terms,
         terms[:4],
-        terms[2:6],
+        expanded[:6] if len(expanded) > len(terms[:4]) else terms[2:6],
     ]
     queries = []
     for group in candidates:
