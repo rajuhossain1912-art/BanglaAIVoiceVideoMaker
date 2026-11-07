@@ -257,5 +257,14 @@ class SceneImageSimilarityTests(unittest.TestCase):
         self.assertIn("plants", keywords)
 
 
+    def test_specific_bangla_subject_terms_win_over_broad_country_concept(self):
+        concepts = video_app._matched_visual_concepts("বাংলাদেশের ট্রেন ও রেলস্টেশন")
+        self.assertTrue(any("passenger train" in item for item in concepts))
+        keywords = video_app._image_keywords("বাংলাদেশের ট্রেন ও রেলস্টেশন")
+        self.assertIn("train", keywords)
+        self.assertIn("railway", keywords)
+        self.assertNotIn("community", keywords)
+
+
 if __name__ == "__main__":
     unittest.main()
