@@ -130,6 +130,41 @@ jobs:
               assert len(downloaded)>=2, downloaded
               print("Openverse continues to the next relevant licensed photo after the first download fails")
           PY
+      - name: Verify Wikimedia continues after a failed photo download
+        run: |
+          set -e
+          docker exec bangla-video-api python - <<'PY'
+          import json, tempfile
+          from pathlib import Path
+          from unittest.mock import patch
+          import app
+          pages = {
+              "1": {"pageid": 1, "title": "File:Farmer rice seedlings paddy field planting.jpg", "categories": [{"title": "Category:Rice cultivation"}, {"title": "Category:Agriculture in Bangladesh"}], "imageinfo": [{"thumburl": "https://example.test/best.jpg", "extmetadata": {"LicenseShortName": {"value": "CC BY 4.0"}, "Artist": {"value": "Test"}}}]},
+              "2": {"pageid": 2, "title": "File:Farmer rice planting.jpg", "categories": [{"title": "Category:Rice cultivation"}], "imageinfo": [{"thumburl": "https://example.test/backup.jpg", "extmetadata": {"LicenseShortName": {"value": "CC0"}, "Artist": {"value": "Test"}}}]}
+          }
+          class Response:
+              def __init__(self, payload): self.payload = payload
+              def __enter__(self): return self
+              def __exit__(self, *args): return False
+              def read(self, limit=-1): return json.dumps(self.payload).encode()
+          responses = [Response({"results": []}) for _ in range(3)] + [Response({"query": {"pages": pages}}) for _ in range(3)]
+          downloaded = []
+          def fake_download(url, folder, filename, credit):
+              downloaded.append(url)
+              if len(downloaded) == 1: return None, ""
+              target = folder / "backup.jpg"
+              target.write_bytes(b"checked-test-image")
+              return target, credit
+          with tempfile.TemporaryDirectory() as tmp, \
+               patch.object(app, "_image_keywords", return_value=["farmer", "rice", "seedlings", "paddy", "field", "planting"]), \
+               patch.object(app.urllib.request, "urlopen", side_effect=responses), \
+               patch.object(app, "_download_checked_image", side_effect=fake_download), \
+               patch.object(app, "_is_unrelated_map_image", return_value=False):
+              image, credit = app.find_contextual_image("কৃষক ধান রোপণ করছেন", Path(tmp), "farmer planting rice")
+              assert image and image.name == "backup.jpg", image
+              assert len(downloaded) >= 2, downloaded
+              print("Wikimedia continues to the next relevant reusable photo after the first download fails")
+          PY
       - name: Verify licensed image search checks a broad candidate pool
         run: |
           set -e
