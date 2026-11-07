@@ -12,8 +12,6 @@ class VoiceChatTests(unittest.TestCase):
         response = io.BytesIO(json.dumps({
             "result": {"response": "আপনাকে কীভাবে সাহায্য করতে পারি?"}
         }).encode("utf-8"))
-        response.__enter__ = lambda: response
-        response.__exit__ = lambda *args: False
         with patch.dict("os.environ", {
             "CLOUDFLARE_ACCOUNT_ID": "test-account",
             "CLOUDFLARE_AI_API_TOKEN": "existing-token",
