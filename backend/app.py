@@ -2468,6 +2468,8 @@ def make_scene_backgrounds(script: str, folder: Path, progress_callback=None, du
                         )
         elif index in review_indices:
             print(f"IMAGE_REVIEW skipped scene={index + 1} reason=non_photographic_source source={review_source}", flush=True)
+        final_visual_status = scene_review_status
+        final_visual_description = scene_review_description
         duplicate_detected = any(_scene_images_too_similar(background, prior) for prior in backgrounds)
         if duplicate_detected:
             duplicate_retry_action = "retry_new_photo_composition"
@@ -2480,6 +2482,8 @@ def make_scene_backgrounds(script: str, folder: Path, progress_callback=None, du
             )
             if any(_scene_images_too_similar(distinct_background, prior) for prior in backgrounds):
                 duplicate_retry_action = "topic_graphic_after_duplicate_retry"
+                final_visual_status = "topic_graphic_unreviewed"
+                final_visual_description = ""
                 print(f"IMAGE_SCENE repeated_image index={index + 1} action=use_topic_graphic_after_retry", flush=True)
                 background = make_background(
                     scene_text, scene_dir, force_topic_graphic=True,
@@ -2500,16 +2504,22 @@ def make_scene_backgrounds(script: str, folder: Path, progress_callback=None, du
                     if distinct_review is None:
                         semantic_review["duplicate_retry_unavailable"] += 1
                         duplicate_retry_action = "accepted_distinct_photo_unverified"
+                        final_visual_status = "unavailable"
+                        final_visual_description = ""
                         print(f"IMAGE_REVIEW duplicate_retry=unavailable scene={index + 1} action=keep_distinct_photo", flush=True)
                         background = distinct_background
                     elif distinct_review["match"]:
                         semantic_review["duplicate_retry_matched"] += 1
                         duplicate_retry_action = "accepted_distinct_photo"
+                        final_visual_status = "matched"
+                        final_visual_description = str(distinct_review.get("description") or "")
                         print(f"IMAGE_REVIEW duplicate_retry=match scene={index + 1} action=accept", flush=True)
                         background = distinct_background
                     else:
                         semantic_review["duplicate_retry_mismatched"] += 1
                         duplicate_retry_action = "topic_graphic_after_duplicate_retry"
+                        final_visual_status = "topic_graphic_unreviewed"
+                        final_visual_description = ""
                         print(f"IMAGE_REVIEW duplicate_retry=mismatch scene={index + 1} action=use_topic_graphic", flush=True)
                         background = make_background(
                             scene_text, scene_dir, force_topic_graphic=True,
@@ -2519,8 +2529,12 @@ def make_scene_backgrounds(script: str, folder: Path, progress_callback=None, du
                     background = distinct_background
                     if _should_semantically_review_image_source(distinct_source):
                         duplicate_retry_action = "accepted_distinct_photo_unreviewed"
+                        final_visual_status = "not_reviewed"
+                        final_visual_description = ""
                     else:
                         duplicate_retry_action = "accepted_distinct_visual"
+                        final_visual_status = "not_reviewed"
+                        final_visual_description = ""
                     print(f"IMAGE_SCENE repeated_image index={index + 1} action=accepted_new_composition", flush=True)
         try:
             source_info = json.loads((scene_dir / "scene-source.json").read_text(encoding="utf-8"))
@@ -2537,6 +2551,8 @@ def make_scene_backgrounds(script: str, folder: Path, progress_callback=None, du
             "image_source": source_name,
             "semantic_status": scene_review_status,
             "semantic_description": scene_review_description[:240],
+            "final_visual_status": final_visual_status,
+            "final_visual_description": final_visual_description[:240],
             "duplicate_detected": duplicate_detected,
             "duplicate_retry_action": duplicate_retry_action,
         })
