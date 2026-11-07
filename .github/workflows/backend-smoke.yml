@@ -96,6 +96,10 @@ jobs:
         run: |
           set -e
           docker exec bangla-video-api python -c 'from app import _image_keywords; terms=_image_keywords("বাংলায় একজন কৃষক জমিতে চারা রোপণ করছেন", "A recognizable person showing a realistic documentary photograph of a farmer planting rice seedlings in a flooded paddy field, clear visible subject, natural light"); assert all(word in terms for word in ("farmer","rice","seedlings","paddy","field")), terms; generic=("photographic","photorealistic","documentary","recognizable","realistic","person","showing","visible","subject","natural","light","clear"); assert not any(word in terms for word in generic), terms; print("Licensed image search removes generic visual-style words and prioritizes concrete storyboard subjects:", terms)'
+      - name: Verify licensed image search broadens zero-result queries
+        run: |
+          set -e
+          docker exec bangla-video-api python -c 'from app import _image_search_query_variants as variants; q=variants(["farmer","rice","seedlings","paddy","field","planting"]); assert q[0]=="farmer rice seedlings paddy", q; assert "farmer rice" in q and "seedlings paddy" in q and "field planting" in q, q; assert len(q)==5 and len(set(q))==5, q; print("Licensed photo search tries a full scene query and four narrower subject queries:", q)'
       - name: Verify licensed image search checks a broad candidate pool
         run: |
           set -e
