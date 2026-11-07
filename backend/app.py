@@ -33,6 +33,11 @@ AI_IMAGE_PROVIDER_TIMEOUT = max(12, min(45, int(os.getenv("AI_IMAGE_PROVIDER_TIM
 ALLOW_LICENSED_IMAGE_FALLBACK = os.getenv("ALLOW_LICENSED_IMAGE_FALLBACK", "true").lower() in ("1", "true", "yes")
 # Search a wider but bounded candidate pool so relevant documentary photos are less likely to be missed.
 IMAGE_SEARCH_CANDIDATE_LIMIT = 20
+# Reuse successful public image-search responses across scenes and renders.
+IMAGE_SEARCH_CACHE_TTL_SECONDS = 6 * 60 * 60
+IMAGE_SEARCH_CACHE_MAX_ENTRIES = 128
+_IMAGE_SEARCH_CACHE = {}
+_IMAGE_SEARCH_CACHE_LOCK = threading.Lock()
 WORK_DIR = Path(os.getenv("WORK_DIR", "/tmp/bangla-video-jobs"))
 WORK_DIR.mkdir(parents=True, exist_ok=True)
 MAX_SCRIPT_CHARS = int(os.getenv("MAX_SCRIPT_CHARS", "50000"))
@@ -719,6 +724,37 @@ def _download_checked_image(image_url: str, folder: Path, filename: str, credit:
         return None, ""
 
 
+def _image_search_cache_get(source: str, query: str):
+    """Return a fresh cached provider response, including a successful empty result."""
+    key = (str(source), str(query))
+    now = time.monotonic()
+    with _IMAGE_SEARCH_CACHE_LOCK:
+        entry = _IMAGE_SEARCH_CACHE.get(key)
+        if not entry:
+            return None
+        expires_at, payload = entry
+        if expires_at <= now:
+            _IMAGE_SEARCH_CACHE.pop(key, None)
+            return None
+        if isinstance(payload, dict):
+            return dict(payload)
+        if isinstance(payload, list):
+            return list(payload)
+        return payload
+
+
+def _image_search_cache_set(source: str, query: str, payload):
+    """Cache only successful provider responses and keep memory use strictly bounded."""
+    key = (str(source), str(query))
+    with _IMAGE_SEARCH_CACHE_LOCK:
+        _IMAGE_SEARCH_CACHE[key] = (
+            time.monotonic() + IMAGE_SEARCH_CACHE_TTL_SECONDS,
+            dict(payload) if isinstance(payload, dict) else list(payload) if isinstance(payload, list) else payload,
+        )
+        while len(_IMAGE_SEARCH_CACHE) > IMAGE_SEARCH_CACHE_MAX_ENTRIES:
+            _IMAGE_SEARCH_CACHE.pop(next(iter(_IMAGE_SEARCH_CACHE)))
+
+
 def _image_search_query_variants(keywords):
     """Return a few progressively broader searches without losing scene-specific terms."""
     terms = list(dict.fromkeys(
@@ -746,8 +782,12 @@ def find_openverse_image(script: str, folder: Path, model_visual_prompt: Optiona
     results = []
     seen = set()
     for query in _image_search_query_variants(keywords):
-        params = urllib.parse.urlencode({
-            "q": query,
+        cached_results = _image_search_cache_get("openverse", query)
+        if cached_results is not None:
+            query_results = cached_results
+        else:
+            params = urllib.parse.urlencode({
+                "q": query,
             "license": "cc0,pdm,by,by-sa",
             "page_size": str(IMAGE_SEARCH_CANDIDATE_LIMIT),
             "mature": "false",
@@ -759,7 +799,10 @@ def find_openverse_image(script: str, folder: Path, model_visual_prompt: Optiona
             )
             with urllib.request.urlopen(request, timeout=6) as response:
                 data = json.loads(response.read(1_500_000).decode("utf-8"))
-            for item in data.get("results", []):
+            query_results = data.get("results", [])
+            _image_search_cache_set("openverse", query, query_results)
+        try:
+            for item in query_results:
                 identity = str(item.get("id") or item.get("url") or item.get("thumbnail") or "")
                 if identity and identity not in seen:
                     seen.add(identity)
@@ -806,8 +849,12 @@ def find_contextual_image(script: str, folder: Path, model_visual_prompt: Option
         return None, ""
     pages_by_id = {}
     for query in _image_search_query_variants(keywords):
-        params = urllib.parse.urlencode({
-            "action": "query", "generator": "search",
+        cached_pages = _image_search_cache_get("wikimedia", query)
+        if cached_pages is not None:
+            query_pages = cached_pages
+        else:
+            params = urllib.parse.urlencode({
+                "action": "query", "generator": "search",
             "gsrsearch": "filetype:bitmap " + query,
             "gsrnamespace": "6", "gsrlimit": str(IMAGE_SEARCH_CANDIDATE_LIMIT),
             "prop": "categories|imageinfo", "cllimit": "20", "iiprop": "url|extmetadata",
@@ -820,7 +867,10 @@ def find_contextual_image(script: str, folder: Path, model_visual_prompt: Option
         try:
             with urllib.request.urlopen(request, timeout=8) as response:
                 data = json.loads(response.read(2_000_000).decode("utf-8"))
-            for page_id, page in (data.get("query", {}).get("pages") or {}).items():
+            query_pages = data.get("query", {}).get("pages") or {}
+            _image_search_cache_set("wikimedia", query, query_pages)
+        try:
+            for page_id, page in query_pages.items():
                 pages_by_id.setdefault(str(page_id), page)
         except Exception as exc:
             detail = str(exc)[:180]
