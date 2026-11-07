@@ -2019,12 +2019,16 @@ def _review_generated_image_against_scene(image_path: Path, narration: str, visu
         visual_text = re.sub(r"\s+", " ", str(visual_prompt or "")).strip()[:220]
         # Keep the primary VQA request deliberately short. Retry once with simpler
         # wording when Workers AI returns an empty or unparseable answer.
+        # Moondream is more reliable when the comparison target is an explicit
+        # English visual description. Bengali narration remains supporting context;
+        # do not make the vision model infer the scene from Bengali text alone.
+        comparison_text = visual_text or narration_text
         questions = [
-            "Does this image clearly depict the following scene: " + narration_text
-            + "? Intended visual: " + visual_text
-            + ". Reply with exactly MATCH or MISMATCH. Generic or unrelated images are MISMATCH.",
-            "Look at the image. Is its main visible subject clearly the same as this scene: "
-            + narration_text + "? Answer only MATCH or MISMATCH.",
+            "Look at the image. Does it clearly show this scene: " + comparison_text
+            + "? Bengali narration context: " + narration_text[:120]
+            + ". Reply with exactly MATCH or MISMATCH. Judge the visible subject and action, not text.",
+            "Compare the visible image with this scene description: " + comparison_text
+            + ". Is the main subject or action clearly shown? Answer only MATCH or MISMATCH.",
         ]
         model_path = urllib.parse.quote(model, safe="@/-")
         raw = ""
