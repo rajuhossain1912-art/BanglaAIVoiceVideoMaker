@@ -671,8 +671,58 @@ private fun VideoMakerScreen() {
                     scope.launch {
                         try {
                             val report = withContext(Dispatchers.IO) { getVideoReport(baseUrl, currentJobId) }
-                            reportText = report.optString("report_text", "পরীক্ষার প্রতিবেদন পাওয়া যায়নি।")
-                            status = "ভিডিও পরীক্ষা সম্পন্ন হয়েছে। নিচের প্রতিবেদন TalkBack দিয়ে পড়ুন।"
+                            reportText = buildString {
+                                append(report.optString("report_text", "পরীক্ষার প্রতিবেদন পাওয়া যায়নি।"))
+                                val scenes = report.optJSONArray("scene_audit")
+                                if (scenes != null && scenes.length() > 0) {
+                                    append("\\n\\nদৃশ্য অনুযায়ী বিস্তারিত প্রতিবেদন। মোট দৃশ্য: ")
+                                    append(scenes.length())
+                                    for (index in 0 until scenes.length()) {
+                                        val scene = scenes.optJSONObject(index) ?: continue
+                                        append("\\n\\nদৃশ্য ")
+                                        append(scene.optInt("scene_number", index + 1))
+                                        val narration = scene.optString("narration").trim()
+                                        if (narration.isNotBlank()) {
+                                            append("। বর্ণনা: ")
+                                            append(narration)
+                                        }
+                                        val visual = scene.optString("visual_description").trim()
+                                        if (visual.isNotBlank()) {
+                                            append("। ছবির পরিকল্পনা: ")
+                                            append(visual)
+                                        }
+                                        val source = when (scene.optString("image_source")) {
+                                            "ai_generated" -> "কৃত্রিম বুদ্ধিমত্তায় তৈরি ছবি"
+                                            "licensed_contextual" -> "লাইসেন্সযুক্ত প্রাসঙ্গিক ছবি"
+                                            "licensed_contextual_after_rejected_ai" -> "বিকল্প লাইসেন্সযুক্ত ছবি"
+                                            "topic_graphic" -> "বিষয়ভিত্তিক গ্রাফিক"
+                                            else -> "উৎস অজানা"
+                                        }
+                                        append("। ছবির উৎস: ")
+                                        append(source)
+                                        val matchStatus = when (scene.optString("semantic_status")) {
+                                            "matched" -> "ছবির সঙ্গে বিষয়ের মিল পাওয়া গেছে"
+                                            "retry_matched" -> "নতুন ছবিতে বিষয়ের মিল পাওয়া গেছে"
+                                            "mismatched" -> "ছবির সঙ্গে বিষয়ের অমিল পাওয়া গেছে"
+                                            "retry_mismatched" -> "নতুন ছবিতেও বিষয়ের অমিল পাওয়া গেছে"
+                                            "unavailable" -> "ছবির মিল যাচাই করা যায়নি"
+                                            "retry_unavailable" -> "বিকল্প ছবির মিল যাচাই করা যায়নি"
+                                            else -> "ছবির বিষয়বস্তু যাচাই করা হয়নি"
+                                        }
+                                        append("। যাচাই: ")
+                                        append(matchStatus)
+                                        if (scene.optBoolean("duplicate_detected")) {
+                                            append("। আগের দৃশ্যের সঙ্গে একই রকম ছবি ধরা পড়েছিল")
+                                            when (scene.optString("duplicate_retry_action")) {
+                                                "accepted_distinct_photo" -> append("। বিকল্প আলাদা ছবি নেওয়া হয়েছে")
+                                                "topic_graphic_after_duplicate_retry" -> append("। বিকল্প চেষ্টা করেও মিল থাকায় বিষয়ভিত্তিক গ্রাফিক নেওয়া হয়েছে")
+                                                else -> append("। বিকল্প ছবি নেওয়ার চেষ্টা হয়েছে")
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            status = "ভিডিও পরীক্ষা সম্পন্ন হয়েছে। নিচের সম্পূর্ণ প্রতিবেদন TalkBack দিয়ে পড়ুন।"
                         } catch (e: Exception) {
                             reportText = "ভিডিও পরীক্ষা করা যায়নি: " + (e.message ?: "অজানা সমস্যা")
                             status = reportText
