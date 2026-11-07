@@ -68,8 +68,8 @@ jobs:
           import app
           farmer = app._image_search_query_variants(["farmer", "rice", "field", "harvesting"])
           assert farmer[0] == "farmer rice field harvesting", farmer
-          assert farmer[1] == "farmer rice field harvesting" or farmer[1] == "farmer rice field harvesting"[:0] or farmer[1] == "farmer rice field harvesting", farmer
-          assert any("agriculture" in query and "paddy" in query for query in farmer), farmer
+          assert len(farmer) == 2, farmer
+          assert "agriculture" in farmer[1] and "paddy" in farmer[1], farmer
           train = app._image_search_query_variants(["train", "railway", "station"])
           assert any("locomotive" in query for query in train), train
           print("Licensed photo query variants preserve original scene terms and add relevant subject synonyms")
