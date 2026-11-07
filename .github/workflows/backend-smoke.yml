@@ -58,6 +58,15 @@ jobs:
               sent = json.loads(request.data.decode("utf-8"))
               assert sent["messages"][-1]["content"] == "তুমি কী করতে পারো?", sent
           print("Voice chat uses the existing Cloudflare token and returns the model reply")
+          with patch.dict(os.environ, {"CLOUDFLARE_ACCOUNT_ID": "test-account", "CLOUDFLARE_AI_API_TOKEN": "existing-token"}), patch.object(
+              app.urllib.request, "urlopen",
+              side_effect=app.urllib.error.HTTPError("https://api.cloudflare.com", 429, "Too Many Requests", {}, None)
+          ) as mocked:
+              result = app.chat({"messages": [{"role": "user", "content": "হায় কেমন আছো"}]})
+              assert result["provider"] == "অফলাইন বিকল্প উত্তর", result
+              assert "আমি ভালো আছি" in result["reply"], result
+              assert mocked.call_count == 1, mocked.call_count
+          print("Cloudflare 429 greeting fallback responds locally and stops retrying rate-limited models")
           PY
       - name: Verify Bangla and English audio transcript comparison
         run: |
