@@ -1279,7 +1279,7 @@ def _image_provider_cooldown_seconds(error=None):
         if error.code == 400:
             return 180
         return 60
-    if isinstance(error, (TimeoutError, socket.timeout)):
+    if isinstance(error, TimeoutError):
         return 90
     if error is None:
         return 90
