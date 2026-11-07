@@ -3211,6 +3211,34 @@ def video_quality_report(job_id: str):
         summary = "প্রাথমিক প্রযুক্তিগত পরীক্ষা সফল। ভিডিও ও অডিও ট্র্যাক এবং ফাইলের দৈর্ঘ্য পাওয়া গেছে। দৃশ্যের উজ্জ্বলতা পরীক্ষা করা হয়েছে; তবে দৃশ্য ও সাবটাইটেলের বিষয়বস্তু শতভাগ সঠিক কি না, এই পরীক্ষা তা নিশ্চিত করে না।"
         overall = "passed_with_limits"
 
+    # A technically valid MP4 is not automatically safe to publish. Until the
+    # actual narration is independently transcribed and captions are checked,
+    # keep the publication decision fail-closed and explain what remains unknown.
+    semantic_mismatches = (
+        semantic_review["mismatched"]
+        + semantic_review["retry_mismatched"]
+        + semantic_review["duplicate_retry_mismatched"]
+    )
+    publication_reasons = []
+    if semantic_mismatches:
+        publication_status = "blocked"
+        publication_reasons.append("এক বা একাধিক ছবির সঙ্গে বর্ণনার অমিল পাওয়া গেছে।")
+    elif overall == "problem" or (
+        dark_sample_count is not None
+        and visual_sample_count
+        and dark_sample_count / visual_sample_count >= 0.5
+    ):
+        publication_status = "blocked"
+        publication_reasons.append("ভিডিওর প্রযুক্তিগত বা দৃশ্যমান সমস্যার কারণে প্রকাশের আগে সংশোধন দরকার।")
+    else:
+        publication_status = "review_required"
+    if semantic_review["reviewed"] < (image_count or 0) or semantic_review["unavailable"]:
+        publication_reasons.append("সব পটভূমির ছবির অর্থগত মিল যাচাই করা হয়নি।")
+    publication_reasons.append("তৈরি অডিওকে মূল লেখার সঙ্গে মিলিয়ে প্রতিলিপি যাচাই করা হয়নি।")
+    publication_reasons.append("সাবটাইটেলের বানান ও সময় অডিওর সঙ্গে আলাদাভাবে মিলিয়ে দেখা হয়নি।")
+
+    report_text += "প্রকাশের উপযোগিতা: " + ("প্রকাশ বন্ধ রাখা হয়েছে। " if publication_status == "blocked" else "আরও যাচাই প্রয়োজন। ")
+    report_text += "কারণ: " + " ".join(publication_reasons) + " "
     report_text = "ভিডিও পরীক্ষার প্রতিবেদন। " + summary + " "
     report_text += f"ভিডিওর দৈর্ঘ্য {round(duration, 1)} সেকেন্ড। "
     report_text += f"ফাইলের আকার {round(size_bytes / (1024 * 1024), 2)} মেগাবাইট। "
@@ -3270,6 +3298,8 @@ def video_quality_report(job_id: str):
     return {
         "job_id": job_id,
         "overall": overall,
+        "publication_status": publication_status,
+        "publication_reasons": publication_reasons,
         "summary": summary,
         "report_text": report_text,
         "checks": checks,
