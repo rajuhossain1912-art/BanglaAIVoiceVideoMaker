@@ -3078,6 +3078,70 @@ def render(job_id: str, script: str, mode: str, audio_path: Optional[Path], capt
                 pass
 
 
+@app.post("/api/chat")
+def chat(payload: dict):
+    """Short Bangla/English voice-chat turns using the already configured Cloudflare AI token."""
+    messages = payload.get("messages", [])
+    if not isinstance(messages, list) or not messages:
+        raise HTTPException(400, "কথা বা প্রশ্ন পাঠান।")
+    safe_messages = []
+    for item in messages[-10:]:
+        if not isinstance(item, dict):
+            continue
+        role = item.get("role")
+        content = str(item.get("content", "")).strip()
+        if role not in ("user", "assistant") or not content:
+            continue
+        if len(content) > 3000:
+            raise HTTPException(413, "একটি বার্তা সর্বোচ্চ ৩০০০ অক্ষরের হতে পারবে।")
+        safe_messages.append({"role": role, "content": content})
+    if not safe_messages or safe_messages[-1]["role"] != "user":
+        raise HTTPException(400, "সর্বশেষ বার্তাটি ব্যবহারকারীর কথা হতে হবে।")
+    account_id = os.getenv("CLOUDFLARE_ACCOUNT_ID", "").strip()
+    api_token = os.getenv("CLOUDFLARE_AI_API_TOKEN", os.getenv("CLOUDFLARE_API_TOKEN", "")).strip()
+    if not account_id or not api_token:
+        raise HTTPException(503, "আগের AI সংযোগের Token পাওয়া যাচ্ছে না। সার্ভারের সেটিংস পরীক্ষা করুন।")
+    models = [
+        os.getenv("CLOUDFLARE_AI_MODEL", "@cf/meta/llama-3.2-3b-instruct").strip(),
+        "@cf/qwen/qwen3-30b-a3b-fp8",
+        "@cf/google/gemma-4-26b-a4b-it",
+    ]
+    system_message = {
+        "role": "system",
+        "content": (
+            "You are the conversational assistant inside Bangla AI Voice Video Maker. "
+            "Speak naturally and helpfully in Bangla by default. If the user speaks English, answer in English. "
+            "Understand Banglish and mixed Bangla-English. Keep spoken answers concise, clear, and easy for a screen reader. "
+            "Do not use markdown tables, emojis, or decorative symbols. Never claim to perform actions you did not perform."
+        ),
+    }
+    for model in dict.fromkeys(x for x in models if x):
+        try:
+            body = json.dumps({
+                "messages": [system_message] + safe_messages,
+                "temperature": 0.35,
+                "max_tokens": 700,
+                **({"chat_template_kwargs": {"enable_thinking": False}} if "gemma-4" in model else {}),
+            }).encode("utf-8")
+            model_path = urllib.parse.quote(model, safe="@/-")
+            request = urllib.request.Request(
+                f"https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/run/{model_path}",
+                data=body,
+                headers={"Authorization": "Bearer " + api_token, "Content-Type": "application/json", "User-Agent": "BanglaAIVoiceVideoMaker/0.9"},
+                method="POST",
+            )
+            with urllib.request.urlopen(request, timeout=18) as response:
+                data = json.loads(response.read(120_000).decode("utf-8"))
+            result = data.get("result") or {}
+            answer = result.get("response") or result.get("choices", [{}])[0].get("message", {}).get("content", "")
+            answer = str(answer).strip()
+            if answer:
+                return {"reply": answer, "model": model, "provider": "Cloudflare Workers AI"}
+        except Exception as exc:
+            print(f"VOICE_CHAT fallback=next_model model={model} error={type(exc).__name__}: {str(exc)[:160]}", flush=True)
+    raise HTTPException(503, "এই মুহূর্তে AI উত্তর দিতে পারছে না। কিছুক্ষণ পর আবার কথা বলুন।")
+
+
 @app.get("/")
 def root():
     return {"name": "Bangla AI Voice Video Maker API", "status": "ok", "docs": "/docs"}
