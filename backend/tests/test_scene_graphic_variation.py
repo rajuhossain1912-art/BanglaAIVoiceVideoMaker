@@ -256,6 +256,23 @@ class SceneImageSimilarityTests(unittest.TestCase):
         self.assertIn("rural", keywords)
         self.assertIn("plants", keywords)
 
+    def test_image_keywords_remove_generic_generation_prompt_terms(self):
+        keywords = video_app._image_keywords(
+            "একজন কৃষক ধানক্ষেতে কাজ করছেন",
+            "One coherent documentary photograph, vertical 9:16, for a Bangladeshi educational video. "
+            "Depict the exact real-world subject and physical action stated in this scene: "
+            "farmer harvesting rice in a field. Show the actual named object, believable authentic "
+            "materials, environmental details, natural light, and a clear camera viewpoint."
+        )
+        self.assertIn("farmer", keywords)
+        self.assertIn("harvesting", keywords)
+        self.assertIn("rice", keywords)
+        self.assertNotIn("documentary", keywords)
+        self.assertNotIn("educational", keywords)
+        self.assertNotIn("world", keywords)
+        self.assertNotIn("materials", keywords)
+        self.assertNotIn("viewpoint", keywords)
+
 
     def test_image_search_cache_reuses_successful_empty_results(self):
         with patch.object(video_app, "_IMAGE_SEARCH_CACHE", {}), \\
