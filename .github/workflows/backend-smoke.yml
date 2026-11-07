@@ -52,6 +52,34 @@ jobs:
         run: |
           set -e
           docker exec bangla-video-api python -c 'import tempfile; from pathlib import Path; import app; original_ai=app.find_generated_image; original_licensed=app.find_contextual_image; app.find_generated_image=lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("AI provider called for forced topic graphic")); app.find_contextual_image=lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("licensed provider called for forced topic graphic")); temp=Path(tempfile.mkdtemp()); result=app.make_background("বাসস্ট্যান্ডে যাত্রীরা বাসের জন্য অপেক্ষা করছেন", temp, force_topic_graphic=True, variation_seed=2); assert result.is_file(), result; print("Forced topic graphic is deterministic and makes no external image-provider calls")'
+      - name: Verify rejected AI photos can recover with licensed contextual photos
+        run: |
+          set -e
+          docker exec bangla-video-api python - <<'PY'
+          import json, tempfile
+          from pathlib import Path
+          from PIL import Image
+          import app
+          folder = Path(tempfile.mkdtemp())
+          candidate = folder / "licensed-candidate.jpg"
+          Image.new("RGB", (160, 240), (95, 145, 105)).save(candidate)
+          original = app.find_contextual_image
+          try:
+              app.find_contextual_image = lambda *args, **kwargs: (candidate, "Licensed test photo")
+              output = app.make_background(
+                  "একজন কৃষক ধানক্ষেতে কাজ করছেন",
+                  folder,
+                  "A Bangladeshi farmer working in a rice paddy field",
+                  force_licensed_contextual=True,
+              )
+              metadata = json.loads((folder / "scene-source.json").read_text(encoding="utf-8"))
+              assert output.is_file(), output
+              assert metadata["source"] == "licensed_contextual", metadata
+              assert metadata["provider"] == "openverse_or_wikimedia", metadata
+              print("Rejected AI photo recovery selects and records a licensed contextual photo before topic-graphic fallback")
+          finally:
+              app.find_contextual_image = original
+          PY
       - name: Verify scene-aware visual planning
         run: |
           set -e
