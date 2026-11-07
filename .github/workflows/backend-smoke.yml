@@ -402,6 +402,45 @@ jobs:
         run: |
           set -e
           docker exec bangla-video-api python -c 'from app import _should_review_duplicate_retry as should; selected={0,2}; assert should(0,selected,"ai_generated"); assert should(2,selected,"licensed_contextual"); assert not should(1,selected,"ai_generated"); assert not should(0,selected,"topic_graphic"); assert not should(0,selected,"unknown"); print("Duplicate replacement photos are semantically reviewed only for selected photographic scenes")'
+      - name: Verify licensed recovery reports its verified semantic result
+        run: |
+          set -e
+          docker exec bangla-video-api python - <<'PY'
+          import json, tempfile
+          from pathlib import Path
+          from unittest.mock import patch
+          from PIL import Image
+          import app
+          root = Path(tempfile.mkdtemp())
+          calls = {"background": 0, "review": 0}
+          def fake_background(script, folder, model_visual_prompt=None, **kwargs):
+              calls["background"] += 1
+              folder.mkdir(parents=True, exist_ok=True)
+              index = calls["background"]
+              image = folder / f"background-{index}.png"
+              Image.new("RGB", (120, 180), (index * 55, 30 + index * 20, 70)).save(image)
+              source = "licensed_contextual" if kwargs.get("force_licensed_contextual") else "ai_generated"
+              (folder / "scene-source.json").write_text(json.dumps({"source": source}), encoding="utf-8")
+              return image
+          def fake_review(*args, **kwargs):
+              calls["review"] += 1
+              if calls["review"] <= 2:
+                  return {"match": False, "description": "unrelated landscape"}
+              return {"match": True, "description": "farmer working in a rice field"}
+          with patch.object(app, "_plan_scene_visual_prompts", return_value=["farmer in rice field"]), \
+               patch.object(app, "make_background", side_effect=fake_background), \
+               patch.object(app, "_review_generated_image_against_scene", side_effect=fake_review):
+              backgrounds, scenes, summary = app.make_scene_backgrounds(
+                  "একজন কৃষক ধানক্ষেতে কাজ করছেন", root, duration=5, scene_interval=5
+              )
+          audit = json.loads((root / "scene-audit.json").read_text(encoding="utf-8"))
+          assert len(backgrounds) == 1 and len(audit) == 1, audit
+          assert audit[0]["image_source"] == "licensed_contextual", audit
+          assert audit[0]["semantic_status"] == "retry_matched", audit
+          assert audit[0]["semantic_description"] == "farmer working in a rice field", audit
+          assert summary["retry_matched"] == 1, summary
+          print("Verified licensed recovery is reported as matched, not as the rejected retry's mismatch")
+          PY
       - name: Show backend logs on failure
         if: failure()
         run: docker logs bangla-video-api || true
