@@ -131,7 +131,7 @@ private fun VideoMakerScreen() {
     DisposableEffect(context) {
         val engine = TextToSpeech(context) { result ->
             if (result == TextToSpeech.SUCCESS) {
-                speechOutput?.language = Locale.forLanguageTag("bn-BD")
+                status = "বাংলা কণ্ঠে উত্তর দেওয়ার ব্যবস্থা প্রস্তুত।"
             }
         }
         speechOutput = engine
