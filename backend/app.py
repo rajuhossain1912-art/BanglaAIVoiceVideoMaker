@@ -2382,6 +2382,9 @@ def make_scene_backgrounds(script: str, folder: Path, progress_callback=None, du
         # contextual photograph. Local topic graphics cannot pass a vision comparison,
         # so reviewing them would waste the limited vision-model allocation.
         scene_review_status = "not_reviewed"
+        duplicate_detected = False
+        duplicate_retry_action = "not_needed"
+        scene_review_description = ""
         source_info_for_review = {}
         try:
             source_info_for_review = json.loads((scene_dir / "scene-source.json").read_text(encoding="utf-8"))
@@ -2396,9 +2399,11 @@ def make_scene_backgrounds(script: str, folder: Path, progress_callback=None, du
                 semantic_review["unavailable"] += 1
             elif review["match"]:
                 scene_review_status = "matched"
+                scene_review_description = str(review.get("description") or "")
                 semantic_review["matched"] += 1
             else:
                 scene_review_status = "mismatched"
+                scene_review_description = str(review.get("description") or "")
                 semantic_review["mismatched"] += 1
                 semantic_review["retried"] += 1
                 print(f"IMAGE_REVIEW action=regenerate scene={index + 1}", flush=True)
@@ -2461,7 +2466,9 @@ def make_scene_backgrounds(script: str, folder: Path, progress_callback=None, du
                         )
         elif index in review_indices:
             print(f"IMAGE_REVIEW skipped scene={index + 1} reason=non_photographic_source source={review_source}", flush=True)
-        if any(_scene_images_too_similar(background, prior) for prior in backgrounds):
+        duplicate_detected = any(_scene_images_too_similar(background, prior) for prior in backgrounds)
+        if duplicate_detected:
+            duplicate_retry_action = "retry_new_photo_composition"
             print(f"IMAGE_SCENE repeated_image index={index + 1} action=try_new_photo_composition", flush=True)
             distinct_prompt = _distinct_scene_retry_prompt(scene_visual_prompt, scene_text)
             distinct_background = make_background(
@@ -2470,6 +2477,7 @@ def make_scene_backgrounds(script: str, folder: Path, progress_callback=None, du
                 scene_index=index + 1
             )
             if any(_scene_images_too_similar(distinct_background, prior) for prior in backgrounds):
+                duplicate_retry_action = "topic_graphic_after_duplicate_retry"
                 print(f"IMAGE_SCENE repeated_image index={index + 1} action=use_topic_graphic_after_retry", flush=True)
                 background = make_background(
                     scene_text, scene_dir, force_topic_graphic=True,
@@ -2504,6 +2512,7 @@ def make_scene_backgrounds(script: str, folder: Path, progress_callback=None, du
                         )
                 else:
                     background = distinct_background
+                    duplicate_retry_action = "accepted_distinct_photo"
                     print(f"IMAGE_SCENE repeated_image index={index + 1} action=accepted_new_composition", flush=True)
         try:
             source_info = json.loads((scene_dir / "scene-source.json").read_text(encoding="utf-8"))
@@ -2516,8 +2525,12 @@ def make_scene_backgrounds(script: str, folder: Path, progress_callback=None, du
         scene_audit.append({
             "scene_number": index + 1,
             "narration": str(scene_text)[:500],
+            "visual_description": str(scene_visual_prompt or "")[:500],
             "image_source": source_name,
             "semantic_status": scene_review_status,
+            "semantic_description": scene_review_description[:240],
+            "duplicate_detected": duplicate_detected,
+            "duplicate_retry_action": duplicate_retry_action,
         })
         backgrounds.append(background)
     try:
