@@ -61,6 +61,19 @@ jobs:
           app._IMAGE_SEARCH_CACHE.clear()
           print("Licensed image cache passed: successful empty results, expiry, and bounded entry count")
           PY
+      - name: Verify licensed photo searches include subject synonyms
+        run: |
+          set -e
+          docker exec bangla-video-api python - <<'PY'
+          import app
+          farmer = app._image_search_query_variants(["farmer", "rice", "field", "harvesting"])
+          assert farmer[0] == "farmer rice field harvesting", farmer
+          assert farmer[1] == "farmer rice field harvesting" or farmer[1] == "farmer rice field harvesting"[:0] or farmer[1] == "farmer rice field harvesting", farmer
+          assert any("agriculture" in query and "paddy" in query for query in farmer), farmer
+          train = app._image_search_query_variants(["train", "railway", "station"])
+          assert any("locomotive" in query for query in train), train
+          print("Licensed photo query variants preserve original scene terms and add relevant subject synonyms")
+          PY
       - name: Verify image-search keywords prioritize scene subjects over camera wording
         run: |
           set -e
