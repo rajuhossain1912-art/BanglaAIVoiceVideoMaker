@@ -257,6 +257,40 @@ class SceneImageSimilarityTests(unittest.TestCase):
         self.assertIn("plants", keywords)
 
 
+    def test_image_search_cache_reuses_successful_empty_results(self):
+        with patch.object(video_app, "_IMAGE_SEARCH_CACHE", {}), \\
+             patch.object(video_app.time, "monotonic", return_value=100.0):
+            video_app._image_search_cache_set("openverse", "train railway", [])
+            self.assertEqual(
+                video_app._image_search_cache_get("openverse", "train railway"),
+                []
+            )
+            self.assertIsNone(
+                video_app._image_search_cache_get("wikimedia", "train railway")
+            )
+
+    def test_image_search_cache_expires_old_provider_results(self):
+        with patch.object(video_app, "_IMAGE_SEARCH_CACHE", {}):
+            with patch.object(video_app.time, "monotonic", return_value=100.0):
+                video_app._image_search_cache_set("wikimedia", "farmer rice", [{"id": 1}])
+            with patch.object(
+                video_app.time, "monotonic",
+                return_value=100.0 + video_app.IMAGE_SEARCH_CACHE_TTL_SECONDS + 1
+            ):
+                self.assertIsNone(
+                    video_app._image_search_cache_get("wikimedia", "farmer rice")
+                )
+
+    def test_image_search_cache_stays_within_configured_limit(self):
+        with patch.object(video_app, "_IMAGE_SEARCH_CACHE", {}):
+            for index in range(video_app.IMAGE_SEARCH_CACHE_MAX_ENTRIES + 5):
+                video_app._image_search_cache_set("openverse", str(index), [])
+            self.assertEqual(
+                len(video_app._IMAGE_SEARCH_CACHE),
+                video_app.IMAGE_SEARCH_CACHE_MAX_ENTRIES
+            )
+            self.assertIsNone(video_app._image_search_cache_get("openverse", "0"))
+
     def test_specific_bangla_subject_terms_win_over_broad_country_concept(self):
         concepts = video_app._matched_visual_concepts("বাংলাদেশের ট্রেন ও রেলস্টেশন")
         self.assertTrue(any("passenger train" in item for item in concepts))
