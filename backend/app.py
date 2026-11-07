@@ -638,6 +638,13 @@ def _image_keywords(script: str, model_visual_prompt: Optional[str] = None):
         # Camera/composition wording describes the photograph, not the narrated subject.
         "close", "wide", "shot", "camera", "angle", "view", "background", "foreground",
         "frame", "composition", "portrait", "detail", "detailed", "lens", "lighting",
+        # Generic style and instruction words are not the scene subject.
+        "coherent", "documentary", "educational", "world", "exact", "physical",
+        "stated", "actual", "named", "rather", "symbolic", "substitute", "believable",
+        "authentic", "materials", "environmental", "details", "viewpoint", "plausible",
+        "situation", "communicates", "supported", "neighboring", "large", "recognizable",
+        "visibly", "doing", "described", "only", "without", "logos", "watermark",
+        "captions", "letters", "proportions", "specific",
     }
     return list(dict.fromkeys(word for word in tokens if word not in stopwords))[:8]
 
