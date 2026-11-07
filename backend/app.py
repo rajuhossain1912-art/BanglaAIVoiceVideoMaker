@@ -768,8 +768,8 @@ def _image_search_query_variants(keywords):
     # For common Bangladesh scenes, a few equivalent subject terms help find
     # differently tagged licensed photographs without making the search generic.
     subject_aliases = {
-        "farmer": ("agriculture", "farming"),
-        "rice": ("paddy", "harvest"),
+        "farmer": ("agriculture",),
+        "rice": ("paddy",),
         "train": ("railway", "locomotive"),
         "railway": ("train", "locomotive"),
         "bus": ("transit", "passenger"),
