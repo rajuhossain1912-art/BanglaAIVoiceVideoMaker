@@ -2556,8 +2556,8 @@ def make_ass(script: str, duration: float, path: Path, caption_offset: float = 0
 
 
 
-def sentence_timing_spans(audio_path: Optional[Path], sentences, duration: float):
-    """Use real audio silence boundaries to improve automatic sentence timing; fall back safely."""
+def sentence_timing_spans(audio_path: Optional[Path], sentences, duration: float, return_method: bool = False):
+    """Estimate sentence spans, preferring detected silence; never imply true word timestamps."""
     weights = [max(1, len(re.findall(r"\S+", sentence))) for sentence in sentences]
     total = sum(weights) or 1
     expected = [0.0]
@@ -2566,8 +2566,9 @@ def sentence_timing_spans(audio_path: Optional[Path], sentences, duration: float
         running += weight
         expected.append(duration * running / total)
     expected.append(duration)
+    fallback_spans = list(zip(expected[:-1], expected[1:]))
     if audio_path is None or len(sentences) < 2:
-        return list(zip(expected[:-1], expected[1:]))
+        return (fallback_spans, "estimated_proportional") if return_method else fallback_spans
     try:
         result = subprocess.run(
             ["ffmpeg", "-hide_banner", "-nostats", "-i", str(audio_path),
@@ -2598,10 +2599,11 @@ def sentence_timing_spans(audio_path: Optional[Path], sentences, duration: float
         chosen = [max(0.0, min(duration, x)) for x in chosen]
         if all(chosen[i + 1] > chosen[i] + 0.05 for i in range(len(chosen) - 1)):
             print(f"CAPTION_ALIGNMENT method=audio_silence sentences={len(sentences)}", flush=True)
-            return list(zip(chosen[:-1], chosen[1:]))
+            spans = list(zip(chosen[:-1], chosen[1:]))
+            return (spans, "audio_silence_boundaries") if return_method else spans
     except Exception as exc:
         print(f"CAPTION_ALIGNMENT fallback=estimated error={type(exc).__name__}", flush=True)
-    return list(zip(expected[:-1], expected[1:]))
+    return (fallback_spans, "estimated_proportional") if return_method else fallback_spans
 
 
 def _scene_index_to_background_index(scene_index: int, scene_count: int, background_count: int) -> int:
@@ -2625,7 +2627,26 @@ def make_caption_frames(script: str, duration: float, background: Path, folder: 
     sentences = _split_script_into_scenes(script, max_scenes=None)
     sentence_words = [re.findall(r"\S+", sentence) for sentence in sentences]
     total_words = max(1, sum(len(words) for words in sentence_words))
-    sentence_spans = sentence_timing_spans(audio_path, sentences, duration)
+    sentence_spans, sentence_timing_method = sentence_timing_spans(
+        audio_path, sentences, duration, return_method=True
+    )
+    alignment_report = {
+        "status": "estimated",
+        "sentence_timing_method": sentence_timing_method,
+        "word_timing_method": "estimated_proportional_within_sentence",
+        "word_timestamps_from_asr": False,
+        "verified": False,
+        "note": "প্রতিটি শব্দের প্রকৃত শুরুর ও শেষের সময় ASR থেকে পাওয়া যায়নি; বাক্যের সময়ের মধ্যে শব্দের দৈর্ঘ্য অনুযায়ী সময় ভাগ করা হয়েছে।",
+    }
+    if job_id:
+        with LOCK:
+            if job_id in JOBS:
+                JOBS[job_id]["caption_alignment"] = alignment_report
+    print(
+        "CAPTION_ALIGNMENT report_status=estimated sentence_method="
+        + sentence_timing_method + " word_method=estimated_proportional",
+        flush=True,
+    )
     # The interval controls scene changes. Long scripts retain all narration segments; representative
     # backgrounds may be sampled to stay within free-tier time and memory limits.
     interval = scene_interval if scene_interval in (3, 5, 10, 15, 20) else 5
@@ -3235,6 +3256,9 @@ def video_quality_report(job_id: str):
     checks = {
         "semantic_image_review": semantic_review,
         "audio_verification": snapshot.get("audio_verification") or {"status": "unavailable", "similarity": None},
+        "caption_alignment": snapshot.get("caption_alignment") or {
+            "status": "unavailable", "verified": False, "word_timestamps_from_asr": False
+        },
         "image_source_counts": image_source_counts,
         "file_exists": True,
         "video_track": video_stream is not None,
@@ -3370,6 +3394,15 @@ def video_quality_report(job_id: str):
         report_text += f"তৈরির সময় {captions}টি সাবটাইটেল ফ্রেম তৈরি হয়েছিল। "
     else:
         report_text += "সাবটাইটেলের দৃশ্যমান লেখা আলাদাভাবে যাচাই করা যায়নি। "
+    caption_alignment = snapshot.get("caption_alignment") or {}
+    sentence_method = caption_alignment.get("sentence_timing_method", "unavailable")
+    if sentence_method == "audio_silence_boundaries":
+        report_text += "সাবটাইটেলের বাক্যভিত্তিক সময় অডিওর নীরব বিরতি দেখে আনুমানিক নির্ধারণ করা হয়েছে। "
+    elif sentence_method == "estimated_proportional":
+        report_text += "সাবটাইটেলের বাক্যভিত্তিক সময় মোট অডিওর দৈর্ঘ্য ও লেখার অনুপাত ধরে অনুমান করা হয়েছে। "
+    else:
+        report_text += "সাবটাইটেলের বাক্যভিত্তিক সময় নির্ধারণের পদ্ধতি পাওয়া যায়নি। "
+    report_text += "প্রতিটি শব্দের প্রকৃত উচ্চারণ-সময় শনাক্ত করা হয়নি; শব্দের হাইলাইট বাক্যের ভেতরে আনুমানিক ভাগ করা হয়েছে। "
     report_text += "এই প্রতিবেদন ফাইলের প্রযুক্তিগত পরীক্ষা; কণ্ঠে লেখা হুবহু পড়া হয়েছে কি না বা প্রতিটি সাবটাইটেল ঠিক আছে কি না তা নিশ্চিত করে না।"
 
     return {
@@ -3378,6 +3411,7 @@ def video_quality_report(job_id: str):
         "publication_status": publication_status,
         "publication_reasons": publication_reasons,
         "audio_verification": audio_verification,
+        "caption_alignment": caption_alignment,
         "summary": summary,
         "report_text": report_text,
         "checks": checks,
@@ -3386,6 +3420,7 @@ def video_quality_report(job_id: str):
         "limitations": [
             "কণ্ঠে লেখা হুবহু পড়া হয়েছে কি না স্বয়ংক্রিয়ভাবে নিশ্চিত করা হয়নি।",
             "সাবটাইটেলের বানান ও সময়ের সঙ্গে কণ্ঠের মিল OCR বা মানুষের পর্যালোচনা ছাড়া নিশ্চিত নয়।",
+            "শব্দ-পর্যায়ের সাবটাইটেল সময় বর্তমানে অনুমাননির্ভর; ASR word timestamps দিয়ে যাচাই করা হয়নি।",
             "ছবির অর্থগত AI যাচাই কেবল নির্বাচিত নমুনায় করা হয়; সব ছবির শতভাগ নির্ভুলতা নিশ্চিত করে না।"
         ],
     }
