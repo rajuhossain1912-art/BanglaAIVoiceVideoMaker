@@ -714,7 +714,10 @@ private fun VideoMakerScreen() {
                                         if (scene.optBoolean("duplicate_detected")) {
                                             append("। আগের দৃশ্যের সঙ্গে একই রকম ছবি ধরা পড়েছিল")
                                             when (scene.optString("duplicate_retry_action")) {
-                                                "accepted_distinct_photo" -> append("। বিকল্প আলাদা ছবি নেওয়া হয়েছে")
+                                                "accepted_distinct_photo" -> append("। বিকল্প আলাদা ছবি নেওয়া হয়েছে এবং বিষয়ের সঙ্গে মিল পাওয়া গেছে")
+                                                "accepted_distinct_photo_unverified" -> append("। বিকল্প আলাদা ছবি নেওয়া হয়েছে, তবে বিষয়ের মিল যাচাই করা যায়নি")
+                                                "accepted_distinct_photo_unreviewed" -> append("। বিকল্প আলাদা ছবি নেওয়া হয়েছে, তবে বিষয়ের মিল যাচাই করা হয়নি")
+                                                "accepted_distinct_visual" -> append("। বিকল্প আলাদা দৃশ্য নেওয়া হয়েছে")
                                                 "topic_graphic_after_duplicate_retry" -> append("। বিকল্প চেষ্টা করেও মিল থাকায় বিষয়ভিত্তিক গ্রাফিক নেওয়া হয়েছে")
                                                 else -> append("। বিকল্প ছবি নেওয়ার চেষ্টা হয়েছে")
                                             }
