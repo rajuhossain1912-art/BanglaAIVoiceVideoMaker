@@ -94,12 +94,13 @@ class VoiceCloneUnitTests(unittest.TestCase):
                 progress_callback=lambda percent, message: progress.append((percent, message))
             )
 
-            self.assertEqual(calls, ["first-space", "second-space"])
+            self.assertEqual(calls, ["first-space", "first-space", "second-space"])
             self.assertEqual(selected, "second-space")
             self.assertEqual(result, good_audio)
-            self.assertEqual([item[0] for item in progress], [14, 21])
+            self.assertEqual([item[0] for item in progress], [14, 14, 21])
             self.assertIn("কণ্ঠসেবা 1/2", progress[0][1])
-            self.assertIn("কণ্ঠসেবা 2/2", progress[1][1])
+            self.assertIn("আরেকবার চেষ্টা", progress[1][1])
+            self.assertIn("কণ্ঠসেবা 2/2", progress[2][1])
 
     def test_provider_retries_once_after_transient_timeout(self):
         with tempfile.TemporaryDirectory() as temp_dir:
