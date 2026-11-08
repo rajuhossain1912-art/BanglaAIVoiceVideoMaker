@@ -1089,8 +1089,8 @@ private fun sendChatMessage(baseUrl: String, transcript: List<String>): String {
     val payload = JSONObject().put("messages", messages).toString().toByteArray(Charsets.UTF_8)
     val connection = (URL(baseUrl + "/api/chat").openConnection() as HttpURLConnection).apply {
         requestMethod = "POST"
-        connectTimeout = 20000
-        readTimeout = 45000
+        connectTimeout = 60000
+        readTimeout = 120000
         doOutput = true
         setRequestProperty("Content-Type", "application/json; charset=utf-8")
     }
