@@ -21,6 +21,9 @@ jobs:
         uses: actions/checkout@v4
       - name: Build backend container
         run: docker build -t bangla-video-api-test .
+      - name: Run backend unit tests
+        run: |
+          docker run --rm --workdir /service --entrypoint python bangla-video-api-test -m unittest discover -s backend/tests -v
       - name: Start backend
         run: docker run -d --name bangla-video-api -e AI_IMAGE_GENERATION_ENABLED=false -e LANGUAGE_MODEL_VISUAL_PLANNER_ENABLED=false -p 10000:10000 bangla-video-api-test
       - name: Wait for health endpoint
