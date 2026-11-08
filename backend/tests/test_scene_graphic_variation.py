@@ -32,7 +32,7 @@ class SceneImageSimilarityTests(unittest.TestCase):
 
     def test_motivation_text_selects_motivation_visual_not_bus(self):
         concepts = video_app._matched_visual_concepts("নিজের ওপর বিশ্বাস রাখুন এবং চেষ্টা চালিয়ে যান")
-        self.assertTrue(any("meaningful goal" in item for item in concepts))
+        self.assertTrue(any("determined Bangladeshi person" in item for item in concepts))
         self.assertFalse(any("passenger bus" in item for item in concepts))
 
     def test_success_and_forward_progress_select_motivation_visual(self):
