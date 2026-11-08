@@ -1218,6 +1218,11 @@ def transcribe_uploaded_audio(audio_path: Path, folder: Path, progress_callback=
     transcript = " ".join(transcripts).strip()
     if len(transcript) > MAX_SCRIPT_CHARS:
         raise RuntimeError(f"অডিওর লেখা {MAX_SCRIPT_CHARS} অক্ষরের সীমা অতিক্রম করেছে।")
+    if return_details:
+        return {
+            "text": transcript,
+            "word_timestamps": all_word_timestamps,
+        }
     return transcript
 
 
@@ -2991,6 +2996,7 @@ def render(job_id: str, script: str, mode: str, audio_path: Optional[Path], capt
             JOBS[job_id]["status"] = "processing"
             JOBS[job_id]["progress"] = 10
             JOBS[job_id]["message"] = "ভয়েস ও দৃশ্য প্রস্তুত করা হচ্ছে"
+        uploaded_transcription = None
         if mode == "audio" and not script.strip():
             def update_transcription_progress(progress, message):
                 with LOCK:
@@ -2999,8 +3005,15 @@ def render(job_id: str, script: str, mode: str, audio_path: Optional[Path], capt
                         JOBS[job_id]["message"] = message
             if audio_path is None:
                 raise RuntimeError("কথার অডিও নির্বাচন করুন।")
-            script = transcribe_uploaded_audio(audio_path, folder, update_transcription_progress)
-            print(f"TRANSCRIPTION_PROVIDER=Cloudflare-Whisper characters={len(script)}", flush=True)
+            uploaded_transcription = transcribe_uploaded_audio(
+                audio_path, folder, update_transcription_progress, return_details=True
+            )
+            script = uploaded_transcription["text"]
+            print(
+                f"TRANSCRIPTION_PROVIDER=Cloudflare-Whisper characters={len(script)} "
+                f"word_timestamps={len(uploaded_transcription.get('word_timestamps') or [])}",
+                flush=True,
+            )
         if mode == "clone":
             reference_audio = audio_path
             if reference_audio is None:
