@@ -153,7 +153,7 @@ class SceneIntervalDiagnosticsTests(unittest.TestCase):
             response = contextlib.nullcontext(
                 io.BytesIO(json.dumps(response_data, ensure_ascii=False).encode("utf-8"))
             )
-            with patch.object(video_app, "run", side_effect=fake_run), \\
+            with patch.object(video_app, "run", side_effect=fake_run), \
                  patch.object(video_app.urllib.request, "urlopen", return_value=response):
                 result = video_app.transcribe_uploaded_audio(
                     audio_path, folder, return_details=True
