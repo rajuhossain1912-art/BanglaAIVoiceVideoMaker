@@ -25,7 +25,6 @@ jobs:
       ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
       ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
       ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-      GH_RELEASE_TOKEN: ${{ secrets.GH_RELEASE_TOKEN }}
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
@@ -76,7 +75,7 @@ jobs:
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          token: ${{ secrets.GH_RELEASE_TOKEN != '' && secrets.GH_RELEASE_TOKEN || github.token }}
+          token: ${{ github.token }}
           tag_name: v${{ env.APP_VERSION_NAME }}
           name: Bangla AI Voice Video Maker v${{ env.APP_VERSION_NAME }}
           target_commitish: ${{ github.sha }}
