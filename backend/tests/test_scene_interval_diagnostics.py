@@ -1,4 +1,10 @@
+import contextlib
+import io
+import json
+import tempfile
 import unittest
+from pathlib import Path
+from unittest.mock import patch
 
 from backend import app as video_app
 
@@ -116,6 +122,47 @@ class SceneIntervalDiagnosticsTests(unittest.TestCase):
         }, return_details=True)
         self.assertEqual(result["text"], "কথার প্রতিলিপি")
         self.assertEqual(result["word_timestamps"], [])
+
+    def test_uploaded_audio_transcription_returns_word_timestamps_when_requested(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            folder = Path(temp_dir)
+            audio_path = folder / "input.mp3"
+            audio_path.write_bytes(b"fake audio")
+            response_data = {
+                "success": True,
+                "result": {
+                    "text": "আমি ভালো আছি",
+                    "segments": [{
+                        "words": [
+                            {"word": "আমি", "start": 0.1, "end": 0.4},
+                            {"word": "ভালো", "start": 0.5, "end": 0.9},
+                            {"word": "আছি", "start": 1.0, "end": 1.3},
+                        ]
+                    }]
+                }
+            }
+
+            def fake_run(command, timeout=240):
+                if "-segment" in command:
+                    pattern = Path(command[-1])
+                    chunk_path = Path(str(pattern).replace("%04d", "0000"))
+                    chunk_path.parent.mkdir(parents=True, exist_ok=True)
+                    chunk_path.write_bytes(b"fake chunk")
+                return b""
+
+            response = contextlib.nullcontext(
+                io.BytesIO(json.dumps(response_data, ensure_ascii=False).encode("utf-8"))
+            )
+            with patch.object(video_app, "run", side_effect=fake_run), \\
+                 patch.object(video_app.urllib.request, "urlopen", return_value=response):
+                result = video_app.transcribe_uploaded_audio(
+                    audio_path, folder, return_details=True
+                )
+
+            self.assertEqual(result["text"], "আমি ভালো আছি")
+            self.assertEqual(len(result["word_timestamps"]), 3)
+            self.assertEqual(result["word_timestamps"][0]["start"], 0.1)
+            self.assertEqual(result["word_timestamps"][-1]["end"], 1.3)
 
     def test_caption_alignment_uses_asr_word_times_only_with_strong_text_match(self):
         script = "আমি ভালো আছি"
