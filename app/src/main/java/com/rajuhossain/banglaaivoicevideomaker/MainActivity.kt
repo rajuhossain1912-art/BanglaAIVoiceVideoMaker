@@ -193,7 +193,12 @@ private fun VideoMakerScreen() {
     }
 
     val startVoiceRecording: () -> Unit = {
-        try {
+        // Give TalkBack time to finish speaking the button label before the microphone opens.
+        // The user can keep TalkBack enabled; no app status or start beep is spoken into the sample.
+        scope.launch {
+            status = "রেকর্ডিং শুরু হচ্ছে। টকব্যাকের কথা শেষ হওয়া পর্যন্ত একটু অপেক্ষা করুন।"
+            delay(3000)
+            try {
             val target = File(context.cacheDir, "voice_recording_preview.m4a")
             target.delete()
             val newRecorder = MediaRecorder()
@@ -214,9 +219,6 @@ private fun VideoMakerScreen() {
             isRecording = true
             recordingStartedAt = System.currentTimeMillis()
             autoStopTriggered = false
-            val tone = ToneGenerator(AudioManager.STREAM_MUSIC, 80)
-            tone.startTone(ToneGenerator.TONE_PROP_BEEP, 250)
-            scope.launch { delay(350); tone.release() }
             status = "রেকর্ডিং শুরু হয়েছে। শান্ত ঘরে স্বাভাবিক স্বরে কথা বলুন। সর্বোচ্চ ২ মিনিট পর অ্যাপ নিজে থেকেই রেকর্ড বন্ধ করবে। বন্ধ করার জন্য স্ক্রিনে চাপ দিতে হবে না।"
         } catch (e: Exception) {
             runCatching { recorder?.release() }
@@ -224,6 +226,7 @@ private fun VideoMakerScreen() {
             isRecording = false
             runCatching { context.startService(Intent(context, VideoWorkService::class.java).setAction(VideoWorkService.ACTION_STOP)) }
             status = "রেকর্ডিং শুরু করা যায়নি। মাইক্রোফোনের অনুমতি ও ফোনের স্টোরেজ পরীক্ষা করুন।"
+            }
         }
     }
     val recordPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -556,7 +559,7 @@ private fun VideoMakerScreen() {
             }
             if (previewFile == null && !isRecording) {
                 Text(
-                    "ভালো কণ্ঠের নমুনার জন্য শান্ত ঘরে ২০ থেকে ১২০ সেকেন্ড স্বাভাবিক স্বরে কথা বলুন। সর্বোচ্চ ২ মিনিট হলে অ্যাপ নিজে থেকে রেকর্ড বন্ধ করবে। ফোন মুখ থেকে প্রায় এক হাত দূরে রাখুন। ফ্যান, গান বা অন্য মানুষের কথা যেন পেছনে না থাকে। নিজের স্বাভাবিক উচ্চারণ ও কথার গতি বজায় রাখুন; ফিসফিস বা চিৎকার করবেন না।",
+                    "রেকর্ড বোতাম চাপার পর টকব্যাকের কথা শেষ হওয়া পর্যন্ত ৩ সেকেন্ড অপেক্ষা করুন, তারপর কথা বলা শুরু করুন। রেকর্ডিং চলাকালে স্ক্রিনে অপ্রয়োজনীয় টাচ করবেন না। বন্ধ করার বোতাম চাপলে রেকর্ড সঙ্গে সঙ্গে বন্ধ হবে। শান্ত ঘরে ২০ থেকে ১২০ সেকেন্ড স্বাভাবিক স্বরে কথা বলুন। সর্বোচ্চ ২ মিনিট হলে অ্যাপ নিজে থেকে রেকর্ড বন্ধ করবে। ফোন মুখ থেকে প্রায় এক হাত দূরে রাখুন। ফ্যান, গান বা অন্য মানুষের কথা যেন পেছনে না থাকে।",
                     style = MaterialTheme.typography.bodyMedium
                 )
             }
@@ -869,7 +872,7 @@ private fun VideoMakerScreen() {
                 }
             }
         }
-        if (!running && downloadPath.isBlank() && status != "অনলাইন সার্ভার যুক্ত হলে এখানে ভিডিও তৈরির অবস্থা দেখা যাবে।") {
+        if (!running && !isRecording && downloadPath.isBlank() && status != "অনলাইন সার্ভার যুক্ত হলে এখানে ভিডিও তৈরির অবস্থা দেখা যাবে।") {
             Text(status, modifier = Modifier
                 .fillMaxWidth()
                 .semantics {
