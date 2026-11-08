@@ -26,10 +26,11 @@ APP_DIR = Path(__file__).resolve().parent
 VOICE_CLONE_SPACE = os.getenv("VOICE_CLONE_SPACE", "kawshikbuet17/bengali-cosyvoice3-tts-demo")
 # Optional comma-separated public Gradio Spaces with the same API contract.
 VOICE_CLONE_BN_SPACES = [x.strip() for x in os.getenv("VOICE_CLONE_BN_SPACES", VOICE_CLONE_SPACE).split(",") if x.strip()]
-# Independent IndicF5-based Bengali fallback hosted on a separate public Space.
+# Independent IndicF5 Bengali fallback. The official Space exposes the
+# public Gradio API, while its model weights are managed by the Space owner.
 VOICE_CLONE_BN_VAKYA_SPACES = [
     x.strip() for x in os.getenv(
-        "VOICE_CLONE_BN_VAKYA_SPACES", "ashishkblink/vakya-tts-playground"
+        "VOICE_CLONE_BN_VAKYA_SPACES", "ai4bharat/IndicF5"
     ).split(",") if x.strip()
 ]
 VOICE_CLONE_EN_SPACE = os.getenv("VOICE_CLONE_EN_SPACE", "ResembleAI/Chatterbox")
@@ -333,24 +334,21 @@ def _clone_with_cosyvoice(script: str, normalized: Path, space: str):
 
 
 def _clone_with_vakya(script: str, normalized: Path, space: str):
-    """Use a separate IndicF5 Bengali Space with its own Gradio API contract."""
+    """Use the official IndicF5 Space; it requires the exact reference transcript."""
     from gradio_client import Client, handle_file
+    # Transcribe the user's own reference clip so IndicF5 receives its required
+    # prompt text instead of an empty string. This uses the already configured
+    # Cloudflare Whisper integration and does not retain the transcript separately.
+    reference_text = transcribe_uploaded_audio(normalized, normalized.parent)
+    if not reference_text.strip():
+        raise RuntimeError("IndicF5 reference transcript is empty")
     client = Client(space, verbose=False, httpx_kwargs={"timeout": 300.0})
-    # Vakya loads its model through a dedicated button before accepting synthesis.
-    load_status = client.predict(api_name="/load_model")
-    if isinstance(load_status, str) and any(
-        marker in load_status.lower() for marker in ("error", "failed", "exception")
-    ):
-        raise RuntimeError(f"Vakya model load failed: {load_status[:160]}")
-    result = client.predict(
-        handle_file(str(normalized)),
-        "",
+    return client.predict(
         script,
-        1.0,
-        False,
-        api_name="/generate_speech",
+        handle_file(str(normalized)),
+        reference_text,
+        api_name="/synthesize_speech",
     )
-    return result
 
 
 def _clone_with_chatterbox(script: str, normalized: Path, space: str):
@@ -470,7 +468,9 @@ def synthesize_cloned_voice(script: str, reference_audio: Path, folder: Path, pr
     try:
         if progress_callback:
             progress_callback(12, "নিজের কণ্ঠের নমুনা অডিও প্রস্তুত করা হচ্ছে।")
-        run(["ffmpeg", "-y", "-i", str(reference_audio), "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", str(normalized)], 120)
+        # The public Bengali CosyVoice demo rejects long prompt recordings.
+        # Keep a clean 12-second reference excerpt; callers may record longer.
+        run(["ffmpeg", "-y", "-i", str(reference_audio), "-t", "12", "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", str(normalized)], 120)
         if progress_callback:
             progress_callback(13, "ফ্রি কণ্ঠসেবার সঙ্গে সংযোগ করা হচ্ছে।")
         output = folder / "cloned_voice.wav"
