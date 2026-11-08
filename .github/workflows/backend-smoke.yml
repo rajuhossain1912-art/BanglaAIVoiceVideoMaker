@@ -67,6 +67,14 @@ jobs:
               assert "আমি ভালো আছি" in result["reply"], result
               assert mocked.call_count == 1, mocked.call_count
           print("Cloudflare 429 greeting fallback responds locally and stops retrying rate-limited models")
+          with patch.dict(os.environ, {"CLOUDFLARE_ACCOUNT_ID": "test-account", "CLOUDFLARE_AI_API_TOKEN": "existing-token"}), patch.object(
+              app.urllib.request, "urlopen", side_effect=TimeoutError("provider timed out")
+          ) as mocked:
+              result = app.chat({"messages": [{"role": "user", "content": "হায় কেমন আছো"}]})
+              assert result["provider"] == "অফলাইন বিকল্প উত্তর", result
+              assert "আমি ভালো আছি" in result["reply"], result
+              assert mocked.call_count == 1, mocked.call_count
+          print("Cloudflare timeout greeting fallback responds locally and stops retrying")
           PY
       - name: Verify Bangla and English audio transcript comparison
         run: |
