@@ -158,38 +158,37 @@ class VoiceCloneUnitTests(unittest.TestCase):
             sleep.assert_called_once_with(2)
             self.assertTrue(any("আরেকবার চেষ্টা" in message for _, message in progress))
 
-    def test_vakya_adapter_loads_model_then_generates_audio(self):
+    def test_indicf5_adapter_transcribes_reference_then_generates_audio(self):
         calls = []
 
         class FakeClient:
-            src = "https://example-space.hf.space"
-
             def __init__(self, *args, **kwargs):
                 calls.append(("client", args[0]))
 
             def predict(self, *args, **kwargs):
                 calls.append((kwargs.get("api_name"), args))
-                if kwargs.get("api_name") == "/load_model":
-                    return "Model loaded successfully"
                 return (24000, [0.0, 0.1, -0.1] * 1000)
 
-        with patch.dict("sys.modules", {
-            "gradio_client": type("FakeGradioClient", (), {
-                "Client": FakeClient,
-                "handle_file": staticmethod(lambda path: f"FILE:{path}"),
-            })
-        }):
+        with (
+            patch.dict("sys.modules", {
+                "gradio_client": type("FakeGradioClient", (), {
+                    "Client": FakeClient,
+                    "handle_file": staticmethod(lambda path: f"FILE:{path}"),
+                })
+            }),
+            patch.object(video_app, "transcribe_uploaded_audio", return_value="আমি আজ বাংলা বলছি।") as transcribe,
+        ):
             result = video_app._clone_with_vakya(
-                "বাংলা পরীক্ষা", Path("/tmp/reference.wav"), "test/vakya"
+                "বাংলা পরীক্ষা", Path("/tmp/reference.wav"), "ai4bharat/IndicF5"
             )
 
         self.assertEqual(result[0], 24000)
-        self.assertEqual(calls[0], ("client", "test/vakya"))
-        self.assertEqual(calls[1][0], "/load_model")
-        self.assertEqual(calls[2][0], "/generate_speech")
-        self.assertEqual(calls[2][1][0], "FILE:/tmp/reference.wav")
-        self.assertEqual(calls[2][1][1], "")
-        self.assertEqual(calls[2][1][2], "বাংলা পরীক্ষা")
+        self.assertEqual(calls[0], ("client", "ai4bharat/IndicF5"))
+        self.assertEqual(calls[1][0], "/synthesize_speech")
+        self.assertEqual(calls[1][1][0], "বাংলা পরীক্ষা")
+        self.assertEqual(calls[1][1][1], "FILE:/tmp/reference.wav")
+        self.assertEqual(calls[1][1][2], "আমি আজ বাংলা বলছি।")
+        transcribe.assert_called_once_with(Path("/tmp/reference.wav"), Path("/tmp"))
 
     def test_bengali_clone_uses_vakya_pool_after_primary_pool_fails(self):
         with tempfile.TemporaryDirectory() as temp_dir:
