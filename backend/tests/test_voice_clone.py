@@ -211,11 +211,13 @@ class VoiceCloneUnitTests(unittest.TestCase):
                 return candidate, "vakya-test-space"
 
             progress = []
-            with patch.object(video_app, "VOICE_CLONE_ENABLED", True), \\
-                 patch.object(video_app, "VOICE_CLONE_BN_SPACES", ["primary-space"]), \\
-                 patch.object(video_app, "VOICE_CLONE_BN_VAKYA_SPACES", ["vakya-space"]), \\
-                 patch.object(video_app, "run", side_effect=fake_run), \\
-                 patch.object(video_app, "_clone_with_provider_fallback", side_effect=fake_provider):
+            with (
+                patch.object(video_app, "VOICE_CLONE_ENABLED", True),
+                patch.object(video_app, "VOICE_CLONE_BN_SPACES", ["primary-space"]),
+                patch.object(video_app, "VOICE_CLONE_BN_VAKYA_SPACES", ["vakya-space"]),
+                patch.object(video_app, "run", side_effect=fake_run),
+                patch.object(video_app, "_clone_with_provider_fallback", side_effect=fake_provider),
+            ):
                 output = video_app.synthesize_cloned_voice(
                     "বাংলা পরীক্ষামূলক বক্তব্য।", reference, folder,
                     progress_callback=lambda percent, message: progress.append((percent, message))
