@@ -130,6 +130,34 @@ class VoiceCloneUnitTests(unittest.TestCase):
             sleep.assert_called_once_with(2)
             self.assertTrue(any("আরেকবার চেষ্টা" in message for _, message in progress))
 
+    def test_provider_retries_once_when_space_returns_no_audio(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            folder = Path(temp_dir)
+            good_audio = folder / "recovered.wav"
+            good_audio.write_bytes(b"valid recovered audio" * 20)
+            calls = []
+
+            def empty_then_success(script, normalized, space):
+                calls.append(space)
+                if len(calls) == 1:
+                    return None
+                return str(good_audio)
+
+            progress = []
+            with patch.object(video_app.time, "sleep") as sleep:
+                result, selected = video_app._clone_with_provider_fallback(
+                    "পরীক্ষা", folder / "reference.wav",
+                    ["bengali-space"], empty_then_success,
+                    "bn", folder, "empty-audio-retry",
+                    progress_callback=lambda percent, message: progress.append((percent, message))
+                )
+
+            self.assertEqual(calls, ["bengali-space", "bengali-space"])
+            self.assertEqual(selected, "bengali-space")
+            self.assertEqual(result, good_audio)
+            sleep.assert_called_once_with(2)
+            self.assertTrue(any("আরেকবার চেষ্টা" in message for _, message in progress))
+
     def test_clone_reports_start_and_completion_progress(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             folder = Path(temp_dir)
