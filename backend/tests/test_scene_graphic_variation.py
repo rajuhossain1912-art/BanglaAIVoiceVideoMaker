@@ -133,12 +133,13 @@ class SceneImageSimilarityTests(unittest.TestCase):
                 "তৃতীয় দৃশ্যে আরেকটি গুরুত্বপূর্ণ বিষয় তুলে ধরা হয়েছে।"
             )
             with patch.object(video_app, "_plan_scene_visual_prompts", return_value=None) as _planner, patch.object(video_app, "make_background", side_effect=fake_background):
-                backgrounds, scenes = video_app.make_scene_backgrounds(
+                backgrounds, scenes, semantic_review = video_app.make_scene_backgrounds(
                     script, root,
                     progress_callback=lambda percent, message: progress.append((percent, message))
                 )
 
             self.assertGreaterEqual(len(scenes), 2)
+            self.assertIsInstance(semantic_review, dict)
             self.assertEqual(len(backgrounds), len(generated))
             values = [item[0] for item in progress]
             self.assertEqual(values, sorted(values))
