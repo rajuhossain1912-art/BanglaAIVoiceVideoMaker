@@ -3167,10 +3167,14 @@ def chat(payload: dict):
                 return {"reply": answer, "model": model, "provider": "Cloudflare Workers AI"}
         except Exception as exc:
             print(f"VOICE_CHAT fallback=next_model model={model} error={type(exc).__name__}: {str(exc)[:160]}", flush=True)
-            # A 429 means the account allocation is throttled; trying more models
-            # immediately only creates extra failed requests. For simple greetings,
-            # provide a transparent local response instead of failing the whole turn.
-            if isinstance(exc, urllib.error.HTTPError) and exc.code == 429:
+            # A 429 or provider timeout should not trigger more slow model attempts.
+            # For simple greetings, provide a transparent local response immediately.
+            is_rate_limited = isinstance(exc, urllib.error.HTTPError) and exc.code == 429
+            is_timed_out = isinstance(exc, (TimeoutError,)) or (
+                isinstance(exc, urllib.error.URLError)
+                and isinstance(exc.reason, (TimeoutError, OSError))
+            )
+            if is_rate_limited or is_timed_out:
                 last_text = safe_messages[-1]["content"].strip().lower()
                 normalized = re.sub(r"[\s\W_]+", "", last_text, flags=re.UNICODE)
                 greetings = {
@@ -3186,8 +3190,7 @@ def chat(payload: dict):
                     else:
                         reply = "হ্যালো। আপনাকে স্বাগতম। কীভাবে সাহায্য করতে পারি?"
                     return {"reply": reply, "model": "local_greeting_fallback", "provider": "অফলাইন বিকল্প উত্তর"}
-                # Cloudflare has already rate-limited the account; stop the model
-                # chain rather than sending two more requests that will also fail.
+                # Stop after a provider timeout/rate limit instead of waiting on more models.
                 break
     raise HTTPException(503, "এই মুহূর্তে AI উত্তর দিতে পারছে না। Cloudflare-এর বিনামূল্যের AI সীমা সাময়িকভাবে পূর্ণ বা ব্যস্ত। পরে আবার চেষ্টা করুন।")
 
