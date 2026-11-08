@@ -308,7 +308,21 @@ def _clone_with_cosyvoice(script: str, normalized: Path, space: str):
     # FileData may be returned as a dict or typed object depending on version.
     base_url = getattr(client, "src", "") or ""
     if isinstance(result, (list, tuple)):
-        return (result[0], base_url) if result else (None, base_url)
+        audio_result = result[0] if result else None
+        status_text = result[1] if len(result) > 1 and isinstance(result[1], str) else ""
+        if audio_result is None:
+            safe_status = " ".join(status_text.split())[:160]
+            print(
+                f"VOICE_CLONE_SPACE_NO_AUDIO status={safe_status or 'empty provider output'}",
+                flush=True,
+            )
+            raise RuntimeError(
+                "Space returned no audio" + (f": {safe_status}" if safe_status else "")
+            )
+        return (audio_result, base_url)
+    if result is None:
+        print("VOICE_CLONE_SPACE_NO_AUDIO status=empty provider output", flush=True)
+        raise RuntimeError("Space returned no audio")
     return result, base_url
 
 
@@ -368,7 +382,14 @@ def _clone_with_provider_fallback(
                 message = str(exc).lower()
                 transient = isinstance(exc, (TimeoutError, ConnectionError)) or any(
                     marker in message
-                    for marker in ("timeout", "timed out", "429", "503", "temporarily unavailable", "queue full")
+                    for marker in (
+                        "timeout", "timed out", "429", "503",
+                        "temporarily unavailable", "queue full",
+                        "space returned no usable audio file",
+                        "space returned no audio",
+                        "failed: no audio generated",
+                        "inference failed",
+                    )
                 )
                 failures.append(f"{space} attempt {attempt + 1}: {type(exc).__name__}: {str(exc)[:120]}")
                 print(
