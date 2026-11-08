@@ -603,6 +603,10 @@ def _matched_visual_concepts(script: str, limit: int = 2):
             # Specific terms win ties over broad concepts; original order is a stable final tie-breaker.
             specificity = max(len(term) for term in terms if _contains_visual_term(text, term))
             ranked.append((hits * 10 + min(specificity, 20) / 100 - order / 10000, order, prompt))
+    # "Bangladeshi community and civic life" is a broad fallback, not an
+    # additional subject. Do not mix it into a scene that already has a concrete topic.
+    if any(order != 12 for _, order, _ in ranked):
+        ranked = [item for item in ranked if item[1] != 12]
     ranked.sort(reverse=True)
     selected = []
     for _, _, prompt in ranked:
@@ -2956,7 +2960,9 @@ def make_caption_frames(script: str, duration: float, background: Path, folder: 
 def _normalize_transcript_tokens(text: str):
     """Normalize Bangla/English transcript tokens without changing word order."""
     normalized = unicodedata.normalize("NFKC", str(text or "")).casefold()
-    return re.findall(r"[^\W_]+", normalized, flags=re.UNICODE)
+    # Python's \w class excludes Bengali combining vowel signs, which splits
+    # words such as "আমি" and "ভালো" into fragments. Keep the full Bangla block.
+    return re.findall(r"[A-Za-z0-9]+|[\u0980-\u09FF]+", normalized, flags=re.UNICODE)
 
 
 def _compare_script_transcript(script: str, transcript: str):
