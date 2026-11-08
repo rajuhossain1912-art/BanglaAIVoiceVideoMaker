@@ -158,6 +158,76 @@ class VoiceCloneUnitTests(unittest.TestCase):
             sleep.assert_called_once_with(2)
             self.assertTrue(any("আরেকবার চেষ্টা" in message for _, message in progress))
 
+    def test_vakya_adapter_loads_model_then_generates_audio(self):
+        calls = []
+
+        class FakeClient:
+            src = "https://example-space.hf.space"
+
+            def __init__(self, *args, **kwargs):
+                calls.append(("client", args[0]))
+
+            def predict(self, *args, **kwargs):
+                calls.append((kwargs.get("api_name"), args))
+                if kwargs.get("api_name") == "/load_model":
+                    return "Model loaded successfully"
+                return (24000, [0.0, 0.1, -0.1] * 1000)
+
+        with patch.dict("sys.modules", {
+            "gradio_client": type("FakeGradioClient", (), {
+                "Client": FakeClient,
+                "handle_file": staticmethod(lambda path: f"FILE:{path}"),
+            })
+        }):
+            result = video_app._clone_with_vakya(
+                "বাংলা পরীক্ষা", Path("/tmp/reference.wav"), "test/vakya"
+            )
+
+        self.assertEqual(result[0], 24000)
+        self.assertEqual(calls[0], ("client", "test/vakya"))
+        self.assertEqual(calls[1][0], "/load_model")
+        self.assertEqual(calls[2][0], "/generate_speech")
+        self.assertEqual(calls[2][1][0], "FILE:/tmp/reference.wav")
+        self.assertEqual(calls[2][1][1], "")
+        self.assertEqual(calls[2][1][2], "বাংলা পরীক্ষা")
+
+    def test_bengali_clone_uses_vakya_pool_after_primary_pool_fails(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            folder = Path(temp_dir)
+            reference = folder / "reference.m4a"
+            reference.write_bytes(b"reference audio")
+            candidate = folder / "candidate.wav"
+            candidate.write_bytes(b"generated audio" * 20)
+            calls = []
+
+            def fake_run(command, timeout=240):
+                Path(command[-1]).write_bytes(b"normalized audio" * 20)
+                return b""
+
+            def fake_provider(script, normalized, spaces, clone_function, language, *args, **kwargs):
+                calls.append((list(spaces), clone_function, language))
+                if len(calls) == 1:
+                    raise RuntimeError("primary Bengali provider pool unavailable")
+                return candidate, "vakya-test-space"
+
+            progress = []
+            with patch.object(video_app, "VOICE_CLONE_ENABLED", True), \\
+                 patch.object(video_app, "VOICE_CLONE_BN_SPACES", ["primary-space"]), \\
+                 patch.object(video_app, "VOICE_CLONE_BN_VAKYA_SPACES", ["vakya-space"]), \\
+                 patch.object(video_app, "run", side_effect=fake_run), \\
+                 patch.object(video_app, "_clone_with_provider_fallback", side_effect=fake_provider):
+                output = video_app.synthesize_cloned_voice(
+                    "বাংলা পরীক্ষামূলক বক্তব্য।", reference, folder,
+                    progress_callback=lambda percent, message: progress.append((percent, message))
+                )
+
+            self.assertTrue(output.exists())
+            self.assertEqual(calls[0][0], ["primary-space"])
+            self.assertIs(calls[0][1], video_app._clone_with_cosyvoice)
+            self.assertEqual(calls[1][0], ["vakya-space"])
+            self.assertIs(calls[1][1], video_app._clone_with_vakya)
+            self.assertEqual(calls[1][2], "bn_vakya_fallback")
+
     def test_clone_reports_start_and_completion_progress(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             folder = Path(temp_dir)
