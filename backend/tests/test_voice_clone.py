@@ -101,6 +101,34 @@ class VoiceCloneUnitTests(unittest.TestCase):
             self.assertIn("কণ্ঠসেবা 1/2", progress[0][1])
             self.assertIn("কণ্ঠসেবা 2/2", progress[1][1])
 
+    def test_provider_retries_once_after_transient_timeout(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            folder = Path(temp_dir)
+            good_audio = folder / "recovered.wav"
+            good_audio.write_bytes(b"valid recovered audio" * 20)
+            calls = []
+
+            def flaky_clone(script, normalized, space):
+                calls.append(space)
+                if len(calls) == 1:
+                    raise TimeoutError("provider request timed out")
+                return str(good_audio)
+
+            progress = []
+            with patch.object(video_app.time, "sleep") as sleep:
+                result, selected = video_app._clone_with_provider_fallback(
+                    "পরীক্ষা", folder / "reference.wav",
+                    ["temporary-space"], flaky_clone,
+                    "bn", folder, "retry-test",
+                    progress_callback=lambda percent, message: progress.append((percent, message))
+                )
+
+            self.assertEqual(calls, ["temporary-space", "temporary-space"])
+            self.assertEqual(selected, "temporary-space")
+            self.assertEqual(result, good_audio)
+            sleep.assert_called_once_with(2)
+            self.assertTrue(any("আরেকবার চেষ্টা" in message for _, message in progress))
+
     def test_clone_reports_start_and_completion_progress(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             folder = Path(temp_dir)
