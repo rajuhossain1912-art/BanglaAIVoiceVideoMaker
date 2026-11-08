@@ -2792,8 +2792,10 @@ def make_caption_frames(script: str, duration: float, background: Path, folder: 
             if job_id in JOBS:
                 JOBS[job_id]["caption_alignment"] = alignment_report
     print(
-        "CAPTION_ALIGNMENT report_status=estimated sentence_method="
-        + sentence_timing_method + " word_method=estimated_proportional",
+        "CAPTION_ALIGNMENT report_status="
+        + alignment_report["status"]
+        + " sentence_method=" + sentence_timing_method
+        + " word_method=" + alignment_report["word_timing_method"],
         flush=True,
     )
     # The interval controls scene changes. Long scripts retain all narration segments; representative
@@ -3689,7 +3691,10 @@ def video_quality_report(job_id: str):
         report_text += "সাবটাইটেলের বাক্যভিত্তিক সময় মোট অডিওর দৈর্ঘ্য ও লেখার অনুপাত ধরে অনুমান করা হয়েছে। "
     else:
         report_text += "সাবটাইটেলের বাক্যভিত্তিক সময় নির্ধারণের পদ্ধতি পাওয়া যায়নি। "
-    report_text += "প্রতিটি শব্দের প্রকৃত উচ্চারণ-সময় শনাক্ত করা হয়নি; শব্দের হাইলাইট বাক্যের ভেতরে আনুমানিক ভাগ করা হয়েছে। "
+    if caption_alignment.get("word_timestamps_from_asr"):
+        report_text += "Whisper-এর স্পষ্ট শব্দ-সময় স্ক্রিপ্টের সঙ্গে মিলিয়ে হাইলাইটে ব্যবহার করা হয়েছে; এটি স্বাধীন মানব যাচাই নয়। "
+    else:
+        report_text += "প্রতিটি শব্দের প্রকৃত উচ্চারণ-সময় পাওয়া যায়নি; শব্দের হাইলাইট বাক্যের ভেতরে আনুমানিক ভাগ করা হয়েছে। "
     report_text += "এই প্রতিবেদন ফাইলের প্রযুক্তিগত পরীক্ষা; কণ্ঠে লেখা হুবহু পড়া হয়েছে কি না বা প্রতিটি সাবটাইটেল ঠিক আছে কি না তা নিশ্চিত করে না।"
 
     return {
@@ -3708,7 +3713,11 @@ def video_quality_report(job_id: str):
         "limitations": [
             "কণ্ঠে লেখা হুবহু পড়া হয়েছে কি না স্বয়ংক্রিয়ভাবে নিশ্চিত করা হয়নি।",
             "সাবটাইটেলের বানান ও সময়ের সঙ্গে কণ্ঠের মিল OCR বা মানুষের পর্যালোচনা ছাড়া নিশ্চিত নয়।",
-            "শব্দ-পর্যায়ের সাবটাইটেল সময় বর্তমানে অনুমাননির্ভর; ASR word timestamps দিয়ে যাচাই করা হয়নি।",
+            (
+                "Whisper-এর স্পষ্ট শব্দ-সময় স্ক্রিপ্টের সঙ্গে মিলিয়ে ব্যবহার করা হয়েছে; স্বাধীন মানব যাচাই নয়।"
+                if caption_alignment.get("word_timestamps_from_asr")
+                else "শব্দ-পর্যায়ের সাবটাইটেল সময় অনুমাননির্ভর; ASR word timestamps ব্যবহার করা যায়নি।"
+            ),
             "ছবির অর্থগত AI যাচাই কেবল নির্বাচিত নমুনায় করা হয়; সব ছবির শতভাগ নির্ভুলতা নিশ্চিত করে না।"
         ],
     }
