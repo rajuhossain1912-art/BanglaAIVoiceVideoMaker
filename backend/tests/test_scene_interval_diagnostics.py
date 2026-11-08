@@ -143,7 +143,7 @@ class SceneIntervalDiagnosticsTests(unittest.TestCase):
             }
 
             def fake_run(command, timeout=240):
-                if "-segment" in command:
+                if "segment" in command:
                     pattern = Path(command[-1])
                     chunk_path = Path(str(pattern).replace("%04d", "0000"))
                     chunk_path.parent.mkdir(parents=True, exist_ok=True)
