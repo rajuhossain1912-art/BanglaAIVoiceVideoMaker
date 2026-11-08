@@ -47,7 +47,7 @@ class SceneImageSimilarityTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             outputs = []
-            with patch.object(video_app, "find_generated_image", return_value=(None, "")), \\
+            with patch.object(video_app, "find_generated_image", return_value=(None, "")), \
                  patch.object(video_app, "ALLOW_LICENSED_IMAGE_FALLBACK", False):
                 for index in range(3):
                     folder = root / str(index)
@@ -276,7 +276,7 @@ class SceneImageSimilarityTests(unittest.TestCase):
 
 
     def test_image_search_cache_reuses_successful_empty_results(self):
-        with patch.object(video_app, "_IMAGE_SEARCH_CACHE", {}), \\
+        with patch.object(video_app, "_IMAGE_SEARCH_CACHE", {}), \
              patch.object(video_app.time, "monotonic", return_value=100.0):
             video_app._image_search_cache_set("openverse", "train railway", [])
             self.assertEqual(
@@ -327,7 +327,7 @@ class SceneImageSimilarityTests(unittest.TestCase):
                 calls.append(request.full_url)
                 return contextlib.nullcontext(io.BytesIO(b'{"results": []}'))
 
-            with patch.object(video_app, "_IMAGE_SEARCH_CACHE", {}), \\
+            with patch.object(video_app, "_IMAGE_SEARCH_CACHE", {}), \
                  patch.object(video_app.urllib.request, "urlopen", side_effect=fake_urlopen):
                 first = video_app.find_openverse_image(
                     "একজন কৃষক ধানক্ষেতে কাজ করছেন",
