@@ -332,7 +332,7 @@ def _clone_with_provider_fallback(
     folder: Path, stem: str, progress_callback=None, progress_base: int = 14,
     progress_span: int = 14,
 ):
-    """Try free Spaces in order and announce each attempt before waiting on its queue."""
+    """Try free Spaces in order, retrying transient queue/network failures once."""
     failures = []
     available_spaces = list(spaces)
     for index, space in enumerate(available_spaces):
@@ -342,23 +342,44 @@ def _clone_with_provider_fallback(
                 percent,
                 f"ফ্রি কণ্ঠসেবা {index + 1}/{len(available_spaces)} চেষ্টা করা হচ্ছে। উত্তর আসতে কিছুটা সময় লাগতে পারে।"
             )
-        try:
-            print(f"VOICE_CLONE_TRY language={language} space={space}", flush=True)
-            result = clone_function(script, normalized, space)
-            base_url = ""
-            if isinstance(result, tuple) and len(result) == 2 and isinstance(result[1], str):
-                result, base_url = result
-            candidate = _write_gradio_audio_result(result, folder, stem, base_url=base_url)
-            if candidate is None or not candidate.exists() or candidate.stat().st_size < 100:
-                raise RuntimeError("Space returned no usable audio file")
-            print(f"VOICE_CLONE_OK language={language} space={space}", flush=True)
-            return candidate, space
-        except Exception as exc:
-            failures.append(f"{space}: {type(exc).__name__}: {str(exc)[:120]}")
-            print(f"VOICE_CLONE_FAILED language={language} space={space} error={type(exc).__name__}", flush=True)
+        for attempt in range(2):
+            try:
+                if attempt:
+                    if progress_callback:
+                        progress_callback(
+                            min(29, progress_base + int(progress_span * index / max(1, len(available_spaces)))),
+                            "কণ্ঠসেবার সংযোগ সাময়িকভাবে আটকে গেছে। আরেকবার চেষ্টা করা হচ্ছে।"
+                        )
+                    time.sleep(2)
+                print(
+                    f"VOICE_CLONE_TRY language={language} space={space} attempt={attempt + 1}/2",
+                    flush=True,
+                )
+                result = clone_function(script, normalized, space)
+                base_url = ""
+                if isinstance(result, tuple) and len(result) == 2 and isinstance(result[1], str):
+                    result, base_url = result
+                candidate = _write_gradio_audio_result(result, folder, stem, base_url=base_url)
+                if candidate is None or not candidate.exists() or candidate.stat().st_size < 100:
+                    raise RuntimeError("Space returned no usable audio file")
+                print(f"VOICE_CLONE_OK language={language} space={space}", flush=True)
+                return candidate, space
+            except Exception as exc:
+                message = str(exc).lower()
+                transient = isinstance(exc, (TimeoutError, ConnectionError)) or any(
+                    marker in message
+                    for marker in ("timeout", "timed out", "429", "503", "temporarily unavailable", "queue full")
+                )
+                failures.append(f"{space} attempt {attempt + 1}: {type(exc).__name__}: {str(exc)[:120]}")
+                print(
+                    f"VOICE_CLONE_FAILED language={language} space={space} "
+                    f"attempt={attempt + 1}/2 error={type(exc).__name__}",
+                    flush=True,
+                )
+                if attempt == 0 and transient:
+                    continue
+                break
     raise RuntimeError("All configured free voice-clone Spaces failed. " + " | ".join(failures))
-
-
 def _split_voice_clone_text(script: str, max_chars: int = 450):
     """Split narration at sentence boundaries into provider-sized chunks."""
     sentences = re.split(r"(?<=[।.!?])\s+|\n+", script.strip())
