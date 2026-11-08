@@ -26,6 +26,12 @@ APP_DIR = Path(__file__).resolve().parent
 VOICE_CLONE_SPACE = os.getenv("VOICE_CLONE_SPACE", "kawshikbuet17/bengali-cosyvoice3-tts-demo")
 # Optional comma-separated public Gradio Spaces with the same API contract.
 VOICE_CLONE_BN_SPACES = [x.strip() for x in os.getenv("VOICE_CLONE_BN_SPACES", VOICE_CLONE_SPACE).split(",") if x.strip()]
+# Independent IndicF5-based Bengali fallback hosted on a separate public Space.
+VOICE_CLONE_BN_VAKYA_SPACES = [
+    x.strip() for x in os.getenv(
+        "VOICE_CLONE_BN_VAKYA_SPACES", "ashishkblink/vakya-tts-playground"
+    ).split(",") if x.strip()
+]
 VOICE_CLONE_EN_SPACE = os.getenv("VOICE_CLONE_EN_SPACE", "ResembleAI/Chatterbox")
 VOICE_CLONE_EN_SPACES = [x.strip() for x in os.getenv("VOICE_CLONE_EN_SPACES", VOICE_CLONE_EN_SPACE).split(",") if x.strip()]
 VOICE_CLONE_ENABLED = os.getenv("VOICE_CLONE_ENABLED", "true").lower() in ("1", "true", "yes")
@@ -326,6 +332,27 @@ def _clone_with_cosyvoice(script: str, normalized: Path, space: str):
     return result, base_url
 
 
+def _clone_with_vakya(script: str, normalized: Path, space: str):
+    """Use a separate IndicF5 Bengali Space with its own Gradio API contract."""
+    from gradio_client import Client, handle_file
+    client = Client(space, verbose=False, httpx_kwargs={"timeout": 300.0})
+    # Vakya loads its model through a dedicated button before accepting synthesis.
+    load_status = client.predict(api_name="/load_model")
+    if isinstance(load_status, str) and any(
+        marker in load_status.lower() for marker in ("error", "failed", "exception")
+    ):
+        raise RuntimeError(f"Vakya model load failed: {load_status[:160]}")
+    result = client.predict(
+        handle_file(str(normalized)),
+        "",
+        script,
+        1.0,
+        False,
+        api_name="/generate_speech",
+    )
+    return result
+
+
 def _clone_with_chatterbox(script: str, normalized: Path, space: str):
     from gradio_client import Client, handle_file
     client = Client(space, verbose=False, httpx_kwargs={"timeout": 120.0})
@@ -476,11 +503,26 @@ def synthesize_cloned_voice(script: str, reference_audio: Path, folder: Path, pr
                     except Exception:
                         raise english_error
             else:
-                candidate, provider = _clone_with_provider_fallback(
-                    text_chunk, normalized, VOICE_CLONE_BN_SPACES, _clone_with_cosyvoice,
-                    "bn_or_mixed", folder, f"clone-part-{index:03d}",
-                    progress_callback=progress_callback, progress_base=provider_progress_base, progress_span=provider_progress_span
-                )
+                try:
+                    candidate, provider = _clone_with_provider_fallback(
+                        text_chunk, normalized, VOICE_CLONE_BN_SPACES, _clone_with_cosyvoice,
+                        "bn_or_mixed", folder, f"clone-part-{index:03d}",
+                        progress_callback=progress_callback,
+                        progress_base=provider_progress_base,
+                        progress_span=max(1, provider_progress_span // 2),
+                    )
+                except Exception as primary_error:
+                    print(
+                        f"VOICE_CLONE_PRIMARY_POOL_FAILED language=bn error={type(primary_error).__name__}",
+                        flush=True,
+                    )
+                    candidate, provider = _clone_with_provider_fallback(
+                        text_chunk, normalized, VOICE_CLONE_BN_VAKYA_SPACES, _clone_with_vakya,
+                        "bn_vakya_fallback", folder, f"clone-part-{index:03d}",
+                        progress_callback=progress_callback,
+                        progress_base=min(chunk_end_progress - 1, provider_progress_base + max(1, provider_progress_span // 2)),
+                        progress_span=max(1, provider_progress_span // 2),
+                    )
             selected_providers.append(provider)
             print(f"VOICE_CLONE_CHUNK_OK part={index + 1}/{len(chunks)}", flush=True)
             if progress_callback:
