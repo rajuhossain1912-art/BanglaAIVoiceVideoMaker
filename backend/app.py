@@ -457,36 +457,60 @@ def _split_voice_clone_text(script: str, max_chars: int = 450):
     return chunks
 
 
+def _split_voice_clone_text_by_language(script: str, max_chars: int = 250):
+    """Split mixed Bangla/English narration into provider-specific text chunks."""
+    tokens = re.findall(r"[\\u0980-\\u09FF]+|[A-Za-z0-9]+|[^A-Za-z0-9\\u0980-\\u09FF]+", script)
+    segments = []
+    current_language = None
+    current_text = ""
+    for token in tokens:
+        if re.search(r"[\\u0980-\\u09FF]", token):
+            language = "bn"
+        elif re.search(r"[A-Za-z0-9]", token):
+            language = "en"
+        else:
+            language = current_language or "bn"
+        if current_language is not None and language != current_language:
+            if current_text.strip():
+                segments.append((current_language, current_text.strip()))
+            current_text = ""
+        current_language = language
+        current_text += token
+    if current_text.strip():
+        segments.append((current_language or "bn", current_text.strip()))
+    chunks = []
+    for language, text in segments:
+        chunks.extend((language, part) for part in _split_voice_clone_text(text, max_chars=max_chars))
+    return chunks
+
+
 def synthesize_cloned_voice(script: str, reference_audio: Path, folder: Path, progress_callback=None) -> Path:
-    """Clone narration in short chunks, with free-provider failover for each chunk."""
+    """Clone mixed Bangla/English narration with a language-matched free provider."""
     if not VOICE_CLONE_ENABLED:
         raise RuntimeError("নিজের কণ্ঠের পরীক্ষামূলক সুবিধা বর্তমানে বন্ধ আছে।")
     if len(script) > 3000:
         raise RuntimeError("নিজের কণ্ঠে একবারে সর্বোচ্চ ৩০০০ অক্ষর ব্যবহার করুন।")
     normalized = folder / "voice_reference.wav"
-    pure_english = bool(re.search(r"[A-Za-z]", script)) and not bool(re.search(r"[\u0980-\u09FF]", script))
     try:
         if progress_callback:
             progress_callback(12, "নিজের কণ্ঠের নমুনা অডিও প্রস্তুত করা হচ্ছে।")
-        # The public Bengali CosyVoice demo rejects long prompt recordings.
-        # Keep a clean 12-second reference excerpt; callers may record longer.
         run(["ffmpeg", "-y", "-i", str(reference_audio), "-t", "12", "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", str(normalized)], 120)
         if progress_callback:
             progress_callback(13, "ফ্রি কণ্ঠসেবার সঙ্গে সংযোগ করা হচ্ছে।")
         output = folder / "cloned_voice.wav"
-        chunks = _split_voice_clone_text(script, max_chars=250)
-        print(f"VOICE_CLONE_PLAN chunks={len(chunks)} characters={len(script)}", flush=True)
+        chunks = _split_voice_clone_text_by_language(script, max_chars=250)
+        print(f"VOICE_CLONE_PLAN chunks={len(chunks)} languages={','.join(language for language, _ in chunks)} characters={len(script)}", flush=True)
         audio_parts = []
         selected_providers = []
-        for index, text_chunk in enumerate(chunks):
+        for index, (chunk_language, text_chunk) in enumerate(chunks):
             chunk_start_progress = 14 + int(16 * index / max(1, len(chunks)))
             chunk_end_progress = 14 + int(16 * (index + 1) / max(1, len(chunks)))
             provider_progress_base = min(chunk_end_progress - 1, chunk_start_progress + 1)
             provider_progress_span = max(1, chunk_end_progress - provider_progress_base)
-            print(f"VOICE_CLONE_CHUNK_START part={index + 1}/{len(chunks)} characters={len(text_chunk)}", flush=True)
+            print(f"VOICE_CLONE_CHUNK_START part={index + 1}/{len(chunks)} language={chunk_language} characters={len(text_chunk)}", flush=True)
             if progress_callback:
                 progress_callback(chunk_start_progress, f"নিজের কণ্ঠ তৈরি হচ্ছে: অংশ {index + 1}/{len(chunks)}।")
-            if pure_english:
+            if chunk_language == "en":
                 try:
                     candidate, provider = _clone_with_provider_fallback(
                         text_chunk, normalized, VOICE_CLONE_EN_SPACES, _clone_with_chatterbox,
@@ -506,7 +530,7 @@ def synthesize_cloned_voice(script: str, reference_audio: Path, folder: Path, pr
                 try:
                     candidate, provider = _clone_with_provider_fallback(
                         text_chunk, normalized, VOICE_CLONE_BN_SPACES, _clone_with_cosyvoice,
-                        "bn_or_mixed", folder, f"clone-part-{index:03d}",
+                        "bn", folder, f"clone-part-{index:03d}",
                         progress_callback=progress_callback,
                         progress_base=provider_progress_base,
                         progress_span=max(1, provider_progress_span // 2),
@@ -524,7 +548,7 @@ def synthesize_cloned_voice(script: str, reference_audio: Path, folder: Path, pr
                         progress_span=max(1, provider_progress_span // 2),
                     )
             selected_providers.append(provider)
-            print(f"VOICE_CLONE_CHUNK_OK part={index + 1}/{len(chunks)}", flush=True)
+            print(f"VOICE_CLONE_CHUNK_OK part={index + 1}/{len(chunks)} language={chunk_language}", flush=True)
             if progress_callback:
                 progress_callback(chunk_end_progress, f"নিজের কণ্ঠ তৈরি হচ্ছে: {index + 1}/{len(chunks)} অংশ সম্পন্ন হয়েছে।")
             part_wav = folder / f"clone-part-{index:03d}.wav"
@@ -536,15 +560,16 @@ def synthesize_cloned_voice(script: str, reference_audio: Path, folder: Path, pr
             shutil.copyfile(audio_parts[0], output)
         else:
             listing = folder / "clone-parts.txt"
-            listing.write_text("".join(f"file '{part.as_posix()}'\n" for part in audio_parts), encoding="utf-8")
+            listing.write_text("".join(f"file '{part.as_posix()}'\\n" for part in audio_parts), encoding="utf-8")
             run(["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(listing), "-c:a", "pcm_s16le", str(output)], 180)
         if output.exists() and output.stat().st_size > 100:
             provider_summary = ",".join(dict.fromkeys(selected_providers))
-            print(f"VOICE_PROVIDER selected={provider_summary} language={'en' if pure_english else 'bn_or_mixed'} chunks={len(chunks)}", flush=True)
+            language_summary = ",".join(dict.fromkeys(language for language, _ in chunks))
+            print(f"VOICE_PROVIDER selected={provider_summary} language={language_summary} chunks={len(chunks)}", flush=True)
             return output
         raise RuntimeError("The voice service returned an empty audio file")
     except Exception as exc:
-        print(f"VOICE_PROVIDER failed language={'en' if pure_english else 'bn_or_mixed'} error={type(exc).__name__}: {str(exc)[:250]}", flush=True)
+        print(f"VOICE_PROVIDER failed error={type(exc).__name__}: {str(exc)[:250]}", flush=True)
         raise RuntimeError("নিজের কণ্ঠে অডিও তৈরি করা যায়নি। ফ্রি কণ্ঠ-সেবা ব্যস্ত বা পরিবর্তিত হতে পারে। কিছুক্ষণ পর চেষ্টা করুন, অথবা সাধারণ স্বয়ংক্রিয় ভয়েস বেছে নিন।") from exc
     finally:
         normalized.unlink(missing_ok=True)
