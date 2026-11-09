@@ -2,7 +2,7 @@ import io
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from backend import app as video_app
 
@@ -10,7 +10,7 @@ from backend import app as video_app
 class VoiceCloneUnitTests(unittest.TestCase):
     def test_voice_gradio_client_uses_optional_huggingface_token(self):
         from types import SimpleNamespace
-        fake_client = unittest.mock.Mock()
+        fake_client = Mock()
         fake_module = SimpleNamespace(Client=fake_client)
         with (
             patch.dict("sys.modules", {"gradio_client": fake_module}),
