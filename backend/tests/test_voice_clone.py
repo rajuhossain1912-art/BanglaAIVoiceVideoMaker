@@ -80,6 +80,16 @@ class VoiceCloneUnitTests(unittest.TestCase):
         self.assertEqual([language for language, _ in chunks], ["bn", "en", "bn"])
         self.assertIn("This is English.", chunks[1][1])
 
+    def test_consecutive_bengali_sentences_are_separate_clone_chunks(self):
+        chunks = video_app._split_voice_clone_text_by_language(
+            "আসসালামু আলাইকুম। আজ আমরা বাংলাদেশের প্রকৃতি নিয়ে কথা বলব।"
+        )
+        self.assertEqual([language for language, _ in chunks], ["bn", "bn"])
+        self.assertEqual(
+            [text for _, text in chunks],
+            ["আসসালামু আলাইকুম।", "আজ আমরা বাংলাদেশের প্রকৃতি নিয়ে কথা বলব।"],
+        )
+
     def test_inline_english_term_stays_with_bengali_sentence(self):
         chunks = video_app._split_voice_clone_text_by_language(
             "আজকের AI প্রযুক্তি আমাদের জীবন বদলে দিচ্ছে।"
