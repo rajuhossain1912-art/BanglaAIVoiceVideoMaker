@@ -481,12 +481,10 @@ def _split_voice_clone_text_by_language(script: str, max_chars: int = 250):
         bengali_letters = len(re.findall(r"[\u0980-\u09FF]", sentence))
         latin_letters = len(re.findall(r"[A-Za-z0-9]", sentence))
         language = "en" if latin_letters > bengali_letters else "bn"
+        # Keep every sentence as its own provider request. Combining adjacent
+        # sentences can cause some free TTS Spaces to omit an early sentence
+        # while still returning a valid-looking audio file.
         for part in _split_voice_clone_text(sentence, max_chars=max_chars):
-            if chunks and chunks[-1][0] == language:
-                combined = chunks[-1][1] + " " + part
-                if len(combined) <= max_chars:
-                    chunks[-1] = (language, combined)
-                    continue
             chunks.append((language, part))
     return chunks
 
