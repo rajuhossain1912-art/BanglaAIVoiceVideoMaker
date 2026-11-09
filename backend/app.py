@@ -308,14 +308,14 @@ def _clone_with_cosyvoice(script: str, normalized: Path, space: str):
     # <|endofprompt|>. A clear, moderate-paced narrator instruction is more
     # suitable for long-form narration than the generic assistant default.
     instructed_script = (
-        "You are a professional Bengali narrator. Speak calmly and clearly."
+        "You are a professional Bengali narrator. Speak clearly at a natural, slightly slower pace with gentle pauses."
         "<|endofprompt|>" + script
     )
     result = client.predict(
         instructed_script,
         handle_file(str(normalized)),
         0,
-        1.0,
+        0.95,
         api_name="/generate_cross_lingual_audio",
     )
     # Resolve relative FileData URLs against the actual Space host. Gradio
@@ -367,7 +367,7 @@ def _clone_with_chatterbox(script: str, normalized: Path, space: str):
         0.5,
         0.8,
         0,
-        0.5,
+        0.4,
         api_name="/generate_tts_audio",
     )
     return result
