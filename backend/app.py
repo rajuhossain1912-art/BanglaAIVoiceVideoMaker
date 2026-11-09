@@ -306,9 +306,22 @@ def _write_gradio_audio_result(audio_result, folder: Path, stem: str, base_url: 
     return None
 
 
+def _make_voice_gradio_client(space: str, timeout: float):
+    """Authenticate public ZeroGPU calls when a free Hugging Face token is configured."""
+    from gradio_client import Client
+    kwargs = {"verbose": False, "httpx_kwargs": {"timeout": timeout}}
+    token = os.getenv("HF_TOKEN") or os.getenv("HUGGINGFACE_HUB_TOKEN")
+    if token:
+        kwargs["token"] = token
+        print("VOICE_CLONE_AUTH configured_huggingface_token=true", flush=True)
+    else:
+        print("VOICE_CLONE_AUTH configured_huggingface_token=false", flush=True)
+    return Client(space, **kwargs)
+
+
 def _clone_with_cosyvoice(script: str, normalized: Path, space: str):
-    from gradio_client import Client, handle_file
-    client = Client(space, verbose=False, httpx_kwargs={"timeout": 120.0})
+    from gradio_client import handle_file
+    client = _make_voice_gradio_client(space, 120.0)
     # CosyVoice limits the complete instruction-plus-script input to 500
     # characters. Keep this prompt short so a 250-character narration chunk
     # remains safely within that provider limit.
@@ -347,14 +360,14 @@ def _clone_with_cosyvoice(script: str, normalized: Path, space: str):
 
 def _clone_with_vakya(script: str, normalized: Path, space: str):
     """Use the official IndicF5 Space; it requires the exact reference transcript."""
-    from gradio_client import Client, handle_file
+    from gradio_client import handle_file
     # Transcribe the user's own reference clip so IndicF5 receives its required
     # prompt text instead of an empty string. This uses the already configured
     # Cloudflare Whisper integration and does not retain the transcript separately.
     reference_text = transcribe_uploaded_audio(normalized, normalized.parent)
     if not reference_text.strip():
         raise RuntimeError("IndicF5 reference transcript is empty")
-    client = Client(space, verbose=False, httpx_kwargs={"timeout": 300.0})
+    client = _make_voice_gradio_client(space, 300.0)
     return client.predict(
         script,
         handle_file(str(normalized)),
@@ -364,8 +377,8 @@ def _clone_with_vakya(script: str, normalized: Path, space: str):
 
 
 def _clone_with_chatterbox(script: str, normalized: Path, space: str):
-    from gradio_client import Client, handle_file
-    client = Client(space, verbose=False, httpx_kwargs={"timeout": 180.0})
+    from gradio_client import handle_file
+    client = _make_voice_gradio_client(space, 180.0)
     if "Multilingual-TTS" in space:
         # Official multilingual Chatterbox Space uses named inputs and an
         # explicit language selector. This preserves the supplied speaker
