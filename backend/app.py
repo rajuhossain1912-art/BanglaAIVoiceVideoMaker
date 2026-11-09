@@ -308,7 +308,7 @@ def _clone_with_cosyvoice(script: str, normalized: Path, space: str):
     # <|endofprompt|>. A clear, moderate-paced narrator instruction is more
     # suitable for long-form narration than the generic assistant default.
     instructed_script = (
-        "You are a professional Bengali narrator. Speak clearly at a natural, slightly slower pace with gentle pauses."
+        "You are a professional bilingual Bengali and English narrator. Speak clearly at a steady, natural pace from the first word to the last, with gentle pauses. Pronounce every Bengali word accurately in standard Bengali. Pronounce embedded English words and brand names in clear standard English, not with Bengali letter names or guessed sounds. Keep the same calm speaking pace throughout."
         "<|endofprompt|>" + script
     )
     result = client.predict(
@@ -505,7 +505,7 @@ def synthesize_cloned_voice(script: str, reference_audio: Path, folder: Path, pr
         if progress_callback:
             progress_callback(13, "ফ্রি কণ্ঠসেবার সঙ্গে সংযোগ করা হচ্ছে।")
         output = folder / "cloned_voice.wav"
-        chunks = _split_voice_clone_text_by_language(script, max_chars=250)
+        chunks = _split_voice_clone_text_by_language(script, max_chars=450)
         print(f"VOICE_CLONE_PLAN chunks={len(chunks)} languages={','.join(language for language, _ in chunks)} characters={len(script)}", flush=True)
         audio_parts = []
         selected_providers = []
