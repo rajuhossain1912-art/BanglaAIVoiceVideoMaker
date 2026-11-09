@@ -118,6 +118,43 @@ class VoiceCloneUnitTests(unittest.TestCase):
             self.assertEqual(calls[2][1], ["bengali-space"])
             self.assertIs(calls[2][2], video_app._clone_with_cosyvoice)
 
+    def test_english_provider_failure_never_falls_back_to_bengali_voice(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            folder = Path(temp_dir)
+            reference = folder / "reference.m4a"
+            reference.write_bytes(b"reference audio")
+            candidate = folder / "candidate.wav"
+            candidate.write_bytes(b"generated audio" * 20)
+            calls = []
+
+            def fake_run(command, timeout=240):
+                Path(command[-1]).write_bytes(b"normalized audio" * 20)
+                return b""
+
+            def fake_provider(script, normalized, spaces, clone_function, language, *args, **kwargs):
+                calls.append((list(spaces), language, clone_function))
+                if language == "en":
+                    raise RuntimeError("English provider unavailable")
+                return candidate, "bengali-test-space"
+
+            with (
+                patch.object(video_app, "VOICE_CLONE_ENABLED", True),
+                patch.object(video_app, "VOICE_CLONE_EN_SPACES", ["english-space"]),
+                patch.object(video_app, "VOICE_CLONE_BN_SPACES", ["bengali-space"]),
+                patch.object(video_app, "VOICE_CLONE_BN_VAKYA_SPACES", ["vakya-space"]),
+                patch.object(video_app, "run", side_effect=fake_run),
+                patch.object(video_app, "_clone_with_provider_fallback", side_effect=fake_provider),
+            ):
+                with self.assertRaisesRegex(RuntimeError, "নিজের কণ্ঠে অডিও তৈরি করা যায়নি"):
+                    video_app.synthesize_cloned_voice(
+                        "বাংলা কথা। This is English.", reference, folder
+                    )
+
+            self.assertEqual([call[1] for call in calls], ["bn", "en"])
+            self.assertEqual(calls[0][0], ["bengali-space"])
+            self.assertEqual(calls[1][0], ["english-space"])
+            self.assertIs(calls[1][2], video_app._clone_with_chatterbox)
+
     def test_provider_fallback_tries_next_space_after_failure(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             folder = Path(temp_dir)
