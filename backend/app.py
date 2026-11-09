@@ -34,7 +34,12 @@ VOICE_CLONE_BN_VAKYA_SPACES = [
     ).split(",") if x.strip()
 ]
 VOICE_CLONE_EN_SPACE = os.getenv("VOICE_CLONE_EN_SPACE", "ResembleAI/Chatterbox")
-VOICE_CLONE_EN_SPACES = [x.strip() for x in os.getenv("VOICE_CLONE_EN_SPACES", VOICE_CLONE_EN_SPACE).split(",") if x.strip()]
+# The original English-only Space can exhaust its ZeroGPU allowance. Keep the
+# official multilingual Space as an independent free fallback for English.
+VOICE_CLONE_EN_SPACES = [x.strip() for x in os.getenv(
+    "VOICE_CLONE_EN_SPACES",
+    f"{VOICE_CLONE_EN_SPACE},ResembleAI/Chatterbox-Multilingual-TTS",
+).split(",") if x.strip()]
 VOICE_CLONE_ENABLED = os.getenv("VOICE_CLONE_ENABLED", "true").lower() in ("1", "true", "yes")
 AI_IMAGE_GENERATION_ENABLED = os.getenv("AI_IMAGE_GENERATION_ENABLED", "true").lower() in ("1", "true", "yes")
 AI_IMAGE_PROVIDER_ORDER = [x.strip().lower() for x in os.getenv("AI_IMAGE_PROVIDER_ORDER", "pollinations,flux,zimage").split(",") if x.strip()]
@@ -360,16 +365,27 @@ def _clone_with_vakya(script: str, normalized: Path, space: str):
 
 def _clone_with_chatterbox(script: str, normalized: Path, space: str):
     from gradio_client import Client, handle_file
-    client = Client(space, verbose=False, httpx_kwargs={"timeout": 120.0})
-    result = client.predict(
-        script,
-        handle_file(str(normalized)),
-        0.5,
-        0.8,
-        0,
-        0.4,
-        api_name="/generate_tts_audio",
-    )
+    client = Client(space, verbose=False, httpx_kwargs={"timeout": 180.0})
+    if "Multilingual-TTS" in space:
+        # Official multilingual Chatterbox Space uses named inputs and an
+        # explicit language selector. This preserves the supplied speaker
+        # reference while providing a separate English-capable fallback.
+        result = client.predict(
+            text_input=script[:300],
+            language_id="en",
+            audio_prompt_path_input=handle_file(str(normalized)),
+            api_name="/generate_tts_audio",
+        )
+    else:
+        result = client.predict(
+            script,
+            handle_file(str(normalized)),
+            0.5,
+            0.8,
+            0,
+            0.4,
+            api_name="/generate_tts_audio",
+        )
     return result
 
 
