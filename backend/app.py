@@ -371,9 +371,13 @@ def _clone_with_chatterbox(script: str, normalized: Path, space: str):
         # explicit language selector. This preserves the supplied speaker
         # reference while providing a separate English-capable fallback.
         result = client.predict(
-            text_input=script[:300],
+            text_input=script,
             language_id="en",
             audio_prompt_path_input=handle_file(str(normalized)),
+            exaggeration_input=0.5,
+            temperature_input=0.8,
+            seed_num_input=0,
+            cfgw_input=0.0,
             api_name="/generate_tts_audio",
         )
     else:
@@ -519,7 +523,8 @@ def synthesize_cloned_voice(script: str, reference_audio: Path, folder: Path, pr
         if progress_callback:
             progress_callback(13, "ফ্রি কণ্ঠসেবার সঙ্গে সংযোগ করা হচ্ছে।")
         output = folder / "cloned_voice.wav"
-        chunks = _split_voice_clone_text_by_language(script, max_chars=450)
+        # Keep chunks below the multilingual fallback Space 300-character hard limit.
+        chunks = _split_voice_clone_text_by_language(script, max_chars=250)
         print(f"VOICE_CLONE_PLAN chunks={len(chunks)} languages={','.join(language for language, _ in chunks)} characters={len(script)}", flush=True)
         audio_parts = []
         selected_providers = []
