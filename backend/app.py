@@ -1491,8 +1491,8 @@ def _english_visual_prompt(script: str, model_visual_prompt: Optional[str] = Non
         exclusions = (            " Do not show maps, globes, atlases, or geographic diagrams unless the scene explicitly discusses geography or maps."
         )
     return (
-        "One coherent documentary photograph, vertical 9:16, for a Bangladeshi educational video. "
-        "Depict the exact real-world subject and physical action stated in this scene: " + subject + ". "
+        "Main subject and action, which must be clearly visible: " + subject + ". "
+        "Create one coherent vertical 9:16 documentary photograph for a Bangladeshi educational video. "
         + exclusions +
         "The main subject must be large, recognizable, in focus, and visibly doing the described action; "
         "show the actual named object, person, place, or activity rather than a symbolic substitute. "
@@ -2375,7 +2375,12 @@ def _review_generated_image_against_scene(image_path: Path, narration: str, visu
             preview.save(buffer, format="JPEG", quality=78, optimize=True)
         image_data = "data:image/jpeg;base64," + base64.b64encode(buffer.getvalue()).decode("ascii")
         narration_text = re.sub(r"\s+", " ", str(narration)).strip()[:420]
-        visual_text = re.sub(r"\s+", " ", str(visual_prompt or "")).strip()[:220]
+        # Always give the vision reviewer the narration-grounded subject first.
+        # A planner prompt alone may be vague or incorrect, and truncating it at
+        # 220 characters can hide the actual scene subject behind style wording.
+        visual_text = re.sub(
+            r"\s+", " ", _english_visual_prompt(narration, visual_prompt)
+        ).strip()[:220]
         # Keep the primary VQA request deliberately short. Retry once with simpler
         # wording when Workers AI returns an empty or unparseable answer.
         # Moondream is more reliable when the comparison target is an explicit
