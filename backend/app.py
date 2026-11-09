@@ -185,7 +185,7 @@ def synthesize_mixed_speech(script: str, folder: Path) -> Path:
     if len(audio_parts) == 1:
         return audio_parts[0]
     listing = folder / "audio-parts.txt"
-    listing.write_text("".join(f"file '{part.as_posix()}'\n" for part in audio_parts), encoding="utf-8")
+            listing.write_text("".join(f"file '{part.as_posix()}'\n" for part in audio_parts), encoding="utf-8")
     combined = folder / "voice.wav"
     run(["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(listing), "-c:a", "pcm_s16le", str(combined)], 120)
     return combined
