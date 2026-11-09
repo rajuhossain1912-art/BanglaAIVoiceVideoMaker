@@ -1458,8 +1458,14 @@ def _plan_scene_visual_prompts(scenes, context_scenes=None, context_offset=0):
 def _english_visual_prompt(script: str, model_visual_prompt: Optional[str] = None):
     """Create a focused prompt and explicitly suppress common off-topic map/globe imagery."""
     concepts = _matched_visual_concepts(script, limit=2)
-    if model_visual_prompt:
-        concepts = [re.sub(r"\s+", " ", model_visual_prompt).strip()[:360]]
+    planner_detail = re.sub(r"\s+", " ", str(model_visual_prompt or "")).strip()[:360]
+    # The narration is the source of truth. Never let a broad or mistaken
+    # storyboard-model description replace a concrete subject detected in
+    # the actual sentence; use the model output only as supporting detail.
+    if concepts and planner_detail:
+        concepts = [concepts[0] + "; additional scene detail: " + planner_detail]
+    elif planner_detail:
+        concepts = [planner_detail]
     if not concepts:
         english_words = re.findall(r"[A-Za-z]{3,}", (script or "")[:500])
         subject = "a realistic educational scene in Bangladesh"
