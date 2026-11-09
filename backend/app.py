@@ -309,11 +309,11 @@ def _write_gradio_audio_result(audio_result, folder: Path, stem: str, base_url: 
 def _clone_with_cosyvoice(script: str, normalized: Path, space: str):
     from gradio_client import Client, handle_file
     client = Client(space, verbose=False, httpx_kwargs={"timeout": 120.0})
-    # The Bengali CosyVoice3 Space supports an instruction prefix before
-    # <|endofprompt|>. A clear, moderate-paced narrator instruction is more
-    # suitable for long-form narration than the generic assistant default.
+    # CosyVoice limits the complete instruction-plus-script input to 500
+    # characters. Keep this prompt short so a 250-character narration chunk
+    # remains safely within that provider limit.
     instructed_script = (
-        "You are a professional bilingual Bengali and English narrator. Speak clearly at a steady, natural pace from the first word to the last, with gentle pauses. Pronounce every Bengali word accurately in standard Bengali. Pronounce embedded English words and brand names in clear standard English, not with Bengali letter names or guessed sounds. Keep the same calm speaking pace throughout."
+        "Speak clearly and naturally in Bengali and English, at a steady pace."
         "<|endofprompt|>" + script
     )
     result = client.predict(
