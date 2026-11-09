@@ -359,6 +359,8 @@ class SceneImageSimilarityTests(unittest.TestCase):
         self.assertIn("Bangladeshi farmer working in a green rice field", prompt)
         self.assertIn("additional scene detail", prompt)
         self.assertIn("generic city skyline", prompt)
+        self.assertTrue(prompt.startswith("Main subject and action"))
+        self.assertLess(prompt.index("Bangladeshi farmer working in a green rice field"), 220)
 
 
 if __name__ == "__main__":
