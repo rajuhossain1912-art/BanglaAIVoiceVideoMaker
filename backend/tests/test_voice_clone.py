@@ -270,7 +270,7 @@ class VoiceCloneUnitTests(unittest.TestCase):
                 "bengali-space",
             )
 
-        self.assertEqual(result[0], ("audio-result", "done"))
+        self.assertEqual(result, ("audio-result", "https://example-space.hf.space"))
         args, kwargs = calls[0]
         self.assertTrue(args[0].startswith(
             "You are a professional Bengali narrator. Speak calmly and clearly.<|endofprompt|>"
