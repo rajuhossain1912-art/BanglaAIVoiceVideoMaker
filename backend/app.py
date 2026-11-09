@@ -2360,6 +2360,19 @@ def _should_review_duplicate_retry(index: int, review_indices, source: str):
     return index in review_indices and _should_semantically_review_image_source(source)
 
 
+def _record_duplicate_retry_review(review, semantic_review):
+    """Record a duplicate replacement photo review and return its outcome."""
+    semantic_review["duplicate_retry_reviewed"] += 1
+    if review is None:
+        semantic_review["duplicate_retry_unavailable"] += 1
+        return "unavailable"
+    if review.get("match"):
+        semantic_review["duplicate_retry_matched"] += 1
+        return "matched"
+    semantic_review["duplicate_retry_mismatched"] += 1
+    return "mismatched"
+
+
 def _review_generated_image_against_scene(image_path: Path, narration: str, visual_prompt: Optional[str] = None):
     """Ask Moondream to inspect a generated image and judge whether it depicts this narration."""
     account_id = os.getenv("CLOUDFLARE_ACCOUNT_ID", "").strip()
@@ -2641,11 +2654,48 @@ def make_scene_backgrounds(script: str, folder: Path, progress_callback=None, du
                     _scene_images_too_similar(licensed_background, prior) for prior in backgrounds
                 )
                 if licensed_source == "licensed_contextual" and licensed_is_distinct:
-                    background = licensed_background
-                    duplicate_retry_action = "accepted_licensed_photo_unverified"
-                    final_visual_status = "not_reviewed"
-                    final_visual_description = ""
-                    print(f"IMAGE_SCENE repeated_image index={index + 1} action=accepted_distinct_licensed_photo", flush=True)
+                    licensed_review = None
+                    licensed_outcome = "not_reviewed"
+                    if _should_review_duplicate_retry(index, review_indices, licensed_source):
+                        licensed_review = _review_generated_image_against_scene(
+                            licensed_background, scene_text, distinct_prompt
+                        )
+                        licensed_outcome = _record_duplicate_retry_review(
+                            licensed_review, semantic_review
+                        )
+                    if licensed_outcome in ("matched", "not_reviewed", "unavailable"):
+                        background = licensed_background
+                        duplicate_retry_action = (
+                            "accepted_licensed_photo"
+                            if licensed_outcome == "matched"
+                            else "accepted_licensed_photo_unverified"
+                        )
+                        final_visual_status = (
+                            "matched" if licensed_outcome == "matched"
+                            else "unavailable" if licensed_outcome == "unavailable"
+                            else "not_reviewed"
+                        )
+                        final_visual_description = str(
+                            (licensed_review or {}).get("description") or ""
+                        )
+                        print(
+                            f"IMAGE_SCENE repeated_image index={index + 1} "
+                            f"action=accepted_distinct_licensed_photo review={licensed_outcome}",
+                            flush=True,
+                        )
+                    else:
+                        duplicate_retry_action = "topic_graphic_after_duplicate_retry"
+                        final_visual_status = "topic_graphic_unreviewed"
+                        final_visual_description = ""
+                        print(
+                            f"IMAGE_REVIEW duplicate_retry=mismatch scene={index + 1} "
+                            "action=use_topic_graphic",
+                            flush=True,
+                        )
+                        background = make_background(
+                            scene_text, scene_dir, force_topic_graphic=True,
+                            variation_seed=index, scene_index=index + 1
+                        )
                 else:
                     duplicate_retry_action = "topic_graphic_after_duplicate_retry"
                     final_visual_status = "topic_graphic_unreviewed"
