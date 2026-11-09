@@ -245,6 +245,41 @@ class VoiceCloneUnitTests(unittest.TestCase):
             sleep.assert_called_once_with(2)
             self.assertTrue(any("আরেকবার চেষ্টা" in message for _, message in progress))
 
+    def test_cosyvoice_uses_clear_bengali_narrator_instruction(self):
+        calls = []
+
+        class FakeClient:
+            src = "https://example-space.hf.space"
+
+            def __init__(self, *args, **kwargs):
+                pass
+
+            def predict(self, *args, **kwargs):
+                calls.append((args, kwargs))
+                return ("audio-result", "done")
+
+        with patch.dict("sys.modules", {
+            "gradio_client": type("FakeGradioClient", (), {
+                "Client": FakeClient,
+                "handle_file": staticmethod(lambda path: f"FILE:{path}"),
+            })
+        }):
+            result = video_app._clone_with_cosyvoice(
+                "আজকের খবর আপনাদের জানাচ্ছি।",
+                Path("/tmp/reference.wav"),
+                "bengali-space",
+            )
+
+        self.assertEqual(result[0], ("audio-result", "done"))
+        args, kwargs = calls[0]
+        self.assertTrue(args[0].startswith(
+            "You are a professional Bengali narrator. Speak calmly and clearly.<|endofprompt|>"
+        ))
+        self.assertTrue(args[0].endswith("আজকের খবর আপনাদের জানাচ্ছি।"))
+        self.assertEqual(args[1], "FILE:/tmp/reference.wav")
+        self.assertEqual(args[2:], (0, 1.0))
+        self.assertEqual(kwargs["api_name"], "/generate_cross_lingual_audio")
+
     def test_indicf5_adapter_transcribes_reference_then_generates_audio(self):
         calls = []
 
