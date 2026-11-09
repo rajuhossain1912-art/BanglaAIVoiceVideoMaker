@@ -8,6 +8,22 @@ from backend import app as video_app
 
 
 class VoiceCloneUnitTests(unittest.TestCase):
+    def test_voice_gradio_client_uses_optional_huggingface_token(self):
+        from types import SimpleNamespace
+        fake_client = unittest.mock.Mock()
+        fake_module = SimpleNamespace(Client=fake_client)
+        with (
+            patch.dict("sys.modules", {"gradio_client": fake_module}),
+            patch.dict("os.environ", {"HF_TOKEN": "hf-test-token"}, clear=False),
+        ):
+            video_app._make_voice_gradio_client("owner/space", 90.0)
+        fake_client.assert_called_once_with(
+            "owner/space",
+            verbose=False,
+            httpx_kwargs={"timeout": 90.0},
+            token="hf-test-token",
+        )
+
     def test_gradio_remote_filedata_downloads_url_when_path_is_remote(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             folder = Path(temp_dir)
