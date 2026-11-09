@@ -80,6 +80,21 @@ class VoiceCloneUnitTests(unittest.TestCase):
         self.assertEqual([language for language, _ in chunks], ["bn", "en", "bn"])
         self.assertIn("This is English.", chunks[1][1])
 
+    def test_inline_english_term_stays_with_bengali_sentence(self):
+        chunks = video_app._split_voice_clone_text_by_language(
+            "আজকের AI প্রযুক্তি আমাদের জীবন বদলে দিচ্ছে।"
+        )
+        self.assertEqual(len(chunks), 1)
+        self.assertEqual(chunks[0][0], "bn")
+        self.assertEqual(chunks[0][1], "আজকের AI প্রযুক্তি আমাদের জীবন বদলে দিচ্ছে।")
+
+    def test_standalone_english_sentence_uses_english_provider(self):
+        chunks = video_app._split_voice_clone_text_by_language(
+            "আজকের খবর। Artificial intelligence is changing our lives."
+        )
+        self.assertEqual([language for language, _ in chunks], ["bn", "en"])
+        self.assertEqual(chunks[1][1], "Artificial intelligence is changing our lives.")
+
     def test_mixed_script_routes_english_chunks_to_english_clone_provider(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             folder = Path(temp_dir)
