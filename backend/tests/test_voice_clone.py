@@ -298,8 +298,9 @@ class VoiceCloneUnitTests(unittest.TestCase):
         self.assertEqual(result, ("audio-result", "https://example-space.hf.space"))
         args, kwargs = calls[0]
         self.assertTrue(args[0].startswith(
-            "You are a professional bilingual Bengali and English narrator. Speak clearly at a steady, natural pace from the first word to the last, with gentle pauses. Pronounce every Bengali word accurately in standard Bengali. Pronounce embedded English words and brand names in clear standard English, not with Bengali letter names or guessed sounds. Keep the same calm speaking pace throughout.<|endofprompt|>"
+            "Speak clearly and naturally in Bengali and English, at a steady pace.<|endofprompt|>"
         ))
+        self.assertLessEqual(len(args[0]), 500)
         self.assertTrue(args[0].endswith("আজকের খবর আপনাদের জানাচ্ছি।"))
         self.assertEqual(args[1], "FILE:/tmp/reference.wav")
         self.assertEqual(args[2:], (0, 0.95))
