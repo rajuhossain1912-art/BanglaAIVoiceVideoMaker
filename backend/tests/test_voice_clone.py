@@ -292,8 +292,36 @@ class VoiceCloneUnitTests(unittest.TestCase):
         ))
         self.assertTrue(args[0].endswith("আজকের খবর আপনাদের জানাচ্ছি।"))
         self.assertEqual(args[1], "FILE:/tmp/reference.wav")
-        self.assertEqual(args[2:], (0, 1.0))
+        self.assertEqual(args[2:], (0, 0.95))
         self.assertEqual(kwargs["api_name"], "/generate_cross_lingual_audio")
+
+    def test_chatterbox_uses_gentler_pacing_settings(self):
+        calls = []
+
+        class FakeClient:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            def predict(self, *args, **kwargs):
+                calls.append((args, kwargs))
+                return "audio-result"
+
+        with patch.dict("sys.modules", {
+            "gradio_client": type("FakeGradioClient", (), {
+                "Client": FakeClient,
+                "handle_file": staticmethod(lambda path: f"FILE:{path}"),
+            })
+        }):
+            result = video_app._clone_with_chatterbox(
+                "This is a clear English test.",
+                Path("/tmp/reference.wav"),
+                "english-space",
+            )
+
+        self.assertEqual(result, "audio-result")
+        args, kwargs = calls[0]
+        self.assertEqual(args, ("This is a clear English test.", "FILE:/tmp/reference.wav", 0.5, 0.8, 0, 0.4))
+        self.assertEqual(kwargs["api_name"], "/generate_tts_audio")
 
     def test_indicf5_adapter_transcribes_reference_then_generates_audio(self):
         calls = []
