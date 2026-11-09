@@ -465,29 +465,29 @@ def _split_voice_clone_text(script: str, max_chars: int = 450):
 
 
 def _split_voice_clone_text_by_language(script: str, max_chars: int = 250):
-    """Split mixed Bangla/English narration into provider-specific text chunks."""
-    tokens = re.findall(r"[\u0980-\u09FF]+|[A-Za-z0-9]+|[^A-Za-z0-9\u0980-\u09FF]+", script)
-    segments = []
-    current_language = None
-    current_text = ""
-    for token in tokens:
-        if re.search(r"[\u0980-\u09FF]", token):
-            language = "bn"
-        elif re.search(r"[A-Za-z0-9]", token):
-            language = "en"
-        else:
-            language = current_language or "bn"
-        if current_language is not None and language != current_language:
-            if current_text.strip():
-                segments.append((current_language, current_text.strip()))
-            current_text = ""
-        current_language = language
-        current_text += token
-    if current_text.strip():
-        segments.append((current_language or "bn", current_text.strip()))
+    """Route complete sentences by their dominant script, not individual words.
+
+    Switching providers for a single embedded English word (for example,
+    "আজকের AI প্রযুক্তি") creates tiny audio fragments and damages cadence.
+    Keep mixed-script sentences together and choose the provider by the
+    dominant alphabet; standalone English sentences still use the English pool.
+    """
+    sentences = re.split(r"(?<=[।.!?])\s+|\n+", script.strip())
     chunks = []
-    for language, text in segments:
-        chunks.extend((language, part) for part in _split_voice_clone_text(text, max_chars=max_chars))
+    for sentence in sentences:
+        sentence = sentence.strip()
+        if not sentence:
+            continue
+        bengali_letters = len(re.findall(r"[\u0980-\u09FF]", sentence))
+        latin_letters = len(re.findall(r"[A-Za-z0-9]", sentence))
+        language = "en" if latin_letters > bengali_letters else "bn"
+        for part in _split_voice_clone_text(sentence, max_chars=max_chars):
+            if chunks and chunks[-1][0] == language:
+                combined = chunks[-1][1] + " " + part
+                if len(combined) <= max_chars:
+                    chunks[-1] = (language, combined)
+                    continue
+            chunks.append((language, part))
     return chunks
 
 
