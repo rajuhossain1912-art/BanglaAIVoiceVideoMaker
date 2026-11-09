@@ -73,6 +73,51 @@ class VoiceCloneUnitTests(unittest.TestCase):
         self.assertTrue(all(0 < len(chunk) <= 80 for chunk in chunks))
         self.assertEqual(" ".join(chunks), script)
 
+    def test_mixed_script_is_split_into_language_matched_chunks(self):
+        chunks = video_app._split_voice_clone_text_by_language(
+            "বাংলা কথা। This is English. আবার বাংলা।"
+        )
+        self.assertEqual([language for language, _ in chunks], ["bn", "en", "bn"])
+        self.assertIn("This is English.", chunks[1][1])
+
+    def test_mixed_script_routes_english_chunks_to_english_clone_provider(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            folder = Path(temp_dir)
+            reference = folder / "reference.m4a"
+            reference.write_bytes(b"reference audio")
+            candidate = folder / "candidate.wav"
+            candidate.write_bytes(b"generated audio" * 20)
+            calls = []
+
+            def fake_run(command, timeout=240):
+                Path(command[-1]).write_bytes(b"normalized audio" * 20)
+                return b""
+
+            def fake_provider(script, normalized, spaces, clone_function, language, *args, **kwargs):
+                calls.append((script, list(spaces), clone_function, language))
+                return candidate, f"{language}-test-space"
+
+            with (
+                patch.object(video_app, "VOICE_CLONE_ENABLED", True),
+                patch.object(video_app, "VOICE_CLONE_EN_SPACES", ["english-space"]),
+                patch.object(video_app, "VOICE_CLONE_BN_SPACES", ["bengali-space"]),
+                patch.object(video_app, "VOICE_CLONE_BN_VAKYA_SPACES", ["vakya-space"]),
+                patch.object(video_app, "run", side_effect=fake_run),
+                patch.object(video_app, "_clone_with_provider_fallback", side_effect=fake_provider),
+            ):
+                output = video_app.synthesize_cloned_voice(
+                    "বাংলা কথা। This is English. আবার বাংলা।", reference, folder
+                )
+
+            self.assertTrue(output.exists())
+            self.assertEqual([call[3] for call in calls], ["bn", "en", "bn"])
+            self.assertEqual(calls[0][1], ["bengali-space"])
+            self.assertIs(calls[0][2], video_app._clone_with_cosyvoice)
+            self.assertEqual(calls[1][1], ["english-space"])
+            self.assertIs(calls[1][2], video_app._clone_with_chatterbox)
+            self.assertEqual(calls[2][1], ["bengali-space"])
+            self.assertIs(calls[2][2], video_app._clone_with_cosyvoice)
+
     def test_provider_fallback_tries_next_space_after_failure(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             folder = Path(temp_dir)
