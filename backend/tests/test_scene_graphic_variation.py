@@ -351,6 +351,35 @@ class SceneImageSimilarityTests(unittest.TestCase):
             )
 
 
+    def test_duplicate_retry_review_counters_include_licensed_photo(self):
+        semantic_review = {
+            "duplicate_retry_reviewed": 0,
+            "duplicate_retry_matched": 0,
+            "duplicate_retry_mismatched": 0,
+            "duplicate_retry_unavailable": 0,
+        }
+        self.assertEqual(
+            video_app._record_duplicate_retry_review(
+                {"match": True, "description": "Farmer in rice field"}, semantic_review
+            ),
+            "matched",
+        )
+        self.assertEqual(
+            video_app._record_duplicate_retry_review({"match": False}, semantic_review),
+            "mismatched",
+        )
+        self.assertEqual(
+            video_app._record_duplicate_retry_review(None, semantic_review),
+            "unavailable",
+        )
+        self.assertEqual(semantic_review, {
+            "duplicate_retry_reviewed": 3,
+            "duplicate_retry_matched": 1,
+            "duplicate_retry_mismatched": 1,
+            "duplicate_retry_unavailable": 1,
+        })
+
+
     def test_storyboard_prompt_cannot_override_narration_subject(self):
         prompt = video_app._english_visual_prompt(
             "একজন কৃষক ধানক্ষেতে কাজ করছেন।",
