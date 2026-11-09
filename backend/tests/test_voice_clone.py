@@ -88,8 +88,10 @@ class VoiceCloneUnitTests(unittest.TestCase):
             candidate = folder / "candidate.wav"
             candidate.write_bytes(b"generated audio" * 20)
             calls = []
+            ffmpeg_commands = []
 
             def fake_run(command, timeout=240):
+                ffmpeg_commands.append(command)
                 Path(command[-1]).write_bytes(b"normalized audio" * 20)
                 return b""
 
@@ -117,6 +119,9 @@ class VoiceCloneUnitTests(unittest.TestCase):
             self.assertIs(calls[1][2], video_app._clone_with_chatterbox)
             self.assertEqual(calls[2][1], ["bengali-space"])
             self.assertIs(calls[2][2], video_app._clone_with_cosyvoice)
+            chunk_conversions = [command for command in ffmpeg_commands if str(folder / "clone-part-") in str(command[-1])]
+            self.assertEqual(len(chunk_conversions), 3)
+            self.assertTrue(all("-af" in command and "apad=pad_dur=0.12" in command for command in chunk_conversions))
 
     def test_english_provider_failure_never_falls_back_to_bengali_voice(self):
         with tempfile.TemporaryDirectory() as temp_dir:
