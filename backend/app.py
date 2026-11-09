@@ -511,21 +511,16 @@ def synthesize_cloned_voice(script: str, reference_audio: Path, folder: Path, pr
             if progress_callback:
                 progress_callback(chunk_start_progress, f"নিজের কণ্ঠ তৈরি হচ্ছে: অংশ {index + 1}/{len(chunks)}।")
             if chunk_language == "en":
-                try:
-                    candidate, provider = _clone_with_provider_fallback(
-                        text_chunk, normalized, VOICE_CLONE_EN_SPACES, _clone_with_chatterbox,
-                        "en", folder, f"clone-part-{index:03d}",
-                        progress_callback=progress_callback, progress_base=provider_progress_base, progress_span=max(1, provider_progress_span // 2)
-                    )
-                except Exception as english_error:
-                    try:
-                        candidate, provider = _clone_with_provider_fallback(
-                            text_chunk, normalized, VOICE_CLONE_BN_SPACES, _clone_with_cosyvoice,
-                            "en_fallback", folder, f"clone-part-{index:03d}",
-                            progress_callback=progress_callback, progress_base=min(chunk_end_progress - 1, provider_progress_base + max(1, provider_progress_span // 2)), progress_span=max(1, provider_progress_span // 2)
-                        )
-                    except Exception:
-                        raise english_error
+                # Never send English narration to a Bengali-only fallback. A
+                # technically successful response with the wrong language
+                # model can silently produce badly pronounced words.
+                candidate, provider = _clone_with_provider_fallback(
+                    text_chunk, normalized, VOICE_CLONE_EN_SPACES, _clone_with_chatterbox,
+                    "en", folder, f"clone-part-{index:03d}",
+                    progress_callback=progress_callback,
+                    progress_base=provider_progress_base,
+                    progress_span=max(1, provider_progress_span),
+                )
             else:
                 try:
                     candidate, provider = _clone_with_provider_fallback(
