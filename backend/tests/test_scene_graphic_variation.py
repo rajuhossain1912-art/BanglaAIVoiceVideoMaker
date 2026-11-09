@@ -351,5 +351,15 @@ class SceneImageSimilarityTests(unittest.TestCase):
             )
 
 
+    def test_storyboard_prompt_cannot_override_narration_subject(self):
+        prompt = video_app._english_visual_prompt(
+            "একজন কৃষক ধানক্ষেতে কাজ করছেন।",
+            "A generic city skyline with tall buildings and traffic."
+        )
+        self.assertIn("Bangladeshi farmer working in a rice field", prompt)
+        self.assertIn("additional scene detail", prompt)
+        self.assertIn("generic city skyline", prompt)
+
+
 if __name__ == "__main__":
     unittest.main()
