@@ -356,7 +356,7 @@ class SceneImageSimilarityTests(unittest.TestCase):
             "একজন কৃষক ধানক্ষেতে কাজ করছেন।",
             "A generic city skyline with tall buildings and traffic."
         )
-        self.assertIn("Bangladeshi farmer working in a rice field", prompt)
+        self.assertIn("Bangladeshi farmer working in a green rice field", prompt)
         self.assertIn("additional scene detail", prompt)
         self.assertIn("generic city skyline", prompt)
 
