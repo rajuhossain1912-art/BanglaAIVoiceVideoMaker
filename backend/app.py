@@ -459,12 +459,12 @@ def _split_voice_clone_text(script: str, max_chars: int = 450):
 
 def _split_voice_clone_text_by_language(script: str, max_chars: int = 250):
     """Split mixed Bangla/English narration into provider-specific text chunks."""
-    tokens = re.findall(r"[\\u0980-\\u09FF]+|[A-Za-z0-9]+|[^A-Za-z0-9\\u0980-\\u09FF]+", script)
+    tokens = re.findall(r"[\u0980-\u09FF]+|[A-Za-z0-9]+|[^A-Za-z0-9\u0980-\u09FF]+", script)
     segments = []
     current_language = None
     current_text = ""
     for token in tokens:
-        if re.search(r"[\\u0980-\\u09FF]", token):
+        if re.search(r"[\u0980-\u09FF]", token):
             language = "bn"
         elif re.search(r"[A-Za-z0-9]", token):
             language = "en"
