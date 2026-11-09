@@ -547,7 +547,14 @@ def synthesize_cloned_voice(script: str, reference_audio: Path, folder: Path, pr
             if progress_callback:
                 progress_callback(chunk_end_progress, f"নিজের কণ্ঠ তৈরি হচ্ছে: {index + 1}/{len(chunks)} অংশ সম্পন্ন হয়েছে।")
             part_wav = folder / f"clone-part-{index:03d}.wav"
-            run(["ffmpeg", "-y", "-i", str(candidate), "-ac", "1", "-ar", "24000", "-c:a", "pcm_s16le", str(part_wav)], 120)
+            # Add a short, consistent breathing space after each provider chunk.
+            # The concat demuxer otherwise joins separate TTS generations with
+            # zero silence, making language switches and sentence boundaries sound rushed.
+            run([
+                "ffmpeg", "-y", "-i", str(candidate),
+                "-af", "apad=pad_dur=0.12",
+                "-ac", "1", "-ar", "24000", "-c:a", "pcm_s16le", str(part_wav)
+            ], 120)
             if not part_wav.exists() or part_wav.stat().st_size < 100:
                 raise RuntimeError(f"Voice service returned empty audio for part {index + 1}")
             audio_parts.append(part_wav)
