@@ -2362,6 +2362,7 @@ def _should_review_duplicate_retry(index: int, review_indices, source: str):
 
 def _record_duplicate_retry_review(review, semantic_review):
     """Record a duplicate replacement photo review and return its outcome."""
+    # Keep the report counters consistent for both AI and licensed-photo retries.
     semantic_review["duplicate_retry_reviewed"] += 1
     if review is None:
         semantic_review["duplicate_retry_unavailable"] += 1
