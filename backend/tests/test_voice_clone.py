@@ -333,6 +333,44 @@ class VoiceCloneUnitTests(unittest.TestCase):
         self.assertEqual(args, ("This is a clear English test.", "FILE:/tmp/reference.wav", 0.5, 0.8, 0, 0.4))
         self.assertEqual(kwargs["api_name"], "/generate_tts_audio")
 
+    def test_multilingual_chatterbox_uses_full_text_reference_and_cross_language_cfg(self):
+        calls = []
+
+        class FakeClient:
+            def __init__(self, *args, **kwargs):
+                calls.append(("client", args[0]))
+
+            def predict(self, *args, **kwargs):
+                calls.append(("predict", args, kwargs))
+                return "audio-result"
+
+        with patch.dict("sys.modules", {
+            "gradio_client": type("FakeGradioClient", (), {
+                "Client": FakeClient,
+                "handle_file": staticmethod(lambda path: f"FILE:{path}"),
+            })
+        }):
+            result = video_app._clone_with_chatterbox(
+                "This is the complete English sentence.",
+                Path("/tmp/reference.wav"),
+                "ResembleAI/Chatterbox-Multilingual-TTS",
+            )
+
+        self.assertEqual(result, "audio-result")
+        _, args, kwargs = calls[1]
+        self.assertEqual(args, ())
+        self.assertEqual(kwargs["text_input"], "This is the complete English sentence.")
+        self.assertEqual(kwargs["language_id"], "en")
+        self.assertEqual(kwargs["audio_prompt_path_input"], "FILE:/tmp/reference.wav")
+        self.assertEqual(kwargs["cfgw_input"], 0.0)
+        self.assertEqual(kwargs["api_name"], "/generate_tts_audio")
+
+    def test_multilingual_fallback_chunk_limit_is_250_characters(self):
+        script = ("This is a complete English sentence for testing. " * 20).strip()
+        chunks = video_app._split_voice_clone_text_by_language(script, max_chars=250)
+        self.assertTrue(all(len(text) <= 250 for _, text in chunks))
+        self.assertEqual(" ".join(text for _, text in chunks), script)
+
     def test_indicf5_adapter_transcribes_reference_then_generates_audio(self):
         calls = []
 
