@@ -448,8 +448,10 @@ def _clone_with_provider_fallback(
                 transient = isinstance(exc, (TimeoutError, ConnectionError)) or any(
                     marker in message
                     for marker in (
-                        "timeout", "timed out", "429", "503",
-                        "temporarily unavailable", "queue full",
+                        "timeout", "timed out", "408", "425", "429", "500", "502", "503", "504", "520", "522", "524", "529",
+                        "temporarily unavailable", "temporarily busy", "server busy",
+                        "server is busy", "service busy", "overloaded", "at capacity",
+                        "rate limit", "rate-limit", "queue full", "queue is full",
                         "space returned no usable audio file",
                         "space returned no audio",
                         "failed: no audio generated",
