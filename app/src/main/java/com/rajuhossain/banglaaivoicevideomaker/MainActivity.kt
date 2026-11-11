@@ -304,43 +304,16 @@ private fun VideoMakerScreen() {
             previewPlayer = null
             previewPlaying = false
 
-            // Keep the first completed recording as a private, reusable voice sample.
-            // Never silently replace an already-saved sample.
-            var autoSaved = false
-            var saveFailed = false
+            // Keep the recording as a temporary preview until the user listens and explicitly saves it.
+            // Never replace an existing voice profile without the user's save-button action.
             val profile = File(context.filesDir, "voice_profile_sample")
-            if (!profile.exists()) {
-                val pendingProfile = File(context.filesDir, "voice_profile_sample.pending")
-                try {
-                    pendingProfile.delete()
-                    target.inputStream().use { input ->
-                        pendingProfile.outputStream().use { output -> input.copyTo(output) }
-                    }
-                    require(pendingProfile.exists() && pendingProfile.length() > 1000L) {
-                        "রেকর্ড করা অডিও খালি বা অসম্পূর্ণ।"
-                    }
-                    if (!pendingProfile.renameTo(profile)) {
-                        error("ফোনে কণ্ঠের নমুনা সংরক্ষণ করা যায়নি।")
-                    }
-                    audioUri = Uri.fromFile(profile)
-                    audioName = "ফোনে সংরক্ষিত নিজের কণ্ঠের নমুনা"
-                    hasSavedVoiceProfile = true
-                    autoSaved = true
-                } catch (_: Exception) {
-                    saveFailed = true
-                } finally {
-                    pendingProfile.delete()
-                }
-            }
-
             val tone = ToneGenerator(AudioManager.STREAM_MUSIC, 80)
             tone.startTone(ToneGenerator.TONE_PROP_ACK, 250)
             scope.launch { delay(350); tone.release() }
-            val completion = when {
-                autoSaved -> "আপনার রেকর্ড করা কণ্ঠ স্বয়ংক্রিয়ভাবে এই ফোনে নিরাপদ অ্যাপ-স্টোরেজে সংরক্ষণ করা হয়েছে।"
-                saveFailed -> "রেকর্ডিং সম্পন্ন হয়েছে, কিন্তু স্বয়ংক্রিয়ভাবে সংরক্ষণ করা যায়নি। শুনে ভালো লাগলে নিচের সংরক্ষণ বোতাম চাপুন।"
-                profile.exists() -> "রেকর্ডিং সম্পন্ন হয়েছে। আগের সংরক্ষিত কণ্ঠ অক্ষত রাখা হয়েছে। নতুন রেকর্ডিংটি ব্যবহার করতে চাইলে নিচের বোতাম চাপুন।"
-                else -> "রেকর্ডিং সম্পন্ন হয়েছে। নিচে সংরক্ষণের অবস্থা দেখুন।"
+            val completion = if (profile.exists()) {
+                "আগের সংরক্ষিত কণ্ঠ অক্ষত আছে। নতুন রেকর্ডিংটি শুনে ভালো লাগলে নিচের বোতাম চাপুন।"
+            } else {
+                "এখনো ফোনে সংরক্ষণ করা হয়নি। আগে রেকর্ড করা কণ্ঠ শুনুন, তারপর ভালো লাগলে সংরক্ষণ বোতাম চাপুন।"
             }
             status = (if (autoStopTriggered) "দুই মিনিট পূর্ণ হওয়ায় রেকর্ডিং স্বয়ংক্রিয়ভাবে বন্ধ হয়েছে। " else "রেকর্ডিং সম্পন্ন হয়েছে। ") +
                 completion + " এখন নিজের কণ্ঠ শুনে দেখুন।"
