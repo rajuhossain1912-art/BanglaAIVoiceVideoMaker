@@ -71,8 +71,13 @@ jobs:
         run: |
           set -euo pipefail
           APKSIGNER="${ANDROID_HOME}/build-tools/35.0.0/apksigner"
-          "$APKSIGNER" verify --verbose BanglaAIVoiceVideoMaker-v${{ env.APP_VERSION_NAME }}.apk
-          "$APKSIGNER" verify --print-certs BanglaAIVoiceVideoMaker-v${{ env.APP_VERSION_NAME }}.apk
+          APK="BanglaAIVoiceVideoMaker-v${{ env.APP_VERSION_NAME }}.apk"
+          "$APKSIGNER" verify --verbose "$APK"
+          CERT_INFO="$("$APKSIGNER" verify --print-certs "$APK")"
+          echo "$CERT_INFO"
+          EXPECTED_CERT_SHA256="8696b890339820efaaa4765a1133dea499d5a2475d4c79e5d72f7f02a661a0ba"
+          echo "$CERT_INFO" | grep -F "Signer #1 certificate SHA-256 digest: $EXPECTED_CERT_SHA256"
+          echo "Verified: release signing certificate matches the established update key."
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
