@@ -596,6 +596,11 @@ def synthesize_cloned_voice(script: str, reference_audio: Path, folder: Path, pr
                         f"VOICE_CLONE_PRIMARY_POOL_FAILED language=bn error={type(primary_error).__name__}",
                         flush=True,
                     )
+                    # A quota-exhaustion response is account-wide, not a
+                    # transient model failure. Do not waste another provider
+                    # call against the same exhausted Hugging Face allowance.
+                    if "zerogpu quota exhausted" in str(primary_error).lower():
+                        raise
                     candidate, provider = _clone_with_provider_fallback(
                         text_chunk, normalized, VOICE_CLONE_BN_VAKYA_SPACES, _clone_with_vakya,
                         "bn_vakya_fallback", folder, f"clone-part-{index:03d}",
