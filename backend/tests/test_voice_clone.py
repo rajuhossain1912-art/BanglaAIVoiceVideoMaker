@@ -230,6 +230,34 @@ class VoiceCloneUnitTests(unittest.TestCase):
             self.assertIn("আরেকবার চেষ্টা", progress[1][1])
             self.assertIn("কণ্ঠসেবা 2/2", progress[2][1])
 
+    def test_provider_retries_once_when_server_reports_busy(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            folder = Path(temp_dir)
+            good_audio = folder / "recovered.wav"
+            good_audio.write_bytes(b"valid recovered audio" * 20)
+            calls = []
+
+            def busy_then_success(script, normalized, space):
+                calls.append(space)
+                if len(calls) == 1:
+                    raise RuntimeError("The upstream server is busy; please try again")
+                return str(good_audio)
+
+            progress = []
+            with patch.object(video_app.time, "sleep") as sleep:
+                result, selected = video_app._clone_with_provider_fallback(
+                    "পরীক্ষা", folder / "reference.wav",
+                    ["busy-space"], busy_then_success,
+                    "bn", folder, "busy-retry-test",
+                    progress_callback=lambda percent, message: progress.append((percent, message))
+                )
+
+            self.assertEqual(calls, ["busy-space", "busy-space"])
+            self.assertEqual(selected, "busy-space")
+            self.assertEqual(result, good_audio)
+            sleep.assert_called_once_with(2)
+            self.assertTrue(any("আরেকবার চেষ্টা" in message for _, message in progress))
+
     def test_provider_retries_once_after_transient_timeout(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             folder = Path(temp_dir)
