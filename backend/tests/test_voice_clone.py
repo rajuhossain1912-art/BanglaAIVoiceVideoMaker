@@ -282,7 +282,7 @@ class VoiceCloneUnitTests(unittest.TestCase):
                     side_effect=RuntimeError("Hugging Face free ZeroGPU quota exhausted; stop retrying"),
                 ) as provider_call,
             ):
-                with self.assertRaisesRegex(RuntimeError, "ZeroGPU quota exhausted"):
+                with self.assertRaisesRegex(RuntimeError, "বিনামূল্যের GPU সীমা শেষ হয়েছে"):
                     video_app.synthesize_cloned_voice("বাংলা পরীক্ষা।", reference, folder)
 
             self.assertEqual(provider_call.call_count, 1)
