@@ -445,6 +445,26 @@ def _clone_with_provider_fallback(
                 return candidate, space
             except Exception as exc:
                 message = str(exc).lower()
+                quota_exhausted = any(
+                    marker in message
+                    for marker in (
+                        "exceeded your zerogpu runs limit",
+                        "zerogpu runs limit",
+                        "zerogpu quota",
+                        "quota exceeded",
+                        "daily quota exceeded",
+                        "authenticate with a hugging",
+                    )
+                )
+                if quota_exhausted:
+                    failures.append(f"{space}: free ZeroGPU quota exhausted")
+                    print(
+                        f"VOICE_CLONE_QUOTA_EXHAUSTED language={language} space={space}",
+                        flush=True,
+                    )
+                    raise RuntimeError(
+                        "Hugging Face free ZeroGPU quota exhausted; stop retrying this provider pool"
+                    ) from exc
                 transient = isinstance(exc, (TimeoutError, ConnectionError)) or any(
                     marker in message
                     for marker in (
@@ -613,6 +633,12 @@ def synthesize_cloned_voice(script: str, reference_audio: Path, folder: Path, pr
         raise RuntimeError("The voice service returned an empty audio file")
     except Exception as exc:
         print(f"VOICE_PROVIDER failed error={type(exc).__name__}: {str(exc)[:250]}", flush=True)
+        if "zerogpu quota exhausted" in str(exc).lower():
+            raise RuntimeError(
+                "নিজের কণ্ঠ তৈরির জন্য ব্যবহৃত Hugging Face-এর বিনামূল্যের GPU সীমা শেষ হয়েছে। "
+                "এটি আপনার ফোনের সমস্যা নয়। সীমা পুনরায় চালু না হওয়া পর্যন্ত নিজের কণ্ঠ ক্লোন করা যাবে না। "
+                "এখন সাধারণ স্বয়ংক্রিয় ভয়েস অথবা নিজের রেকর্ড করা অডিও ব্যবহার করুন।"
+            ) from exc
         raise RuntimeError("নিজের কণ্ঠে অডিও তৈরি করা যায়নি। ফ্রি কণ্ঠ-সেবা ব্যস্ত বা পরিবর্তিত হতে পারে। কিছুক্ষণ পর চেষ্টা করুন, অথবা সাধারণ স্বয়ংক্রিয় ভয়েস বেছে নিন।") from exc
     finally:
         normalized.unlink(missing_ok=True)
