@@ -251,6 +251,39 @@ class VoiceCloneUnitTests(unittest.TestCase):
 
             self.assertEqual(calls, ["first-space"])
 
+    def test_bengali_quota_exhaustion_does_not_try_vakya_fallback(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            folder = Path(temp_dir)
+            reference = folder / "reference.m4a"
+            reference.write_bytes(b"reference audio")
+            primary_calls = []
+            fallback_calls = []
+
+            def fake_run(command, timeout=240):
+                Path(command[-1]).write_bytes(b"normalized audio" * 20)
+                return b""
+
+            def primary(*args, **kwargs):
+                primary_calls.append(args[2])
+                raise RuntimeError("Hugging Face free ZeroGPU quota exhausted; stop retrying")
+
+            def fallback(*args, **kwargs):
+                fallback_calls.append(args[2])
+                raise AssertionError("Quota exhaustion must not call another HF provider")
+
+            with (
+                patch.object(video_app, "VOICE_CLONE_ENABLED", True),
+                patch.object(video_app, "VOICE_CLONE_BN_SPACES", ["cosyvoice-space"]),
+                patch.object(video_app, "VOICE_CLONE_BN_VAKYA_SPACES", ["vakya-space"]),
+                patch.object(video_app, "run", side_effect=fake_run),
+                patch.object(video_app, "_clone_with_provider_fallback", side_effect=[RuntimeError("Hugging Face free ZeroGPU quota exhausted; stop retrying")]),
+            ):
+                with self.assertRaisesRegex(RuntimeError, "ZeroGPU quota exhausted"):
+                    video_app.synthesize_cloned_voice("বাংলা পরীক্ষা।", reference, folder)
+
+            self.assertEqual(primary_calls, [])
+            self.assertEqual(fallback_calls, [])
+
     def test_provider_retries_once_when_server_reports_busy(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             folder = Path(temp_dir)
