@@ -104,6 +104,34 @@ def _cleanup_expired_jobs(now=None):
         pass
 
 
+
+def _start_job_wait_heartbeat(job_id: str, interval: float = 15.0):
+    """Refresh the visible status while a blocking voice provider is responding."""
+    stopped = threading.Event()
+    started_at = time.monotonic()
+
+    def heartbeat():
+        while not stopped.wait(interval):
+            elapsed = int(time.monotonic() - started_at)
+            with LOCK:
+                job = JOBS.get(job_id)
+                if not job or job.get("status") != "processing":
+                    return
+                job["message"] = (
+                    "নিজের কণ্ঠ তৈরির জন্য ফ্রি কণ্ঠসেবার উত্তর অপেক্ষা করা হচ্ছে। "
+                    f"অপেক্ষার সময়: {elapsed} সেকেন্ড।"
+                )
+
+    worker = threading.Thread(target=heartbeat, name=f"voice-wait-{job_id}", daemon=True)
+    worker.start()
+
+    def stop():
+        stopped.set()
+        if worker.is_alive():
+            worker.join(timeout=max(1.0, interval + 0.5))
+
+    return stop
+
 def run(cmd, timeout=240):
     result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout, check=False)
     if result.returncode:
@@ -3271,6 +3299,7 @@ def render(job_id: str, script: str, mode: str, audio_path: Optional[Path], capt
             reference_audio = audio_path
             if reference_audio is None:
                 raise RuntimeError("নিজের কণ্ঠের নমুনা অডিও নির্বাচন করুন।")
+            stop_wait_heartbeat = None
             try:
                 def update_voice_progress(progress, message):
                     with LOCK:
@@ -3278,8 +3307,11 @@ def render(job_id: str, script: str, mode: str, audio_path: Optional[Path], capt
                             JOBS[job_id]["progress"] = progress
                             JOBS[job_id]["message"] = message
                 update_voice_progress(12, "নিজের কণ্ঠ তৈরি হচ্ছে। ফ্রি কণ্ঠসেবা থেকে উত্তর আসতে কিছুটা সময় লাগতে পারে।")
+                stop_wait_heartbeat = _start_job_wait_heartbeat(job_id)
                 audio_path = synthesize_cloned_voice(script, reference_audio, folder, update_voice_progress)
             finally:
+                if stop_wait_heartbeat is not None:
+                    stop_wait_heartbeat()
                 try:
                     reference_audio.unlink(missing_ok=True)
                 except Exception:
