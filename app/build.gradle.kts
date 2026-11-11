@@ -14,7 +14,7 @@ android {
     defaultConfig {
         // Use a distinct package so the new persistent-signing app can coexist
         // with the legacy installation and its private saved voice profile.
-        applicationId = "com.rajuhossain.banglaaivoicemaker.new"
+        applicationId = "com.rajuhossain.banglaaivoicemaker"
         minSdk = 26
         targetSdk = 35
         versionCode = providers.environmentVariable("APP_VERSION_CODE").getOrElse("4").toInt()
