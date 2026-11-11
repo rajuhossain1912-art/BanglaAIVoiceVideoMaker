@@ -58,13 +58,12 @@ jobs:
       - name: Prepare release APKs
         run: |
           cp app/build/outputs/apk/release/app-release.apk BanglaAIVoiceVideoMaker-v${{ env.APP_VERSION_NAME }}.apk
-          cp app/build/outputs/apk/release/app-release.apk BanglaAIVoiceVideoMaker-latest.apk
       - name: Verify APK signature
         run: |
           set -euo pipefail
           APKSIGNER="${ANDROID_HOME}/build-tools/35.0.0/apksigner"
-          "$APKSIGNER" verify --verbose BanglaAIVoiceVideoMaker-latest.apk
-          "$APKSIGNER" verify --print-certs BanglaAIVoiceVideoMaker-latest.apk
+          "$APKSIGNER" verify --verbose BanglaAIVoiceVideoMaker-v${{ env.APP_VERSION_NAME }}.apk
+          "$APKSIGNER" verify --print-certs BanglaAIVoiceVideoMaker-v${{ env.APP_VERSION_NAME }}.apk
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
@@ -83,4 +82,3 @@ jobs:
           make_latest: true
           files: |
             BanglaAIVoiceVideoMaker-v${{ env.APP_VERSION_NAME }}.apk
-            BanglaAIVoiceVideoMaker-latest.apk
