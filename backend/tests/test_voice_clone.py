@@ -582,6 +582,39 @@ class VoiceCloneUnitTests(unittest.TestCase):
             self.assertIn("কণ্ঠসেবা 1/1", progress[3][1])
             self.assertIn("1/1 অংশ সম্পন্ন", progress[4][1])
 
+ 
+    def test_voice_wait_heartbeat_updates_message_and_stops_for_finished_job(self):
+        job_id = "heartbeat-test"
+        with video_app.LOCK:
+            video_app.JOBS[job_id] = {
+                "status": "processing",
+                "progress": 12,
+                "message": "নিজের কণ্ঠ তৈরি হচ্ছে",
+            }
+        try:
+            stop = video_app._start_job_wait_heartbeat(job_id, interval=0.01)
+            try:
+                deadline = video_app.time.monotonic() + 1.0
+                while video_app.time.monotonic() < deadline:
+                    with video_app.LOCK:
+                        message = video_app.JOBS[job_id]["message"]
+                    if "অপেক্ষার সময়" in message:
+                        break
+                    video_app.time.sleep(0.01)
+                self.assertIn("অপেক্ষার সময়", message)
+                self.assertEqual(video_app.JOBS[job_id]["progress"], 12)
+            finally:
+                stop()
+            with video_app.LOCK:
+                video_app.JOBS[job_id]["status"] = "completed"
+                before = video_app.JOBS[job_id]["message"]
+            video_app.time.sleep(0.03)
+            with video_app.LOCK:
+                self.assertEqual(video_app.JOBS[job_id]["message"], before)
+        finally:
+            with video_app.LOCK:
+                video_app.JOBS.pop(job_id, None)
+
 
 if __name__ == "__main__":
     unittest.main()
