@@ -47,7 +47,7 @@ android {
     kotlinOptions { jvmTarget = "17" }
 }
 
-// Fail the Android build immediately if a future edit changes the installed app identity.
+// Fail the Android build if app identity or versioning could break in-place upgrades; CI also pins the release certificate.
 tasks.register("verifyStableApplicationId") {
     doLast {
         val actualApplicationId = android.defaultConfig.applicationId
