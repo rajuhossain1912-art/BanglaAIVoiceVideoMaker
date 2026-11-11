@@ -46,6 +46,20 @@ android {
     }
     kotlinOptions { jvmTarget = "17" }
 }
+
+// Fail the Android build immediately if a future edit changes the installed app identity.
+tasks.register("verifyStableApplicationId") {
+    doLast {
+        val actualApplicationId = android.defaultConfig.applicationId
+        check(actualApplicationId == "com.rajuhossain.banglaaivoicemaker") {
+            "Unexpected applicationId: $actualApplicationId. Releases must update the existing app."
+        }
+    }
+}
+tasks.named("preBuild") {
+    dependsOn("verifyStableApplicationId")
+}
+
 dependencies {
     implementation(platform("androidx.compose:compose-bom:2024.12.01"))
     implementation("androidx.activity:activity-compose:1.10.0")
