@@ -54,6 +54,10 @@ tasks.register("verifyStableApplicationId") {
         check(actualApplicationId == "com.rajuhossain.banglaaivoicemaker") {
             "Unexpected applicationId: $actualApplicationId. Releases must update the existing app."
         }
+        val actualVersionCode = android.defaultConfig.versionCode
+        check(actualVersionCode != null && actualVersionCode > 0) {
+            "Android versionCode must be a positive integer for in-place updates."
+        }
     }
 }
 tasks.named("preBuild") {
