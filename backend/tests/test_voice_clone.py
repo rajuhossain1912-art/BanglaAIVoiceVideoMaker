@@ -230,6 +230,27 @@ class VoiceCloneUnitTests(unittest.TestCase):
             self.assertIn("আরেকবার চেষ্টা", progress[1][1])
             self.assertIn("কণ্ঠসেবা 2/2", progress[2][1])
 
+    def test_provider_stops_immediately_when_free_zerogpu_quota_is_exhausted(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            folder = Path(temp_dir)
+            calls = []
+
+            def quota_exhausted(script, normalized, space):
+                calls.append(space)
+                raise RuntimeError(
+                    "You have exceeded your ZeroGPU runs limit. "
+                    "Authenticate with a Hugging Face token."
+                )
+
+            with self.assertRaisesRegex(RuntimeError, "ZeroGPU quota exhausted"):
+                video_app._clone_with_provider_fallback(
+                    "পরীক্ষা", folder / "reference.wav",
+                    ["first-space", "second-space"], quota_exhausted,
+                    "bn", folder, "quota-test",
+                )
+
+            self.assertEqual(calls, ["first-space"])
+
     def test_provider_retries_once_when_server_reports_busy(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             folder = Path(temp_dir)
