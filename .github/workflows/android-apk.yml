@@ -55,7 +55,16 @@ jobs:
           echo "Persistent APK signing key loaded."
       - name: Build release APK
         run: gradle --no-daemon assembleRelease -PAPI_BASE_URL="$API_BASE_URL"
-      - name: Prepare release APKs
+      - name: Verify Android app identity and version
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="app/build/outputs/apk/release/app-release.apk"
+          AAPT="${ANDROID_HOME}/build-tools/35.0.0/aapt"
+          BADGING="$("$AAPT" dump badging "$APK")"
+          echo "$BADGING" | grep -F "package: name='com.rajuhossain.banglaaivoicemaker' versionCode='${APP_VERSION_CODE}'"
+          echo "Verified: one stable application ID and the expected increasing version code."
+      - name: Prepare single release APK
         run: |
           cp app/build/outputs/apk/release/app-release.apk BanglaAIVoiceVideoMaker-v${{ env.APP_VERSION_NAME }}.apk
       - name: Verify APK signature
