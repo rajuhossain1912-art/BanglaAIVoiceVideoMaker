@@ -12,8 +12,7 @@ android {
     namespace = "com.rajuhossain.banglaaivoicemaker"
     compileSdk = 35
     defaultConfig {
-        // Use a distinct package so the new persistent-signing app can coexist
-        // with the legacy installation and its private saved voice profile.
+        // Keep the original package ID so releases update the same installed app.
         applicationId = "com.rajuhossain.banglaaivoicemaker"
         minSdk = 26
         targetSdk = 35
