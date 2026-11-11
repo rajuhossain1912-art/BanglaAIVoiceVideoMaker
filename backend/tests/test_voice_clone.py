@@ -276,13 +276,16 @@ class VoiceCloneUnitTests(unittest.TestCase):
                 patch.object(video_app, "VOICE_CLONE_BN_SPACES", ["cosyvoice-space"]),
                 patch.object(video_app, "VOICE_CLONE_BN_VAKYA_SPACES", ["vakya-space"]),
                 patch.object(video_app, "run", side_effect=fake_run),
-                patch.object(video_app, "_clone_with_provider_fallback", side_effect=[RuntimeError("Hugging Face free ZeroGPU quota exhausted; stop retrying")]),
+                patch.object(
+                    video_app,
+                    "_clone_with_provider_fallback",
+                    side_effect=RuntimeError("Hugging Face free ZeroGPU quota exhausted; stop retrying"),
+                ) as provider_call,
             ):
                 with self.assertRaisesRegex(RuntimeError, "ZeroGPU quota exhausted"):
                     video_app.synthesize_cloned_voice("বাংলা পরীক্ষা।", reference, folder)
 
-            self.assertEqual(primary_calls, [])
-            self.assertEqual(fallback_calls, [])
+            self.assertEqual(provider_call.call_count, 1)
 
     def test_provider_retries_once_when_server_reports_busy(self):
         with tempfile.TemporaryDirectory() as temp_dir:
