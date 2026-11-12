@@ -3605,18 +3605,39 @@ def _publication_gate_decision(
     subtitle_ocr = subtitle_ocr if isinstance(subtitle_ocr, dict) else {}
 
     reviewed = int(semantic_review.get("reviewed", 0) or 0)
+    matched_images = int(semantic_review.get("matched", 0) or 0)
     unavailable = int(semantic_review.get("unavailable", 0) or 0)
     mismatched = sum(int(semantic_review.get(key, 0) or 0) for key in (
         "mismatched", "retry_mismatched", "duplicate_retry_mismatched"
     ))
-    if not isinstance(image_count, int) or image_count <= 0 or reviewed < image_count:
-        reasons.append("সব পটভূমির ছবি আলাদাভাবে যাচাই হয়নি।")
+    if (
+        not isinstance(image_count, int) or image_count <= 0
+        or reviewed < image_count or matched_images < image_count
+    ):
+        reasons.append("প্রতিটি পটভূমির ছবি আলাদাভাবে যাচাই করে মিল পাওয়া যায়নি।")
     if unavailable or mismatched:
         reasons.append("ছবির বিষয়বস্তু যাচাইয়ে অমিল বা অনিশ্চিত ফল রয়েছে।")
-    if audio_verification.get("status") != "matched":
-        reasons.append("কণ্ঠের প্রতিলিপি মূল লেখার সঙ্গে নির্ভরযোগ্যভাবে মেলেনি বা যাচাই অসম্পূর্ণ।")
-    if caption_alignment.get("status") != "asr_word_timestamps":
-        reasons.append("সাবটাইটেলের প্রতিটি শব্দের প্রকৃত সময় পাওয়া যায়নি; অনুমানভিত্তিক সময় গ্রহণযোগ্য নয়।")
+
+    audio_status = audio_verification.get("status")
+    missing_tokens = audio_verification.get("missing_tokens")
+    extra_tokens = audio_verification.get("extra_tokens")
+    if (
+        audio_status != "matched"
+        or missing_tokens != 0
+        or extra_tokens != 0
+    ):
+        reasons.append("কণ্ঠে মূল লেখার প্রতিটি শব্দ হুবহু মেলার প্রমাণ নেই।")
+
+    aligned_words = caption_alignment.get("matched_word_timestamps")
+    script_words = caption_alignment.get("script_word_count")
+    if (
+        caption_alignment.get("status") != "asr_word_timestamps"
+        or not isinstance(aligned_words, int)
+        or not isinstance(script_words, int)
+        or script_words <= 0
+        or aligned_words != script_words
+    ):
+        reasons.append("সাবটাইটেলের প্রতিটি শব্দের প্রকৃত সময় সম্পূর্ণভাবে যাচাই হয়নি; অনুমান গ্রহণযোগ্য নয়।")
     if subtitle_ocr.get("status") != "passed":
         reasons.append("রেন্ডার করা সাবটাইটেলের লেখা, বানান, কাটা অংশ ও দৃশ্যমানতা OCR দিয়ে যাচাই হয়নি।")
     if technical_ok is not True:
