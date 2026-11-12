@@ -1563,9 +1563,11 @@ def _english_visual_prompt(script: str, model_visual_prompt: Optional[str] = Non
     # The narration is the source of truth. Never let a broad or mistaken
     # storyboard-model description replace a concrete subject detected in
     # the actual sentence; use the model output only as supporting detail.
-    if concepts and planner_detail:
-        concepts = [concepts[0] + "; additional scene detail: " + planner_detail]
-    elif planner_detail:
+    # A storyboard model can describe a neighboring or unrelated scene.
+    # When narration already matches a concrete subject, keep that subject
+    # authoritative and do not append planner text that can reintroduce a
+    # rejected or unrelated visual.
+    if not concepts and planner_detail:
         concepts = [planner_detail]
     if not concepts:
         english_words = re.findall(r"[A-Za-z]{3,}", (script or "")[:500])
