@@ -1963,6 +1963,20 @@ def _distinct_scene_retry_prompt(base_prompt: Optional[str], scene_text: str):
     return (prompt[:850].rstrip() + instruction)[:1050]
 
 
+def _scene_mismatch_retry_prompt(narration: str, visual_prompt: Optional[str], rejected_description: str = ""):
+    """Rebuild a rejected image prompt from narration first, never from planner output alone."""
+    grounded_prompt = _english_visual_prompt(narration, visual_prompt)
+    rejected = re.sub(r"\\s+", " ", str(rejected_description or "")).strip()[:140]
+    instruction = (
+        " Regenerate from the exact narrated subject and action above. "
+        "The current narration is the source of truth; do not replace it with a neighboring scene. "
+        "Use a clearly recognizable real-life subject and action, one scene only. "
+    )
+    if rejected:
+        instruction += "Avoid this rejected visual content: " + rejected + ". "
+    return (grounded_prompt[:780].rstrip() + instruction)[:1050]
+
+
 def make_background(script: str, folder: Path, model_visual_prompt: Optional[str] = None, force_topic_graphic: bool = False, force_licensed_contextual: bool = False, variation_seed: int = 0, scene_index: Optional[int] = None):
     # Small canvas is intentional: keep peak memory below Render Free's 512 MiB limit.
     width, height = 360, 640
@@ -2660,12 +2674,9 @@ def make_scene_backgrounds(script: str, folder: Path, progress_callback=None, du
                 semantic_review["mismatched"] += 1
                 semantic_review["retried"] += 1
                 print(f"IMAGE_REVIEW action=regenerate scene={index + 1}", flush=True)
-                correction = (
-                    (scene_visual_prompt or _english_visual_prompt(scene_text))
-                    + " Strictly depict this exact narration: " + scene_text[:220]
-                    + ". Avoid the rejected image content: " + review["description"][:140]
-                    + ". Use a clearly recognizable real-life subject and action."
-                )[:1050]
+                correction = _scene_mismatch_retry_prompt(
+                    scene_text, scene_visual_prompt, review.get("description", "")
+                )
                 retry_background = make_background(
                     scene_text, scene_dir, correction, variation_seed=index + len(visual_scenes),
                     scene_index=index + 1
