@@ -151,7 +151,7 @@ GitHub-এ পাওয়া প্রথম commit ২০২৬-১০-১৫। 
 ### উচ্চ অগ্রাধিকার
 - Semantic review cap বনাম strict gate: IMAGE_SEMANTIC_REVIEW_MAX_SCENES default 12; কিন্তু publication gate প্রত্যেক scene-এর verified match চায়। ১২টির বেশি scene হলে sampled review-এর বাইরে থাকা scene not_reviewed হতে পারে, ফলে share/download block হবে। এটি বাস্তব code-level mismatch; সমাধান ছাড়া এটিকে সম্পন্ন বলা যাবে না।
 - Topic graphic fallback বনাম strict gate: local topic graphic semantic vision review এড়িয়ে যায়, কিন্তু gate কেবল matched/retry_matched গ্রহণ করে। ফলে graphic fallback-সহ ভিডিও download block হতে পারে। Safety না কমিয়ে কীভাবে graphic-এর উপযুক্ত যাচাই হবে তা আলাদা করে সমাধান করতে হবে।
-- Similarity comparison failure: _scene_images_too_similar image open/compare exception হলে বর্তমানে False দেয়। অর্থাৎ তুলনা ব্যর্থ হলে duplicate নেই বলে ধরে নিতে পারে। এটিকে unknown/fail-closed হিসেবে ধরার regression test ও code change দরকার।
+- Similarity comparison failure: সংশোধন করা হয়েছে। _scene_images_too_similar image open/compare exception হলে এখন True (duplicate/unknown) দেয়; missing image-এর regression test যোগ করা হয়েছে। এই test GitHub Actions-এ সফল হয়েছে কি না এখনো যাচাই বাকি।
 - Live Render audit: workspace selection নিশ্চিত না হওয়ায় service status, deploy commit, events, logs ও env-var presence এখনো live account থেকে পরীক্ষা হয়নি।
 - Current CI/release state: backend smoke workflow ও Android release workflow-এর সাম্প্রতিক run success, artifact এবং GitHub Release APK পুনরায় যাচাই দরকার।
 - Real device test: TalkBack দিয়ে latest APK install/update, voice recording, screen-off processing, video report এবং download gate—এসব বাস্তব ফোনে পরীক্ষা ছাড়া সম্পূর্ণ বলা যাবে না।
@@ -168,7 +168,7 @@ GitHub-এ পাওয়া প্রথম commit ২০২৬-১০-১৫। 
 
 1. Render workspace নিশ্চিত করে live service/deploy/log/environment audit করা।
 2. GitHub Actions-এর সর্বশেষ backend এবং Android run, release asset ও signing continuity যাচাই করা।
-3. Scene audit cap, topic graphic verification এবং similarity comparison-এর fail-closed mismatch ঠিক করা; regression tests যোগ করা।
+3. Scene audit cap ও topic graphic verification-এর নিরাপদ সমাধান করা; similarity comparison-এর fail-closed fix যোগ হয়েছে, তার CI ফল যাচাই করা।
 4. README ও PRODUCT_PLAN-কে actual code-এর সঙ্গে একীভূতভাবে synchronize করা।
 5. Backend smoke tests pass না হওয়া পর্যন্ত deployment/release success দাবি না করা।
 6. এরপর একটিমাত্র signed APK release এবং একই app package-এ update install যাচাই করা।
