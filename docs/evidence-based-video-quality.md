@@ -30,7 +30,8 @@ A technically playable MP4 is not automatically safe to publish. A video must no
 - `byseon/voxalign` is not selected for production until its model language coverage, license and alignment quality are independently verified.
 
 ### Bengali subtitle OCR
-- Tesseract OCR is Apache-2.0 and the official Tesseract data repositories include Bengali trained data. This is a practical candidate for reading the actual caption panel back from rendered frames.
+- Tesseract OCR is Apache-2.0 and the official Tesseract data repositories include Bengali trained data. The backend now installs Tesseract with Bengali and English language packs and runs OCR against every generated caption frame, in small batches. It verifies that each frame's active highlighted word can be recognized. Missing OCR, missing words or a failed batch blocks publication.
+- This OCR check is deliberately limited: it confirms the active word in each caption frame, not a human-level review of every surrounding word, font choice, reading comfort or subtitle/audio timing. It must not be described as complete subtitle proofreading.
 - PaddleOCR's published supported-language lists and the Bengali language-support discussion must be checked against the exact deployed version. Do not assume Bengali recognition is supported merely because a language is listed as a discussion request.
 
 ### Visual and media checks
