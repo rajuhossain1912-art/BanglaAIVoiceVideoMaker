@@ -419,6 +419,10 @@ class SceneImageSimilarityTests(unittest.TestCase):
         self.assertIn("avoid this rejected visual content", provider_prompt.lower())
         self.assertIn("city bus", provider_prompt.lower())
         self.assertNotIn("crowded market street", provider_prompt.lower())
+        varied_prompt = video_app._vary_visual_prompt(provider_prompt, variation_seed=3)
+        self.assertEqual(varied_prompt, provider_prompt)
+        self.assertIn("avoid this rejected visual content", varied_prompt.lower())
+        self.assertIn("city bus", varied_prompt.lower())
 
 
     def test_vision_review_parser_keeps_rejected_image_description(self):
