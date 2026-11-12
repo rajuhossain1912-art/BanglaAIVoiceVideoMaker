@@ -3588,6 +3588,46 @@ def _audio_verification_from_transcription(script: str, transcription):
     return result
 
 
+def _publication_gate_decision(
+    *,
+    image_count,
+    semantic_review,
+    audio_verification,
+    caption_alignment,
+    subtitle_ocr=None,
+    technical_ok=True,
+):
+    """Fail closed: never mark a video shareable while any visual/text/audio check is unknown."""
+    reasons = []
+    semantic_review = semantic_review if isinstance(semantic_review, dict) else {}
+    audio_verification = audio_verification if isinstance(audio_verification, dict) else {}
+    caption_alignment = caption_alignment if isinstance(caption_alignment, dict) else {}
+    subtitle_ocr = subtitle_ocr if isinstance(subtitle_ocr, dict) else {}
+
+    reviewed = int(semantic_review.get("reviewed", 0) or 0)
+    unavailable = int(semantic_review.get("unavailable", 0) or 0)
+    mismatched = sum(int(semantic_review.get(key, 0) or 0) for key in (
+        "mismatched", "retry_mismatched", "duplicate_retry_mismatched"
+    ))
+    if not isinstance(image_count, int) or image_count <= 0 or reviewed < image_count:
+        reasons.append("সব পটভূমির ছবি আলাদাভাবে যাচাই হয়নি।")
+    if unavailable or mismatched:
+        reasons.append("ছবির বিষয়বস্তু যাচাইয়ে অমিল বা অনিশ্চিত ফল রয়েছে।")
+    if audio_verification.get("status") != "matched":
+        reasons.append("কণ্ঠের প্রতিলিপি মূল লেখার সঙ্গে নির্ভরযোগ্যভাবে মেলেনি বা যাচাই অসম্পূর্ণ।")
+    if caption_alignment.get("status") != "asr_word_timestamps":
+        reasons.append("সাবটাইটেলের প্রতিটি শব্দের প্রকৃত সময় পাওয়া যায়নি; অনুমানভিত্তিক সময় গ্রহণযোগ্য নয়।")
+    if subtitle_ocr.get("status") != "passed":
+        reasons.append("রেন্ডার করা সাবটাইটেলের লেখা, বানান, কাটা অংশ ও দৃশ্যমানতা OCR দিয়ে যাচাই হয়নি।")
+    if technical_ok is not True:
+        reasons.append("ভিডিওর প্রযুক্তিগত পরীক্ষা সম্পূর্ণ সফল হয়নি।")
+    return {
+        "share_allowed": not reasons,
+        "publication_status": "ready" if not reasons else "blocked",
+        "reasons": reasons,
+    }
+
+
 def _transcription_failure_reason(error):
     """Return a short, accessible Bangla explanation without hiding the failure class."""
     message = str(error)
@@ -4265,6 +4305,17 @@ def video_quality_report(job_id: str):
         publication_reasons.append(str(audio_verification.get("reason") or "তৈরি অডিওর প্রতিলিপি যাচাই করা যায়নি।"))
     publication_reasons.append("সাবটাইটেলের বানান ও সময় অডিওর সঙ্গে আলাদাভাবে মিলিয়ে দেখা হয়নি।")
 
+    release_gate = _publication_gate_decision(
+        image_count=image_count,
+        semantic_review=semantic_review,
+        audio_verification=audio_verification,
+        caption_alignment=snapshot.get("caption_alignment") or {},
+        subtitle_ocr=snapshot.get("subtitle_ocr") or {},
+        technical_ok=overall not in ("problem", "visual_warning"),
+    )
+    publication_status = release_gate["publication_status"]
+    publication_reasons = list(dict.fromkeys(publication_reasons + release_gate["reasons"]))
+
     brain_report = snapshot.get("ai_brain") or {}
     report_text = "ভিডিও পরীক্ষার প্রতিবেদন। " + summary + " "
     if brain_report:
@@ -4380,6 +4431,7 @@ def video_quality_report(job_id: str):
         "job_id": job_id,
         "overall": overall,
         "publication_status": publication_status,
+        "share_allowed": release_gate["share_allowed"],
         "publication_reasons": publication_reasons,
         "audio_verification": audio_verification,
         "ai_brain": brain_report,
@@ -4411,6 +4463,22 @@ def download_video(job_id: str):
         raise HTTPException(404, "ভিডিওর কাজটি পাওয়া যায়নি।")
     if job["status"] != "completed":
         raise HTTPException(409, "ভিডিও এখনো তৈরি হয়নি।")
+    # The file remains on the server for further QA, but download/share is blocked
+    # until a complete, evidence-based release gate has explicitly passed.
+    release_gate = _publication_gate_decision(
+        image_count=job.get("scene_count"),
+        semantic_review=job.get("semantic_review") or {},
+        audio_verification=job.get("audio_verification") or {},
+        caption_alignment=job.get("caption_alignment") or {},
+        subtitle_ocr=job.get("subtitle_ocr") or {},
+        technical_ok=True,
+    )
+    if not release_gate["share_allowed"]:
+        raise HTTPException(
+            409,
+            "ভিডিওটি এখনো শেয়ার বা ডাউনলোডের জন্য অনুমোদিত নয়। "
+            + " ".join(release_gate["reasons"])
+        )
     output = WORK_DIR / job_id / "video.mp4"
     if not output.exists():
         raise HTTPException(404, "ভিডিও ফাইলটি আর পাওয়া যাচ্ছে না।")
