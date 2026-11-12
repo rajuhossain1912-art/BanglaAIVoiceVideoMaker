@@ -660,6 +660,53 @@ class VoiceCloneUnitTests(unittest.TestCase):
         self.assertEqual(report, "")
 
 
+
+class NarrationTranscriptionReuseTests(unittest.TestCase):
+    def test_single_narration_transcription_can_drive_audio_qc(self):
+        transcription = {
+            "text": "আমি আজ বাংলা বলছি today is sunny",
+            "word_timestamps": [
+                {"word": "আমি", "start": 0.0, "end": 0.3},
+                {"word": "আজ", "start": 0.3, "end": 0.5},
+                {"word": "বাংলা", "start": 0.5, "end": 0.9},
+                {"word": "বলছি", "start": 0.9, "end": 1.2},
+                {"word": "today", "start": 1.2, "end": 1.5},
+                {"word": "is", "start": 1.5, "end": 1.6},
+                {"word": "sunny", "start": 1.6, "end": 2.0},
+            ],
+        }
+        result = video_app._audio_verification_from_transcription(
+            "আমি আজ বাংলা বলছি today is sunny", transcription
+        )
+        self.assertEqual(result["status"], "matched")
+        self.assertEqual(result["matched_tokens"], 7)
+        self.assertEqual(result["missing_tokens"], 0)
+        self.assertEqual(result["extra_tokens"], 0)
+        self.assertEqual(result["transcript_characters"], len(transcription["text"]))
+        self.assertEqual(result["source"], "source_narration_audio_before_mux")
+        # The same returned object still carries the provider's explicit times for captions.
+        self.assertEqual(len(transcription["word_timestamps"]), 7)
+        self.assertEqual(transcription["word_timestamps"][0]["start"], 0.0)
+
+    def test_unavailable_narration_transcription_is_not_treated_as_verified(self):
+        with self.assertRaises(RuntimeError):
+            video_app._audio_verification_from_transcription(
+                "আমি আজ বলছি", None
+            )
+
+    def test_transcription_failure_reason_is_accessible_and_specific(self):
+        self.assertIn(
+            "বিনামূল্যের সীমা",
+            video_app._transcription_failure_reason(
+                RuntimeError("Whisper-এর বিনামূল্যের সীমা শেষ")
+            ),
+        )
+        self.assertIn(
+            "TimeoutError",
+            video_app._transcription_failure_reason(TimeoutError("timeout")),
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
 
