@@ -3527,6 +3527,126 @@ def _normalize_transcript_tokens(text: str):
     return re.findall(r"[A-Za-z0-9]+|[\u0980-\u09FF]+", normalized, flags=re.UNICODE)
 
 
+def _parse_tesseract_tsv_panels(tsv_text: str, panel_height: int, panel_step: int, panel_count: int):
+    """Group recognized OCR words by their vertical panel in a stacked contact sheet."""
+    panels = [set() for _ in range(max(0, int(panel_count)))]
+    for line in str(tsv_text or "").splitlines()[1:]:
+        fields = line.split("\t")
+        if len(fields) < 12 or fields[0] != "5":
+            continue
+        try:
+            top = int(fields[7])
+            confidence = float(fields[10])
+            panel_index = top // panel_step
+        except (TypeError, ValueError, ZeroDivisionError):
+            continue
+        if confidence < 0 or panel_index < 0 or panel_index >= len(panels):
+            continue
+        if top % panel_step >= panel_height:
+            continue
+        panels[panel_index].update(_normalize_transcript_tokens(fields[11]))
+    return panels
+
+
+def _verify_subtitle_frames_with_ocr(frame_list: Path, script: str, folder: Path, batch_size: int = 8):
+    """OCR every rendered caption panel and verify its currently highlighted word."""
+    try:
+        languages = subprocess.run(
+            ["tesseract", "--list-langs"], capture_output=True, text=True, timeout=10
+        )
+        available_languages = set((languages.stdout or "").splitlines())
+        if languages.returncode != 0 or not {"ben", "eng"}.issubset(available_languages):
+            return {
+                "status": "unavailable", "frames_checked": 0, "words_detected": 0,
+                "words_missing": None,
+                "reason": "বাংলা ও ইংরেজি Tesseract OCR ভাষার ডেটা পাওয়া যায়নি।",
+            }
+    except Exception as exc:
+        return {
+            "status": "unavailable", "frames_checked": 0, "words_detected": 0,
+            "words_missing": None,
+            "reason": "Tesseract OCR চালানো যায়নি: " + type(exc).__name__,
+        }
+
+    try:
+        listing = Path(frame_list).read_text(encoding="utf-8")
+        frame_paths = []
+        for match in re.findall(r"^file '(.+)'$", listing, flags=re.MULTILINE):
+            path = Path(match)
+            if re.fullmatch(r"frame-\d{6}\.png", path.name):
+                frame_paths.append(path)
+        frame_paths = sorted(set(frame_paths), key=lambda path: int(re.search(r"(\d+)", path.stem).group(1)))
+        raw_words = [
+            word
+            for sentence in _split_script_into_scenes(script, max_scenes=None)
+            for word in re.findall(r"\S+", sentence)
+        ]
+        if not frame_paths or len(frame_paths) != len(raw_words):
+            return {
+                "status": "unavailable", "frames_checked": 0, "words_detected": 0,
+                "words_missing": None,
+                "reason": "সাবটাইটেল ফ্রেম ও মূল লেখার শব্দসংখ্যা মেলেনি; OCR ফল নিশ্চিত করা যায়নি।",
+            }
+
+        ocr_folder = Path(folder) / "subtitle-ocr"
+        ocr_folder.mkdir(parents=True, exist_ok=True)
+        panel_width, panel_height, panel_gap = 664, 364, 24
+        panel_step = panel_height + panel_gap
+        words_detected = 0
+        missing_indices = []
+        for offset in range(0, len(frame_paths), max(1, int(batch_size))):
+            batch = frame_paths[offset:offset + max(1, int(batch_size))]
+            sheet = Image.new("RGB", (panel_width, panel_step * len(batch)), (255, 255, 255))
+            for panel_index, image_path in enumerate(batch):
+                with Image.open(image_path) as image:
+                    crop = image.convert("RGB").crop((14, 440, 346, 622))
+                    crop = crop.resize((panel_width, panel_height), Image.Resampling.LANCZOS)
+                    sheet.paste(crop, (0, panel_index * panel_step))
+            sheet_path = ocr_folder / f"batch-{offset:06d}.png"
+            sheet.save(sheet_path, optimize=True)
+            result = subprocess.run(
+                ["tesseract", str(sheet_path), "stdout", "-l", "ben+eng", "--psm", "6", "tsv"],
+                capture_output=True, text=True, timeout=30,
+            )
+            if result.returncode != 0:
+                return {
+                    "status": "unavailable", "frames_checked": offset, "words_detected": words_detected,
+                    "words_missing": None,
+                    "reason": "সাবটাইটেল OCR-এর একটি ব্যাচ সম্পূর্ণ হয়নি।",
+                }
+            panels = _parse_tesseract_tsv_panels(
+                result.stdout, panel_height, panel_step, len(batch)
+            )
+            for panel_index, found_tokens in enumerate(panels):
+                global_index = offset + panel_index
+                expected_tokens = _normalize_transcript_tokens(raw_words[global_index])
+                if expected_tokens and all(token in found_tokens for token in expected_tokens):
+                    words_detected += 1
+                else:
+                    missing_indices.append(global_index + 1)
+
+        passed = words_detected == len(raw_words) and not missing_indices
+        return {
+            "status": "passed" if passed else "failed",
+            "frames_checked": len(frame_paths),
+            "words_detected": words_detected,
+            "words_missing": len(missing_indices),
+            "missing_word_indices": missing_indices[:100],
+            "reason": (
+                "প্রতিটি সাবটাইটেল ফ্রেমের সক্রিয় শব্দ বাংলা ও ইংরেজি OCR-এ শনাক্ত হয়েছে।"
+                if passed else
+                "এক বা একাধিক সাবটাইটেল ফ্রেমের সক্রিয় শব্দ OCR-এ নিশ্চিতভাবে শনাক্ত হয়নি।"
+            ),
+            "method": "tesseract_ben_eng_active_word_per_frame",
+        }
+    except Exception as exc:
+        return {
+            "status": "unavailable", "frames_checked": 0, "words_detected": 0,
+            "words_missing": None,
+            "reason": "সাবটাইটেল OCR পরীক্ষা সম্পন্ন হয়নি: " + type(exc).__name__,
+        }
+
+
 def _compare_script_transcript(script: str, transcript: str):
     """Compare narration with its approved script and expose token-level QC counts."""
     expected = _normalize_transcript_tokens(script)
