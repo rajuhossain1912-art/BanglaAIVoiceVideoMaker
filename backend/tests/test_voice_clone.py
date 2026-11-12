@@ -642,3 +642,37 @@ class VoiceCloneUnitTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TranscriptComparisonDiagnosticsTests(unittest.TestCase):
+    def test_exact_bilingual_transcript_has_no_missing_or_extra_tokens(self):
+        result = video_app._compare_script_transcript(
+            "আমি ভালো আছি today is sunny", "আমি ভালো আছি today is sunny"
+        )
+        self.assertEqual(result["status"], "matched")
+        self.assertEqual(result["matched_tokens"], 6)
+        self.assertEqual(result["missing_tokens"], 0)
+        self.assertEqual(result["extra_tokens"], 0)
+
+    def test_omitted_and_added_words_are_reported_separately(self):
+        result = video_app._compare_script_transcript(
+            "আমি আজ বাজারে যাব", "আমি বাজারে যাব কাল"
+        )
+        self.assertEqual(result["matched_tokens"], 3)
+        self.assertEqual(result["missing_tokens"], 1)
+        self.assertEqual(result["extra_tokens"], 1)
+        self.assertNotEqual(result["status"], "matched")
+
+    def test_empty_transcript_does_not_claim_missing_word_count(self):
+        result = video_app._compare_script_transcript("আমি যাব", "")
+        self.assertEqual(result["status"], "unavailable")
+        self.assertIsNone(result["missing_tokens"])
+        self.assertIsNone(result["extra_tokens"])
+
+    def test_punctuation_and_case_do_not_create_false_mismatches(self):
+        result = video_app._compare_script_transcript(
+            "Hello, বাংলাদেশ!", "hello বাংলাদেশ"
+        )
+        self.assertEqual(result["status"], "matched")
+        self.assertEqual(result["missing_tokens"], 0)
+        self.assertEqual(result["extra_tokens"], 0)
