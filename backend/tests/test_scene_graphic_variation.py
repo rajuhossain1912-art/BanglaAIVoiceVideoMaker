@@ -418,6 +418,14 @@ class SceneImageSimilarityTests(unittest.TestCase):
         self.assertEqual(parsed["research_queries"], ["Bangladesh agriculture"])
         self.assertTrue(parsed["research_needed"])
 
+    def test_video_brain_treats_string_false_as_false(self):
+        parsed = video_app._parse_video_brain_response(
+            '{"language":"bn","research_needed":"false",'
+            '"research_queries":["Bangladesh agriculture"]}',
+            "বাংলা লেখা",
+        )
+        self.assertFalse(parsed["research_needed"])
+
     def test_video_brain_rejects_malformed_response_and_uses_no_research(self):
         self.assertIsNone(video_app._parse_video_brain_response("not json", "বাংলা লেখা"))
         parsed = video_app._parse_video_brain_response(
