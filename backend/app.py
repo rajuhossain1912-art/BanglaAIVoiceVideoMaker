@@ -3715,6 +3715,7 @@ def _publication_gate_decision(
     audio_verification,
     caption_alignment,
     subtitle_ocr=None,
+    scene_audit=None,
     technical_ok=True,
 ):
     """Fail closed: never mark a video shareable while any visual/text/audio check is unknown."""
@@ -3724,19 +3725,18 @@ def _publication_gate_decision(
     caption_alignment = caption_alignment if isinstance(caption_alignment, dict) else {}
     subtitle_ocr = subtitle_ocr if isinstance(subtitle_ocr, dict) else {}
 
-    reviewed = int(semantic_review.get("reviewed", 0) or 0)
-    matched_images = int(semantic_review.get("matched", 0) or 0)
-    unavailable = int(semantic_review.get("unavailable", 0) or 0)
-    mismatched = sum(int(semantic_review.get(key, 0) or 0) for key in (
-        "mismatched", "retry_mismatched", "duplicate_retry_mismatched"
-    ))
+    scene_audit = scene_audit if isinstance(scene_audit, list) else []
+    accepted_visual_statuses = {"matched", "retry_matched"}
+    final_visual_statuses = [
+        str(item.get("final_visual_status") or item.get("semantic_status") or "not_reviewed")
+        for item in scene_audit if isinstance(item, dict)
+    ]
     if (
         not isinstance(image_count, int) or image_count <= 0
-        or reviewed < image_count or matched_images < image_count
+        or len(final_visual_statuses) != image_count
+        or any(status not in accepted_visual_statuses for status in final_visual_statuses)
     ):
-        reasons.append("প্রতিটি পটভূমির ছবি আলাদাভাবে যাচাই করে মিল পাওয়া যায়নি।")
-    if unavailable or mismatched:
-        reasons.append("ছবির বিষয়বস্তু যাচাইয়ে অমিল বা অনিশ্চিত ফল রয়েছে।")
+        reasons.append("প্রতিটি চূড়ান্ত পটভূমির ছবি আলাদাভাবে পরীক্ষা করে বিষয়ের সঙ্গে মিল নিশ্চিত হয়নি।")
 
     audio_status = audio_verification.get("status")
     missing_tokens = audio_verification.get("missing_tokens")
@@ -4471,6 +4471,7 @@ def video_quality_report(job_id: str):
         audio_verification=audio_verification,
         caption_alignment=snapshot.get("caption_alignment") or {},
         subtitle_ocr=snapshot.get("subtitle_ocr") or {},
+        scene_audit=scene_audit,
         technical_ok=overall not in ("problem", "visual_warning"),
     )
     publication_status = release_gate["publication_status"]
@@ -4639,12 +4640,18 @@ def download_video(job_id: str):
         raise HTTPException(409, "ভিডিও এখনো তৈরি হয়নি।")
     # The file remains on the server for further QA, but download/share is blocked
     # until a complete, evidence-based release gate has explicitly passed.
+    audit_path = WORK_DIR / job_id / "scene-audit.json"
+    try:
+        scene_audit = json.loads(audit_path.read_text(encoding="utf-8")) if audit_path.exists() else []
+    except Exception:
+        scene_audit = []
     release_gate = _publication_gate_decision(
         image_count=job.get("scene_count"),
         semantic_review=job.get("semantic_review") or {},
         audio_verification=job.get("audio_verification") or {},
         caption_alignment=job.get("caption_alignment") or {},
         subtitle_ocr=job.get("subtitle_ocr") or {},
+        scene_audit=scene_audit,
         technical_ok=True,
     )
     if not release_gate["share_allowed"]:
