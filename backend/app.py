@@ -4674,6 +4674,16 @@ def video_quality_report(job_id: str):
         report_text += "Whisper-এর স্পষ্ট শব্দ-সময় স্ক্রিপ্টের সঙ্গে মিলিয়ে হাইলাইটে ব্যবহার করা হয়েছে; এটি স্বাধীন মানব যাচাই নয়। "
     else:
         report_text += "প্রতিটি শব্দের প্রকৃত উচ্চারণ-সময় পাওয়া যায়নি; শব্দের হাইলাইট বাক্যের ভেতরে আনুমানিক ভাগ করা হয়েছে। "
+    timing_integrity = caption_alignment.get("timing_integrity_passed")
+    if timing_integrity is True:
+        report_text += (
+            "শব্দের সময় পরীক্ষা সফল; "
+            + str(caption_alignment.get("timing_integrity_checked_words", 0))
+            + "টি শব্দের সময় পূর্ণতা, ক্রম এবং অডিওর সীমা পরীক্ষা করা হয়েছে। "
+        )
+    else:
+        timing_reason = str(caption_alignment.get("timing_integrity_reason") or "প্রতিটি শব্দের নির্ভরযোগ্য সময় পাওয়া যায়নি।")
+        report_text += "শব্দের সময়ের কঠোর পরীক্ষা সফল হয়নি। " + timing_reason + " তাই প্রকাশের অনুমতি বন্ধ। "
     report_text += "এই প্রতিবেদন ফাইলের প্রযুক্তিগত পরীক্ষা; কণ্ঠে লেখা হুবহু পড়া হয়েছে কি না বা প্রতিটি সাবটাইটেল ঠিক আছে কি না তা নিশ্চিত করে না।"
 
     return {
