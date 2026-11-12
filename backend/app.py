@@ -1072,9 +1072,9 @@ def find_openverse_image(script: str, folder: Path, model_visual_prompt: Optiona
                 if isinstance(exc, urllib.error.HTTPError):
                     detail = f"HTTP {exc.code}: {detail}"
                 print(f"IMAGE_SEARCH openverse_failed query={query[:70]} error={type(exc).__name__}: {detail}", flush=True)
-                is_timeout = isinstance(exc, (TimeoutError, socket.timeout)) or (
+                is_timeout = isinstance(exc, TimeoutError) or (
                     isinstance(exc, urllib.error.URLError)
-                    and isinstance(getattr(exc, "reason", None), (TimeoutError, socket.timeout))
+                    and isinstance(getattr(exc, "reason", None), TimeoutError)
                 )
                 if is_timeout:
                     with IMAGE_PROVIDER_COOLDOWN_LOCK:
