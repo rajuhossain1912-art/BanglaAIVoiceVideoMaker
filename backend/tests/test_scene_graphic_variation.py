@@ -417,7 +417,7 @@ class SceneImageSimilarityTests(unittest.TestCase):
         self.assertIn("farmer", provider_prompt.lower())
         self.assertIn("rice field", provider_prompt.lower())
         self.assertIn("avoid this rejected visual content", provider_prompt.lower())
-        self.assertIn("city bus", provider_prompt.lower())
+        self.assertIn("city bus on a busy road", provider_prompt.lower())
         self.assertNotIn("crowded market street", provider_prompt.lower())
         varied_prompt = video_app._vary_visual_prompt(provider_prompt, variation_seed=3)
         self.assertEqual(varied_prompt, provider_prompt)
