@@ -564,11 +564,19 @@ def _split_voice_clone_text_by_language(script: str, max_chars: int = 250):
         bengali_letters = len(re.findall(r"[\u0980-\u09FF]", sentence))
         latin_letters = len(re.findall(r"[A-Za-z0-9]", sentence))
         language = "en" if latin_letters > bengali_letters else "bn"
-        # Keep every sentence as its own provider request. Combining adjacent
-        # sentences can cause some free TTS Spaces to omit an early sentence
-        # while still returning a valid-looking audio file.
+        # Keep adjacent sentences in one provider request when they use the
+        # same language. This reduces sentence-by-sentence voice seams and
+        # helps the cloned narration retain a more natural speaking rhythm.
+        # Never cross a language boundary and never exceed provider limits.
         for part in _split_voice_clone_text(sentence, max_chars=max_chars):
-            chunks.append((language, part))
+            if (
+                chunks
+                and chunks[-1][0] == language
+                and len(chunks[-1][1]) + 1 + len(part) <= max_chars
+            ):
+                chunks[-1] = (language, chunks[-1][1] + " " + part)
+            else:
+                chunks.append((language, part))
     return chunks
 
 
@@ -641,12 +649,12 @@ def synthesize_cloned_voice(script: str, reference_audio: Path, folder: Path, pr
             if progress_callback:
                 progress_callback(chunk_end_progress, f"নিজের কণ্ঠ তৈরি হচ্ছে: {index + 1}/{len(chunks)} অংশ সম্পন্ন হয়েছে।")
             part_wav = folder / f"clone-part-{index:03d}.wav"
-            # Add a short, consistent breathing space after each provider chunk.
-            # The concat demuxer otherwise joins separate TTS generations with
-            # zero silence, making language switches and sentence boundaries sound rushed.
+            # Add a natural pause between provider chunks. The concat demuxer
+            # otherwise joins separate TTS generations with zero silence, which
+            # makes remaining language/provider boundaries sound clipped.
             run([
                 "ffmpeg", "-y", "-i", str(candidate),
-                "-af", "apad=pad_dur=0.12",
+                "-af", "apad=pad_dur=0.25",
                 "-ac", "1", "-ar", "24000", "-c:a", "pcm_s16le", str(part_wav)
             ], 120)
             if not part_wav.exists() or part_wav.stat().st_size < 100:
