@@ -2,6 +2,7 @@
 
 সর্বশেষ পর্যালোচনা: ২০২৬-১১-১৩  
 Repository: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker  
+পূর্ণ Git commit history: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/commits/main/  
 Production API URL (repository configuration): https://bangla-ai-voice-video-maker-api.onrender.com
 
 এই নথি Git commit history, বর্তমান source code, workflow, README এবং product plan দেখে তৈরি। এটি সার্ভারের গোপন environment value বা কোনো API token প্রকাশ করে না। GitHub code-এ provider integration থাকা মানেই provider account-এ বর্তমানে quota/credentials আছে বা live call সফল—এমন নয়।
