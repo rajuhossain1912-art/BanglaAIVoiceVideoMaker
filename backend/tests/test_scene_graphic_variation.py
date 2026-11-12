@@ -442,6 +442,24 @@ class SceneImageSimilarityTests(unittest.TestCase):
             self.assertIsNone(second)
             self.assertEqual(mocked.call_count, 1)
 
+    def test_vision_review_label_without_description_is_unavailable(self):
+        self.assertIsNone(video_app._parse_scene_match_response("MISMATCH"))
+        self.assertIsNone(video_app._parse_scene_match_response("MATCH"))
+
+    def test_openverse_timeout_activates_provider_cooldown(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            folder = Path(temp_dir)
+            with patch.object(video_app, "IMAGE_PROVIDER_COOLDOWN_UNTIL", {}), \
+                 patch.object(video_app.urllib.request, "urlopen", side_effect=TimeoutError("timed out")):
+                result = video_app.find_openverse_image(
+                    "একজন কৃষক ধান কাটছেন", folder, "farmer harvesting rice"
+                )
+                self.assertEqual(result, (None, ""))
+                self.assertGreater(
+                    video_app.IMAGE_PROVIDER_COOLDOWN_UNTIL.get("Openverse-Search", 0),
+                    video_app.time.time(),
+                )
+
     def test_vision_review_parser_keeps_rejected_image_description(self):
         review = video_app._parse_scene_match_response(
             '{"match":false,"confidence":0.94,'
