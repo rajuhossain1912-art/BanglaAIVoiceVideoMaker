@@ -18,12 +18,16 @@ A technically playable MP4 is not automatically safe to publish. A video must no
 ### Bengali speech recognition
 - `bengaliAI/tugstugi_bengaliai-asr_whisper-medium` is referenced by the Bengali VSR dataset pipeline as its Bengali ASR model. Benchmark it against real app samples before replacing the existing Whisper service.
 - `AdibAFC/Robust-Long-Form-Bangla-Speech-Processing` documents a Bengali long-form pipeline using VAD and tuned Whisper decoding. Its reported WER is project-specific and must not be treated as a guarantee for this app.
-- `eulogik/PolyWhisper` publishes Indic LoRA adapters, but the published Bengali result is not strong enough to adopt without independent local evaluation.
+- `psdn-ai/bangla-asr` publishes a Bengali fine-tuned Whisper-medium checkpoint. It is a candidate for offline benchmarking, but the model is substantially larger than the current hosted Whisper API and should not be placed on the Render Free web service without memory/latency tests.
+- `ehzawad/whisper-large-v3-turbo-bn-BD` is a Bangladesh Bengali fine-tune, but its model card specifies research-only, non-commercial use and gated weights. It is not suitable for this public production app without written permission.
+- `AI4Bharat/IndicConformerASR` lists a Bengali model and MIT code license. Verify the individual checkpoint license, model download size, runtime dependencies and actual word error rate before integrating.
 
 ### Word-level timing
-- `arham-sayyed/mms-forced-align` documents Bengali `bn-IN` support and an ONNX Runtime / CTC Viterbi forced-alignment path. This is a candidate for timing the already-approved transcript; it is not ASR and cannot prove that the words were actually spoken.
-- `Animesh6096/bengali-vsr-dataset` describes a Bengali pipeline combining Silero VAD, Bengali Whisper ASR, MMS forced alignment and confidence scoring. Its example explicitly demonstrates that an ASR-invented word can receive a very low alignment score.
-- `byseon/voxalign` is a multilingual alignment project, but its own documentation says parts of its phoneme-first path are still transitioning. Do not treat its planned path as production-ready.
+- `AI4Bharat/IndicMFA` publishes a Bengali acoustic model and grapheme-to-grapheme pronunciation dictionary as part of its 22-language forced-alignment project. This is the strongest native-script Bengali alignment candidate found so far. It requires Montreal Forced Aligner and corpus/model artifacts, so it must be benchmarked in an isolated worker before adoption.
+- `jahurulislam741/bangla-align` is a Bengali-specific MFA workflow that produces phoneme-level TextGrids. Its README describes a manual dictionary-correction step; it is a research/tooling candidate, not a ready-to-run free API.
+- `arham-sayyed/mms-forced-align` is **not a native Bengali-script aligner**. Its current README says its model vocabulary is Latin letters and its examples support English or romanized Indic text only. Do not feed Bengali script into it or treat its word times as Bengali-validated.
+- `Animesh6096/bengali-vsr-dataset` documents a Bengali pipeline using VAD, Bengali Whisper ASR and alignment, but the exact model assets and runtime constraints need separate validation. Its confidence examples are useful as a safety concept, not a production guarantee.
+- `byseon/voxalign` is not selected for production until its model language coverage, license and alignment quality are independently verified.
 
 ### Bengali subtitle OCR
 - Tesseract OCR is Apache-2.0 and the official Tesseract data repositories include Bengali trained data. This is a practical candidate for reading the actual caption panel back from rendered frames.
@@ -47,7 +51,11 @@ A technically playable MP4 is not automatically safe to publish. A video must no
 - https://github.com/Animesh6096/bengali-vsr-dataset
 - https://github.com/AdibAFC/Robust-Long-Form-Bangla-Speech-Processing
 - https://github.com/eulogik/PolyWhisper
+- https://github.com/AI4Bharat/IndicMFA
+- https://github.com/jahurulislam741/bangla-align
 - https://github.com/arham-sayyed/mms-forced-align
+- https://github.com/AI4Bharat/IndicConformerASR
+- https://github.com/psdn-ai/bangla-asr
 - https://github.com/byseon/voxalign
 - https://github.com/tesseract-ocr/tesseract
 - https://github.com/tesseract-ocr/tessdata
