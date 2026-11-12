@@ -661,6 +661,15 @@ class VoiceCloneUnitTests(unittest.TestCase):
 
 
 
+class SceneImageSimilaritySafetyTests(unittest.TestCase):
+    def test_unreadable_scene_image_is_treated_as_duplicate_for_safety(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            valid_image = Path(temp_dir) / "valid.png"
+            missing_image = Path(temp_dir) / "missing.png"
+            video_app.Image.new("RGB", (24, 42), (180, 110, 70)).save(valid_image)
+            self.assertTrue(video_app._scene_images_too_similar(missing_image, valid_image))
+
+
 class NarrationTranscriptionReuseTests(unittest.TestCase):
     def test_single_narration_transcription_can_drive_audio_qc(self):
         transcription = {
