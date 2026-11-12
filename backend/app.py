@@ -3763,6 +3763,14 @@ def capabilities():
             "providers": ["Cloudflare Workers AI model fallback chain (Llama, Qwen, Gemma when available)", "local keyword fallback"],
             "note": "Only the Cloudflare daily free allocation is used. The model chain tries alternatives when one fails. If credentials are absent, the quota is exhausted, or all models fail, local planning is used. No paid or credit-based fallback is enabled.",
         },
+        "ai_brain": {
+            "automatic_language_understanding": True,
+            "topic_tone_audience_analysis": True,
+            "research_lookup": "Wikipedia public search when the AI identifies a factual research need",
+            "research_source_verification": "context_only_not_independently_fact_checked",
+            "uses_research_for_scene_planning": True,
+            "preserves_user_narration": True,
+        },
         "script_generation": {"available": False, "note": "Video creation uses the user's supplied script; the language model plans visuals and does not invent narration."},
         "free_only": True,
     }
@@ -4081,7 +4089,22 @@ def video_quality_report(job_id: str):
         publication_reasons.append(str(audio_verification.get("reason") or "তৈরি অডিওর প্রতিলিপি যাচাই করা যায়নি।"))
     publication_reasons.append("সাবটাইটেলের বানান ও সময় অডিওর সঙ্গে আলাদাভাবে মিলিয়ে দেখা হয়নি।")
 
+    brain_report = snapshot.get("ai_brain") or {}
     report_text = "ভিডিও পরীক্ষার প্রতিবেদন। " + summary + " "
+    if brain_report:
+        report_text += (
+            "স্বয়ংক্রিয় AI বিশ্লেষণ: ভাষা " + str(brain_report.get("language") or "অনির্ধারিত")
+            + ", বিষয় " + str(brain_report.get("topic") or "অনির্ধারিত")
+            + ", ভিডিওর ধরন " + str(brain_report.get("content_type") or "অনির্ধারিত") + "। "
+        )
+        if brain_report.get("research_needed"):
+            sources = brain_report.get("research_sources") or []
+            report_text += (
+                "তথ্য অনুসন্ধান করা হয়েছে। প্রাসঙ্গিক উৎস পাওয়া গেছে "
+                + str(len(sources)) + "টি। এই তথ্য প্রেক্ষাপট হিসেবে ব্যবহৃত হয়েছে, স্বাধীনভাবে সত্যতা যাচাই করা হয়নি। "
+            )
+        elif brain_report.get("research_status") == "unavailable":
+            report_text += "প্রয়োজনীয় তথ্য অনুসন্ধানের উৎস পাওয়া যায়নি। "
     report_text += "প্রকাশের উপযোগিতা: " + ("প্রকাশ বন্ধ রাখা হয়েছে। " if publication_status == "blocked" else "আরও যাচাই প্রয়োজন। ")
     report_text += "কারণ: " + " ".join(publication_reasons) + " "
     audio_similarity = audio_verification.get("similarity")
@@ -4182,6 +4205,7 @@ def video_quality_report(job_id: str):
         "publication_status": publication_status,
         "publication_reasons": publication_reasons,
         "audio_verification": audio_verification,
+        "ai_brain": brain_report,
         "caption_alignment": caption_alignment,
         "summary": summary,
         "report_text": report_text,
