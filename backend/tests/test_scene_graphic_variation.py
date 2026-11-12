@@ -443,8 +443,25 @@ class SceneImageSimilarityTests(unittest.TestCase):
             self.assertEqual(mocked.call_count, 1)
 
     def test_vision_review_label_without_description_is_unavailable(self):
-        self.assertIsNone(video_app._parse_scene_match_response("MISMATCH"))
-        self.assertIsNone(video_app._parse_scene_match_response("MATCH"))
+        parsed = video_app._parse_scene_match_response("MISMATCH")
+        self.assertIsNotNone(parsed)
+        self.assertFalse(parsed["match"])
+        self.assertEqual(parsed["description"], "")
+        with tempfile.TemporaryDirectory() as temp_dir:
+            image = self._image(Path(temp_dir), "label-only.png", (80, 110, 140))
+            response = contextlib.nullcontext(
+                io.BytesIO(b'{"result":{"response":"MISMATCH"}}')
+            )
+            with (
+                patch.object(video_app, "_IMAGE_REVIEW_QUOTA_EXHAUSTED", False),
+                patch.dict("os.environ", {"CLOUDFLARE_ACCOUNT_ID": "test", "CLOUDFLARE_AI_API_TOKEN": "test"}),
+                patch.object(video_app.urllib.request, "urlopen", return_value=response) as mocked,
+            ):
+                review = video_app._review_generated_image_against_scene(
+                    image, "একজন কৃষক ধান কাটছেন"
+                )
+            self.assertIsNone(review)
+            self.assertEqual(mocked.call_count, 2)
 
     def test_openverse_timeout_activates_provider_cooldown(self):
         with tempfile.TemporaryDirectory() as temp_dir:
