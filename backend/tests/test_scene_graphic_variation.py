@@ -392,5 +392,18 @@ class SceneImageSimilarityTests(unittest.TestCase):
         self.assertLess(prompt.index("Bangladeshi farmer working in a green rice field"), 220)
 
 
+    def test_rejected_image_retry_uses_narration_as_source_of_truth(self):
+        prompt = video_app._scene_mismatch_retry_prompt(
+            "একজন কৃষক ধানক্ষেতে ধান কাটছেন",
+            "A city bus driving through a crowded market street",
+            "A city bus on a busy road",
+        )
+        self.assertIn("farmer", prompt.lower())
+        self.assertIn("rice", prompt.lower())
+        self.assertIn("harvesting", prompt.lower())
+        self.assertNotIn("city bus driving", prompt.lower())
+        self.assertIn("rejected visual content", prompt.lower())
+
+
 if __name__ == "__main__":
     unittest.main()
