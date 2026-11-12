@@ -716,6 +716,10 @@ class PublicationReleaseGateTests(unittest.TestCase):
             "audio_verification": {"status": "matched", "missing_tokens": 0, "extra_tokens": 0},
             "caption_alignment": {"status": "asr_word_timestamps", "matched_word_timestamps": 8, "script_word_count": 8},
             "subtitle_ocr": {"status": "passed"},
+            "scene_audit": [
+                {"final_visual_status": "matched"},
+                {"final_visual_status": "retry_matched"},
+            ],
             "technical_ok": True,
         }
 
@@ -755,9 +759,13 @@ class PublicationReleaseGateTests(unittest.TestCase):
             self.assertFalse(result["share_allowed"])
 
 
-    def test_zero_semantic_matches_blocks_sharing_even_when_all_images_were_reviewed(self):
+    def test_every_final_scene_must_have_a_verified_match(self):
         checks = self._good_checks()
-        checks["semantic_review"] = {"reviewed": 2, "matched": 0, "unavailable": 0}
+        checks["scene_audit"][1]["final_visual_status"] = "not_reviewed"
+        result = video_app._publication_gate_decision(**checks)
+        self.assertFalse(result["share_allowed"])
+        checks = self._good_checks()
+        checks["scene_audit"] = checks["scene_audit"][:1]
         result = video_app._publication_gate_decision(**checks)
         self.assertFalse(result["share_allowed"])
 
