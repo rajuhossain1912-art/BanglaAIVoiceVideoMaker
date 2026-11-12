@@ -713,8 +713,8 @@ class PublicationReleaseGateTests(unittest.TestCase):
         return {
             "image_count": 2,
             "semantic_review": {"reviewed": 2, "matched": 2, "unavailable": 0},
-            "audio_verification": {"status": "matched"},
-            "caption_alignment": {"status": "asr_word_timestamps"},
+            "audio_verification": {"status": "matched", "missing_tokens": 0, "extra_tokens": 0},
+            "caption_alignment": {"status": "asr_word_timestamps", "matched_word_timestamps": 8, "script_word_count": 8},
             "subtitle_ocr": {"status": "passed"},
             "technical_ok": True,
         }
@@ -753,6 +753,26 @@ class PublicationReleaseGateTests(unittest.TestCase):
             checks["audio_verification"] = {"status": status}
             result = video_app._publication_gate_decision(**checks)
             self.assertFalse(result["share_allowed"])
+
+
+    def test_zero_semantic_matches_blocks_sharing_even_when_all_images_were_reviewed(self):
+        checks = self._good_checks()
+        checks["semantic_review"] = {"reviewed": 2, "matched": 0, "unavailable": 0}
+        result = video_app._publication_gate_decision(**checks)
+        self.assertFalse(result["share_allowed"])
+
+    def test_missing_or_extra_spoken_words_blocks_sharing_even_when_similarity_passes(self):
+        for field in ("missing_tokens", "extra_tokens"):
+            checks = self._good_checks()
+            checks["audio_verification"][field] = 1
+            result = video_app._publication_gate_decision(**checks)
+            self.assertFalse(result["share_allowed"])
+
+    def test_partial_asr_word_alignment_blocks_sharing(self):
+        checks = self._good_checks()
+        checks["caption_alignment"]["matched_word_timestamps"] = 7
+        result = video_app._publication_gate_decision(**checks)
+        self.assertFalse(result["share_allowed"])
 
 
 if __name__ == "__main__":
