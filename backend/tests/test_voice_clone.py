@@ -96,14 +96,14 @@ class VoiceCloneUnitTests(unittest.TestCase):
         self.assertEqual([language for language, _ in chunks], ["bn", "en", "bn"])
         self.assertIn("This is English.", chunks[1][1])
 
-    def test_consecutive_bengali_sentences_are_separate_clone_chunks(self):
+    def test_consecutive_bengali_sentences_share_one_clone_chunk_for_natural_flow(self):
         chunks = video_app._split_voice_clone_text_by_language(
             "আসসালামু আলাইকুম। আজ আমরা বাংলাদেশের প্রকৃতি নিয়ে কথা বলব।"
         )
-        self.assertEqual([language for language, _ in chunks], ["bn", "bn"])
+        self.assertEqual([language for language, _ in chunks], ["bn"])
         self.assertEqual(
             [text for _, text in chunks],
-            ["আসসালামু আলাইকুম।", "আজ আমরা বাংলাদেশের প্রকৃতি নিয়ে কথা বলব।"],
+            ["আসসালামু আলাইকুম। আজ আমরা বাংলাদেশের প্রকৃতি নিয়ে কথা বলব।"],
         )
 
     def test_inline_english_term_stays_with_bengali_sentence(self):
@@ -162,7 +162,7 @@ class VoiceCloneUnitTests(unittest.TestCase):
             self.assertIs(calls[2][2], video_app._clone_with_cosyvoice)
             chunk_conversions = [command for command in ffmpeg_commands if str(folder / "clone-part-") in str(command[-1])]
             self.assertEqual(len(chunk_conversions), 3)
-            self.assertTrue(all("-af" in command and "apad=pad_dur=0.12" in command for command in chunk_conversions))
+            self.assertTrue(all("-af" in command and "apad=pad_dur=0.25" in command for command in chunk_conversions))
 
     def test_english_provider_failure_never_falls_back_to_bengali_voice(self):
         with tempfile.TemporaryDirectory() as temp_dir:
