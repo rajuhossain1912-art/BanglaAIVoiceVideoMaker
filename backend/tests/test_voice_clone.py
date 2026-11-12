@@ -731,18 +731,18 @@ class PublicationReleaseGateTests(unittest.TestCase):
 
     def test_missing_image_review_blocks_sharing(self):
         checks = self._good_checks()
-        checks["semantic_review"] = {"reviewed": 1, "matched": 1, "unavailable": 0}
+        checks["scene_audit"][1]["final_visual_status"] = "not_reviewed"
         result = video_app._publication_gate_decision(**checks)
         self.assertFalse(result["share_allowed"])
         self.assertEqual(result["publication_status"], "blocked")
-        self.assertTrue(any("সব পটভূমির ছবি" in reason for reason in result["reasons"]))
+        self.assertTrue(any("প্রতিটি চূড়ান্ত পটভূমির ছবি" in reason for reason in result["reasons"]))
 
     def test_estimated_caption_timing_blocks_sharing(self):
         checks = self._good_checks()
         checks["caption_alignment"] = {"status": "estimated"}
         result = video_app._publication_gate_decision(**checks)
         self.assertFalse(result["share_allowed"])
-        self.assertTrue(any("অনুমানভিত্তিক সময়" in reason for reason in result["reasons"]))
+        self.assertTrue(any("অনুমান গ্রহণযোগ্য নয়" in reason for reason in result["reasons"]))
 
     def test_missing_subtitle_ocr_blocks_sharing_even_with_word_timestamps(self):
         checks = self._good_checks()
@@ -795,9 +795,9 @@ class PublicationReleaseGateTests(unittest.TestCase):
 class SubtitleOCRVerificationTests(unittest.TestCase):
     def test_tesseract_tsv_words_are_assigned_to_the_correct_panel(self):
         tsv = (
-            "level\\tpage_num\\tblock_num\\tpar_num\\tline_num\\tword_num\\tleft\\ttop\\twidth\\theight\\tconf\\ttext\\n"
-            "5\\t1\\t1\\t1\\t1\\t1\\t10\\t40\\t80\\t25\\t95\\tবাংলা\\n"
-            "5\\t1\\t1\\t1\\t1\\t2\\t10\\t400\\t60\\t25\\t92\\ttest\\n"
+            "level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext\n"
+            "5\t1\t1\t1\t1\t1\t10\t40\t80\t25\t95\tবাংলা\n"
+            "5\t1\t1\t1\t1\t2\t10\t400\t60\t25\t92\ttest\n"
         )
         panels = video_app._parse_tesseract_tsv_panels(tsv, 364, 388, 2)
         self.assertIn("বাংলা", panels[0])
@@ -816,16 +816,16 @@ class SubtitleOCRVerificationTests(unittest.TestCase):
             video_app.Image.new("RGB", (360, 640), "black").save(second)
             listing = root / "caption-frames.txt"
             listing.write_text(
-                f"file '{first.as_posix()}'\\nduration 1.0\\n"
-                f"file '{second.as_posix()}'\\nduration 1.0\\n",
+                f"file '{first.as_posix()}'\nduration 1.0\n"
+                f"file '{second.as_posix()}'\nduration 1.0\n",
                 encoding="utf-8",
             )
             tsv = (
-                "level\\tpage_num\\tblock_num\\tpar_num\\tline_num\\tword_num\\tleft\\ttop\\twidth\\theight\\tconf\\ttext\\n"
-                "5\\t1\\t1\\t1\\t1\\t1\\t10\\t40\\t80\\t25\\t95\\tবাংলা\\n"
-                "5\\t1\\t1\\t1\\t1\\t2\\t10\\t400\\t60\\t25\\t92\\ttest\\n"
+                "level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext\n"
+                "5\t1\t1\t1\t1\t1\t10\t40\t80\t25\t95\tবাংলা\n"
+                "5\t1\t1\t1\t1\t2\t10\t400\t60\t25\t92\ttest\n"
             )
-            fake = SimpleNamespace(returncode=0, stdout="List of available languages (2):\\nben\\neng\\n", stderr="")
+            fake = SimpleNamespace(returncode=0, stdout="List of available languages (2):\nben\neng\n", stderr="")
             ocr = SimpleNamespace(returncode=0, stdout=tsv, stderr="")
             with patch.object(video_app.subprocess, "run", side_effect=[fake, ocr]):
                 result = video_app._verify_subtitle_frames_with_ocr(listing, "বাংলা test", root)
@@ -845,15 +845,15 @@ class SubtitleOCRVerificationTests(unittest.TestCase):
             video_app.Image.new("RGB", (360, 640), "black").save(second)
             listing = root / "caption-frames.txt"
             listing.write_text(
-                f"file '{first.as_posix()}'\\nduration 1.0\\n"
-                f"file '{second.as_posix()}'\\nduration 1.0\\n",
+                f"file '{first.as_posix()}'\nduration 1.0\n"
+                f"file '{second.as_posix()}'\nduration 1.0\n",
                 encoding="utf-8",
             )
             tsv = (
-                "level\\tpage_num\\tblock_num\\tpar_num\\tline_num\\tword_num\\tleft\\ttop\\twidth\\theight\\tconf\\ttext\\n"
-                "5\\t1\\t1\\t1\\t1\\t1\\t10\\t40\\t80\\t25\\t95\\tবাংলা\\n"
+                "level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext\n"
+                "5\t1\t1\t1\t1\t1\t10\t40\t80\t25\t95\tবাংলা\n"
             )
-            fake = SimpleNamespace(returncode=0, stdout="List of available languages (2):\\nben\\neng\\n", stderr="")
+            fake = SimpleNamespace(returncode=0, stdout="List of available languages (2):\nben\neng\n", stderr="")
             ocr = SimpleNamespace(returncode=0, stdout=tsv, stderr="")
             with patch.object(video_app.subprocess, "run", side_effect=[fake, ocr]):
                 result = video_app._verify_subtitle_frames_with_ocr(listing, "বাংলা test", root)
