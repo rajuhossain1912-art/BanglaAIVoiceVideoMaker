@@ -3576,13 +3576,28 @@ def _audio_token_diagnostics_report(audio_verification):
         f"{extra}টি অতিরিক্ত শব্দ এবং {matched}টি শব্দ মিলে গেছে। "
     )
 
-def verify_rendered_audio_against_script(video_path: Path, script: str, folder: Path, progress_callback=None):
-    """Transcribe the final MP4 audio track and compare it with the approved script."""
-    transcript = transcribe_uploaded_audio(video_path, folder, progress_callback)
+def _audio_verification_from_transcription(script: str, transcription):
+    """Compare a single narration transcription with the approved script."""
+    if not isinstance(transcription, dict):
+        raise RuntimeError("অডিও প্রতিলিপির তথ্য পাওয়া যায়নি।")
+    transcript = str(transcription.get("text") or "")
     result = _compare_script_transcript(script, transcript)
     result["transcript_characters"] = len(transcript)
     result["provider"] = "Cloudflare Workers AI Whisper large-v3-turbo"
+    result["source"] = "source_narration_audio_before_mux"
     return result
+
+
+def _transcription_failure_reason(error):
+    """Return a short, accessible Bangla explanation without hiding the failure class."""
+    message = str(error)
+    if "বিনামূল্যের সীমা" in message:
+        return "Whisper-এর বিনামূল্যের সীমা শেষ বা অনুরোধের হার অতিক্রম হয়েছে।"
+    if "অনুমতি দেয়নি" in message:
+        return "Whisper সংযোগের অনুমতি বা টোকেন পরীক্ষা করা দরকার।"
+    if "সাময়িকভাবে ব্যস্ত" in message or "সময়সীমা শেষ" in message:
+        return "Whisper সেবা সাময়িকভাবে ব্যস্ত অথবা সংযোগে সময় শেষ হয়েছে।"
+    return "অডিও প্রতিলিপি যাচাই সম্পন্ন হয়নি: " + type(error).__name__
 
 
 def render(job_id: str, script: str, mode: str, audio_path: Optional[Path], caption_offset: float = 0.0, scene_interval: int = 5):
@@ -3636,6 +3651,36 @@ def render(job_id: str, script: str, mode: str, audio_path: Optional[Path], capt
         elif audio_path is None:
             audio_path = synthesize_mixed_speech(script, folder)
         duration = duration_of(audio_path)
+        narration_transcription = uploaded_transcription if isinstance(uploaded_transcription, dict) else None
+        narration_transcription_error = None
+        audio_qc_enabled = os.getenv("ENABLE_FINAL_AUDIO_QC", "true").strip().lower() not in ("0", "false", "no", "off")
+        # Transcribe the exact narration file once, before captions are rendered.
+        # The same result supplies explicit word times and script-vs-speech QC.
+        # A Whisper failure must never prevent video creation.
+        if narration_transcription is None and audio_qc_enabled:
+            try:
+                with LOCK:
+                    JOBS[job_id]["progress"] = 27
+                    JOBS[job_id]["message"] = "কণ্ঠের শব্দ ও সময় শনাক্ত করা হচ্ছে"
+                narration_transcription = transcribe_uploaded_audio(
+                    audio_path, folder / "narration-audio-qc", return_details=True
+                )
+                if not isinstance(narration_transcription, dict):
+                    narration_transcription = None
+                    raise RuntimeError("অডিও প্রতিলিপির তথ্য পাওয়া যায়নি।")
+                print(
+                    f"NARRATION_TRANSCRIPTION characters={len(narration_transcription.get('text') or '')} "
+                    f"word_timestamps={len(narration_transcription.get('word_timestamps') or [])}",
+                    flush=True,
+                )
+            except Exception as transcription_error:
+                narration_transcription_error = _transcription_failure_reason(transcription_error)
+                narration_transcription = None
+                print(
+                    f"NARRATION_TRANSCRIPTION status=unavailable error={type(transcription_error).__name__}: "
+                    f"{str(transcription_error)[:180]}",
+                    flush=True,
+                )
         with LOCK:
             JOBS[job_id]["progress"] = 31
             JOBS[job_id]["message"] = "লেখার ভাষা, বিষয় ও ভিডিওর পরিকল্পনা বোঝা হচ্ছে"
@@ -3666,9 +3711,10 @@ def render(job_id: str, script: str, mode: str, audio_path: Optional[Path], capt
             JOBS[job_id]["progress"] = 40
             JOBS[job_id]["message"] = "বাক্যভিত্তিক দৃশ্য ও পটভূমি তৈরি হয়েছে"
         print(f"VIDEO_STAGE job={job_id} stage=subtitles_start", flush=True)
-        caption_word_timestamps = []
-        if mode == "audio" and isinstance(locals().get("uploaded_transcription"), dict):
-            caption_word_timestamps = uploaded_transcription.get("word_timestamps") or []
+        caption_word_timestamps = (
+            narration_transcription.get("word_timestamps") or []
+            if isinstance(narration_transcription, dict) else []
+        )
         frame_list, frame_count = make_caption_frames(script, duration, backgrounds, folder, caption_offset, audio_path, job_id, scene_interval, visual_scene_texts, caption_word_timestamps)
         print(f"VIDEO_STAGE job={job_id} stage=subtitles_done frames={frame_count} method=pillow_word_highlight", flush=True)
         with LOCK:
@@ -3690,39 +3736,31 @@ def render(job_id: str, script: str, mode: str, audio_path: Optional[Path], capt
         ], 240)
         print(f"VIDEO_STAGE job={job_id} stage=ffmpeg_done", flush=True)
         audio_verification = {"status": "unavailable", "similarity": None, "reason": "অডিও প্রতিলিপি যাচাই সম্পন্ন হয়নি।"}
-        if os.getenv("ENABLE_FINAL_AUDIO_QC", "true").strip().lower() not in ("0", "false", "no", "off"):
-            try:
-                def update_audio_qc_progress(progress, message):
+        if audio_qc_enabled:
+            if isinstance(narration_transcription, dict):
+                try:
                     with LOCK:
-                        if job_id in JOBS and JOBS[job_id].get("status") == "processing":
-                            JOBS[job_id]["progress"] = max(JOBS[job_id].get("progress", 0), progress)
-                            JOBS[job_id]["message"] = message
-                update_audio_qc_progress(90, "তৈরি ভিডিওর কণ্ঠ মূল লেখার সঙ্গে মিলিয়ে পরীক্ষা হচ্ছে।")
-                audio_verification = verify_rendered_audio_against_script(
-                    output, script, folder / "final-audio-qc", update_audio_qc_progress
-                )
-                print(
-                    "AUDIO_QC status=" + str(audio_verification.get("status"))
-                    + " similarity=" + str(audio_verification.get("similarity")),
-                    flush=True,
-                )
-            except Exception as qc_error:
-                qc_message = str(qc_error)
-                if "বিনামূল্যের সীমা" in qc_message:
-                    qc_reason = "Whisper-এর বিনামূল্যের সীমা শেষ বা অনুরোধের হার অতিক্রম হয়েছে।"
-                elif "অনুমতি দেয়নি" in qc_message:
-                    qc_reason = "Whisper সংযোগের অনুমতি বা টোকেন পরীক্ষা করা দরকার।"
-                elif "সাময়িকভাবে ব্যস্ত" in qc_message or "সময়সীমা শেষ" in qc_message:
-                    qc_reason = "Whisper সেবা সাময়িকভাবে ব্যস্ত অথবা সংযোগে সময় শেষ হয়েছে।"
-                else:
-                    qc_reason = "অডিও প্রতিলিপি যাচাই সম্পন্ন হয়নি: " + type(qc_error).__name__
-                audio_verification = {
-                    "status": "unavailable", "similarity": None,
-                    "reason": qc_reason,
-                }
-                print(f"AUDIO_QC status=unavailable error={type(qc_error).__name__}: {str(qc_error)[:180]}", flush=True)
+                        JOBS[job_id]["progress"] = max(JOBS[job_id].get("progress", 0), 90)
+                        JOBS[job_id]["message"] = "কণ্ঠের প্রতিলিপি মূল লেখার সঙ্গে মিলিয়ে পরীক্ষা হচ্ছে"
+                    audio_verification = _audio_verification_from_transcription(
+                        script, narration_transcription
+                    )
+                    audio_verification["reason"] = (
+                        "সাবটাইটেলের শব্দ-সময় ও কণ্ঠ যাচাইয়ের জন্য একই মূল কথার অডিও একবার প্রতিলিপি করা হয়েছে। "
+                        "ভিডিওতে এই অডিও ট্র্যাক যুক্ত হয়েছে।"
+                    )
+                    print(
+                        "AUDIO_QC source=narration status=" + str(audio_verification.get("status"))
+                        + " similarity=" + str(audio_verification.get("similarity")),
+                        flush=True,
+                    )
+                except Exception as qc_error:
+                    audio_verification["reason"] = _transcription_failure_reason(qc_error)
+                    print(f"AUDIO_QC status=unavailable error={type(qc_error).__name__}: {str(qc_error)[:180]}", flush=True)
+            else:
+                audio_verification["reason"] = narration_transcription_error or "Whisper প্রতিলিপি পাওয়া যায়নি; তাই শব্দভিত্তিক সময় ও কণ্ঠ যাচাই করা যায়নি।"
         else:
-            audio_verification["reason"] = "সার্ভার সেটিংসে চূড়ান্ত অডিও যাচাই বন্ধ আছে।"
+            audio_verification["reason"] = "সার্ভার সেটিংসে অডিও প্রতিলিপি ও শব্দ-সময় যাচাই বন্ধ আছে; সাবটাইটেলের সময় অনুমানভিত্তিক।"
         with LOCK:
             JOBS[job_id].update(status="completed", progress=100, message="ভিডিও তৈরি হয়েছে", download_url=f"/api/jobs/{job_id}/download", duration=round(duration, 2), scene_count=len(backgrounds), narration_scene_count=len(visual_scene_texts), scene_interval_seconds=scene_interval, caption_frame_count=frame_count, semantic_review=semantic_review, audio_verification=audio_verification, ai_brain=brain_plan, script_characters=len(script), video_mode=mode, completed_at=time.time())
     except Exception as exc:
