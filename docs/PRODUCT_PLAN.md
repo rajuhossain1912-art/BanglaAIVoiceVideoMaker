@@ -58,6 +58,15 @@ Acceptance criteria:
 - Do not expose uploaded audio, cloned voice profiles, or generated videos publicly.
 - Ask explicit consent before cloning a voice; design for the user's own voice or a voice they have permission to use.
 
+## Automatic AI brain and research-context milestone — 2026-11-12
+
+- Before visual planning, the backend asks the configured free Cloudflare Workers AI model chain to classify the supplied narration's language, topic, content type, tone, audience and visual style.
+- For factual topics only, the model may return up to three neutral research queries. The backend searches public Bengali or English Wikipedia and attaches small source snippets and page links to the video plan.
+- Research context is supplied to the scene visual planner, but the exact current narration remains authoritative for each scene. The user's supplied narration is not rewritten.
+- The AI plan and research source list are included in the job status and video quality report for accessible review.
+- Research snippets are context only, not independently fact-checked claims. Multi-source corroboration, current-news research, reliable official-source ranking, factual claim checking and automatic correction remain future work.
+- If Cloudflare AI or public research is unavailable, the pipeline uses a local fallback and reports the limitation. No paid API is enabled.
+
 ## Current implementation milestone — 2026-11-02
 
 The repository now contains an Android Jetpack Compose app and a FastAPI/FFmpeg video backend.
