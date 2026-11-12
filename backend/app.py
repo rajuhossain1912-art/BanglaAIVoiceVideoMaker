@@ -3957,8 +3957,41 @@ def render(job_id: str, script: str, mode: str, audio_path: Optional[Path], capt
                 audio_verification["reason"] = narration_transcription_error or "Whisper প্রতিলিপি পাওয়া যায়নি; তাই শব্দভিত্তিক সময় ও কণ্ঠ যাচাই করা যায়নি।"
         else:
             audio_verification["reason"] = "সার্ভার সেটিংসে অডিও প্রতিলিপি ও শব্দ-সময় যাচাই বন্ধ আছে; সাবটাইটেলের সময় অনুমানভিত্তিক।"
+        try:
+            final_scene_audit = json.loads(
+                (folder / "scene-audit.json").read_text(encoding="utf-8")
+            )
+        except Exception:
+            final_scene_audit = []
+        preliminary_gate = _publication_gate_decision(
+            image_count=len(backgrounds),
+            semantic_review=semantic_review,
+            audio_verification=audio_verification,
+            caption_alignment=JOBS[job_id].get("caption_alignment") or {},
+            subtitle_ocr=subtitle_ocr,
+            scene_audit=final_scene_audit,
+            technical_ok=True,
+        )
+        can_offer_download = preliminary_gate["share_allowed"]
+        completion_message = (
+            "ভিডিও তৈরি হয়েছে; সব স্বয়ংক্রিয় যাচাই পাস হয়েছে।"
+            if can_offer_download
+            else "ভিডিও তৈরি হয়েছে, কিন্তু নিরাপত্তা যাচাই অসম্পূর্ণ বা ব্যর্থ। শেয়ার ও ডাউনলোড বন্ধ রাখা হয়েছে।"
+        )
         with LOCK:
-            JOBS[job_id].update(status="completed", progress=100, message="ভিডিও তৈরি হয়েছে", download_url=f"/api/jobs/{job_id}/download", duration=round(duration, 2), scene_count=len(backgrounds), narration_scene_count=len(visual_scene_texts), scene_interval_seconds=scene_interval, caption_frame_count=frame_count, semantic_review=semantic_review, audio_verification=audio_verification, subtitle_ocr=subtitle_ocr, ai_brain=brain_plan, script_characters=len(script), video_mode=mode, completed_at=time.time())
+            JOBS[job_id].update(
+                status="completed", progress=100, message=completion_message,
+                download_url=f"/api/jobs/{job_id}/download" if can_offer_download else None,
+                share_allowed=can_offer_download,
+                publication_status=preliminary_gate["publication_status"],
+                publication_reasons=preliminary_gate["reasons"],
+                duration=round(duration, 2), scene_count=len(backgrounds),
+                narration_scene_count=len(visual_scene_texts), scene_interval_seconds=scene_interval,
+                caption_frame_count=frame_count, semantic_review=semantic_review,
+                audio_verification=audio_verification, subtitle_ocr=subtitle_ocr,
+                ai_brain=brain_plan, script_characters=len(script), video_mode=mode,
+                completed_at=time.time(),
+            )
     except Exception as exc:
         print(f"VIDEO_STAGE job={job_id} stage=failed error={type(exc).__name__}: {str(exc)[:500]}", flush=True)
         with LOCK:
@@ -4638,27 +4671,14 @@ def download_video(job_id: str):
         raise HTTPException(404, "ভিডিওর কাজটি পাওয়া যায়নি।")
     if job["status"] != "completed":
         raise HTTPException(409, "ভিডিও এখনো তৈরি হয়নি।")
-    # The file remains on the server for further QA, but download/share is blocked
-    # until a complete, evidence-based release gate has explicitly passed.
-    audit_path = WORK_DIR / job_id / "scene-audit.json"
-    try:
-        scene_audit = json.loads(audit_path.read_text(encoding="utf-8")) if audit_path.exists() else []
-    except Exception:
-        scene_audit = []
-    release_gate = _publication_gate_decision(
-        image_count=job.get("scene_count"),
-        semantic_review=job.get("semantic_review") or {},
-        audio_verification=job.get("audio_verification") or {},
-        caption_alignment=job.get("caption_alignment") or {},
-        subtitle_ocr=job.get("subtitle_ocr") or {},
-        scene_audit=scene_audit,
-        technical_ok=True,
-    )
-    if not release_gate["share_allowed"]:
+    # Re-run the full technical report at download time. This includes decoded
+    # frame checks as well as the evidence-based semantic/audio/caption release gate.
+    release_report = video_quality_report(job_id)
+    if not release_report.get("share_allowed"):
         raise HTTPException(
             409,
             "ভিডিওটি এখনো শেয়ার বা ডাউনলোডের জন্য অনুমোদিত নয়। "
-            + " ".join(release_gate["reasons"])
+            + " ".join(release_report.get("publication_reasons") or [])
         )
     output = WORK_DIR / job_id / "video.mp4"
     if not output.exists():
