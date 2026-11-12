@@ -405,6 +405,19 @@ class SceneImageSimilarityTests(unittest.TestCase):
         self.assertIn("rejected visual content", prompt.lower())
 
 
+    def test_vision_review_parser_keeps_rejected_image_description(self):
+        review = video_app._parse_scene_match_response(
+            '{"match":false,"confidence":0.94,'
+            '"description":"A city bus on a crowded road",'
+            '"reason":"The narration is about a farmer harvesting rice."}'
+        )
+        self.assertIsNotNone(review)
+        self.assertFalse(review["match"])
+        self.assertEqual(review["confidence"], 0.94)
+        self.assertIn("city bus", review["description"])
+        self.assertIn("farmer", review["reason"])
+
+
 
     def test_cloudflare_fallback_stops_for_account_limits_and_timeouts(self):
         self.assertTrue(video_app._cloudflare_should_stop_fallback(
