@@ -2200,7 +2200,8 @@ def _scene_mismatch_retry_prompt(narration: str, visual_prompt: Optional[str], r
     )
     if rejected:
         instruction += "Avoid this rejected visual content: " + rejected + ". "
-    return (grounded_prompt[:780].rstrip() + instruction)[:1050]
+    # Reserve enough room for the complete rejected-visual description and safety instruction.
+    return (grounded_prompt[:620].rstrip() + instruction)[:1050]
 
 
 def make_background(script: str, folder: Path, model_visual_prompt: Optional[str] = None, force_topic_graphic: bool = False, force_licensed_contextual: bool = False, variation_seed: int = 0, scene_index: Optional[int] = None):
