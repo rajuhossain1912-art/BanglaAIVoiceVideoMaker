@@ -729,6 +729,21 @@ class PublicationReleaseGateTests(unittest.TestCase):
         self.assertEqual(result["publication_status"], "ready")
         self.assertEqual(result["reasons"], [])
 
+    def test_remaining_duplicate_final_scene_image_blocks_sharing(self):
+        checks = self._good_checks()
+        checks["scene_audit"][1]["duplicate_remaining"] = True
+        result = video_app._publication_gate_decision(**checks)
+        self.assertFalse(result["share_allowed"])
+        self.assertEqual(result["publication_status"], "blocked")
+        self.assertTrue(any("প্রায় একই" in reason for reason in result["reasons"]))
+
+    def test_resolved_duplicate_does_not_block_sharing(self):
+        checks = self._good_checks()
+        checks["scene_audit"][1]["duplicate_detected"] = True
+        checks["scene_audit"][1]["duplicate_remaining"] = False
+        result = video_app._publication_gate_decision(**checks)
+        self.assertTrue(result["share_allowed"])
+
     def test_missing_image_review_blocks_sharing(self):
         checks = self._good_checks()
         checks["scene_audit"][1]["final_visual_status"] = "not_reviewed"
