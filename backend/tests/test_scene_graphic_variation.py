@@ -406,6 +406,19 @@ class SceneImageSimilarityTests(unittest.TestCase):
 
 
 
+    def test_cloudflare_fallback_stops_for_account_limits_and_timeouts(self):
+        self.assertTrue(video_app._cloudflare_should_stop_fallback(
+            __import__("urllib.error", fromlist=["HTTPError"]).HTTPError(
+                "https://example.com", 429, "rate limited", {}, None
+            )
+        ))
+        self.assertTrue(video_app._cloudflare_should_stop_fallback(TimeoutError("timed out")))
+        self.assertFalse(video_app._cloudflare_should_stop_fallback(
+            __import__("urllib.error", fromlist=["HTTPError"]).HTTPError(
+                "https://example.com", 500, "server error", {}, None
+            )
+        ))
+
     def test_video_brain_parser_validates_language_and_research_queries(self):
         parsed = video_app._parse_video_brain_response(
             '{"language":"mixed","topic":"কৃষি ও প্রযুক্তি","content_type":"educational",'
