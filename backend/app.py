@@ -2720,6 +2720,7 @@ def _record_duplicate_retry_review(review, semantic_review):
 
 def _review_generated_image_against_scene(image_path: Path, narration: str, visual_prompt: Optional[str] = None):
     """Ask Moondream to inspect a generated image and judge whether it depicts this narration."""
+    global _IMAGE_REVIEW_QUOTA_EXHAUSTED
     account_id = os.getenv("CLOUDFLARE_ACCOUNT_ID", "").strip()
     api_token = os.getenv("CLOUDFLARE_AI_API_TOKEN", os.getenv("CLOUDFLARE_API_TOKEN", "")).strip()
     if not account_id or not api_token or not image_path or not image_path.is_file():
@@ -2832,7 +2833,6 @@ def _review_generated_image_against_scene(image_path: Path, narration: str, visu
             detail = ""
         if exc.code == 429:
             with _IMAGE_REVIEW_QUOTA_LOCK:
-                global _IMAGE_REVIEW_QUOTA_EXHAUSTED
                 _IMAGE_REVIEW_QUOTA_EXHAUSTED = True
             print("IMAGE_REVIEW circuit_breaker=enabled reason=http_429", flush=True)
         print(
