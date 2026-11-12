@@ -3481,12 +3481,22 @@ def _normalize_transcript_tokens(text: str):
 
 
 def _compare_script_transcript(script: str, transcript: str):
-    """Return a conservative token-sequence similarity for script/audio QC."""
+    """Compare narration with its approved script and expose token-level QC counts."""
     expected = _normalize_transcript_tokens(script)
     observed = _normalize_transcript_tokens(transcript)
     if not expected or not observed:
-        return {"status": "unavailable", "similarity": None, "expected_tokens": len(expected), "transcribed_tokens": len(observed)}
-    similarity = difflib.SequenceMatcher(None, expected, observed).ratio()
+        return {
+            "status": "unavailable",
+            "similarity": None,
+            "expected_tokens": len(expected),
+            "transcribed_tokens": len(observed),
+            "matched_tokens": None,
+            "missing_tokens": None,
+            "extra_tokens": None,
+        }
+    matcher = difflib.SequenceMatcher(None, expected, observed, autojunk=False)
+    similarity = matcher.ratio()
+    matched_tokens = sum(block.size for block in matcher.get_matching_blocks())
     if similarity < 0.78:
         status = "mismatch"
     elif similarity < 0.92:
@@ -3498,6 +3508,9 @@ def _compare_script_transcript(script: str, transcript: str):
         "similarity": round(similarity, 4),
         "expected_tokens": len(expected),
         "transcribed_tokens": len(observed),
+        "matched_tokens": matched_tokens,
+        "missing_tokens": max(0, len(expected) - matched_tokens),
+        "extra_tokens": max(0, len(observed) - matched_tokens),
     }
 
 
