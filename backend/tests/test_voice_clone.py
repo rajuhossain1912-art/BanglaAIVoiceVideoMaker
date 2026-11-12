@@ -640,6 +640,26 @@ class VoiceCloneUnitTests(unittest.TestCase):
                 video_app.JOBS.pop(job_id, None)
 
 
+    def test_audio_token_diagnostics_are_included_in_bangla_report(self):
+        report = video_app._audio_token_diagnostics_report({
+            "matched_tokens": 17,
+            "missing_tokens": 2,
+            "extra_tokens": 1,
+        })
+        self.assertIn("2টি শব্দ অনুপস্থিত", report)
+        self.assertIn("1টি অতিরিক্ত শব্দ", report)
+        self.assertIn("17টি শব্দ মিলে গেছে", report)
+
+    def test_unavailable_audio_diagnostics_do_not_invent_word_counts(self):
+        report = video_app._audio_token_diagnostics_report({
+            "status": "unavailable",
+            "matched_tokens": None,
+            "missing_tokens": None,
+            "extra_tokens": None,
+        })
+        self.assertEqual(report, "")
+
+
 if __name__ == "__main__":
     unittest.main()
 
