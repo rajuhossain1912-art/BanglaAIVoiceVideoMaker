@@ -1437,6 +1437,23 @@ def transcribe_uploaded_audio(audio_path: Path, folder: Path, progress_callback=
             parsed = _parse_cloudflare_transcription_response(data, return_details=True, offset_seconds=index * 120.0)
             transcripts.append(parsed["text"])
             all_word_timestamps.extend(parsed["word_timestamps"])
+        except urllib.error.HTTPError as exc:
+            status = int(getattr(exc, "code", 0) or 0)
+            if status in (401, 403):
+                detail = "Cloudflare Whisper অনুমতি দেয়নি; AI সংযোগের অনুমতি পরীক্ষা করতে হবে।"
+            elif status == 429:
+                detail = "Cloudflare Whisper-এর বিনামূল্যের সীমা বা অনুরোধের হার অতিক্রম হয়েছে।"
+            elif status >= 500:
+                detail = "Cloudflare Whisper সাময়িকভাবে ব্যস্ত বা সেবা দিতে পারছে না।"
+            else:
+                detail = f"Cloudflare Whisper HTTP {status} উত্তর দিয়েছে।"
+            raise RuntimeError(
+                f"অডিওর {index + 1} নম্বর অংশ যাচাই হয়নি: {detail}"
+            ) from exc
+        except (TimeoutError, urllib.error.URLError) as exc:
+            raise RuntimeError(
+                f"অডিওর {index + 1} নম্বর অংশ যাচাই হয়নি: Whisper সংযোগের সময়সীমা শেষ বা সংযোগ বিচ্ছিন্ন হয়েছে।"
+            ) from exc
         except Exception as exc:
             raise RuntimeError(
                 f"অডিওর {index + 1} নম্বর অংশের কথা বোঝা যায়নি: {type(exc).__name__}"
@@ -3615,9 +3632,18 @@ def render(job_id: str, script: str, mode: str, audio_path: Optional[Path], capt
                     flush=True,
                 )
             except Exception as qc_error:
+                qc_message = str(qc_error)
+                if "বিনামূল্যের সীমা" in qc_message:
+                    qc_reason = "Whisper-এর বিনামূল্যের সীমা শেষ বা অনুরোধের হার অতিক্রম হয়েছে।"
+                elif "অনুমতি দেয়নি" in qc_message:
+                    qc_reason = "Whisper সংযোগের অনুমতি বা টোকেন পরীক্ষা করা দরকার।"
+                elif "সাময়িকভাবে ব্যস্ত" in qc_message or "সময়সীমা শেষ" in qc_message:
+                    qc_reason = "Whisper সেবা সাময়িকভাবে ব্যস্ত অথবা সংযোগে সময় শেষ হয়েছে।"
+                else:
+                    qc_reason = "অডিও প্রতিলিপি যাচাই সম্পন্ন হয়নি: " + type(qc_error).__name__
                 audio_verification = {
                     "status": "unavailable", "similarity": None,
-                    "reason": "অডিও প্রতিলিপি যাচাইয়ের সেবা পাওয়া যায়নি: " + type(qc_error).__name__,
+                    "reason": qc_reason,
                 }
                 print(f"AUDIO_QC status=unavailable error={type(qc_error).__name__}: {str(qc_error)[:180]}", flush=True)
         else:
