@@ -3514,6 +3514,21 @@ def _compare_script_transcript(script: str, transcript: str):
     }
 
 
+
+def _audio_token_diagnostics_report(audio_verification):
+    """Render independently transcribed token counts in the accessible Bangla report."""
+    if not isinstance(audio_verification, dict):
+        return ""
+    matched = audio_verification.get("matched_tokens")
+    missing = audio_verification.get("missing_tokens")
+    extra = audio_verification.get("extra_tokens")
+    if not all(isinstance(value, int) and value >= 0 for value in (matched, missing, extra)):
+        return ""
+    return (
+        f"স্বয়ংক্রিয় প্রতিলিপিতে মূল লেখার {missing}টি শব্দ অনুপস্থিত, "
+        f"{extra}টি অতিরিক্ত শব্দ এবং {matched}টি শব্দ মিলে গেছে। "
+    )
+
 def verify_rendered_audio_against_script(video_path: Path, script: str, folder: Path, progress_callback=None):
     """Transcribe the final MP4 audio track and compare it with the approved script."""
     transcript = transcribe_uploaded_audio(video_path, folder, progress_callback)
@@ -4183,6 +4198,7 @@ def video_quality_report(job_id: str):
             report_text += "প্রয়োজনীয় তথ্য অনুসন্ধানের উৎস পাওয়া যায়নি। "
     report_text += "প্রকাশের উপযোগিতা: " + ("প্রকাশ বন্ধ রাখা হয়েছে। " if publication_status == "blocked" else "আরও যাচাই প্রয়োজন। ")
     report_text += "কারণ: " + " ".join(publication_reasons) + " "
+    report_text += _audio_token_diagnostics_report(audio_verification)
     audio_similarity = audio_verification.get("similarity")
     if audio_similarity is not None:
         report_text += f"অডিও ও মূল লেখার স্বয়ংক্রিয় শব্দ-মিল {round(audio_similarity * 100)} শতাংশ। "
