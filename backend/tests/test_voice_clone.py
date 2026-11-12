@@ -897,3 +897,54 @@ class TranscriptComparisonDiagnosticsTests(unittest.TestCase):
         self.assertEqual(result["status"], "matched")
         self.assertEqual(result["missing_tokens"], 0)
         self.assertEqual(result["extra_tokens"], 0)
+
+
+class WordTimestampIntegrityTests(unittest.TestCase):
+    def test_complete_ordered_timestamps_pass(self):
+        result = video_app._validate_word_timestamp_sequence(
+            {
+                0: {"start": 0.0, "end": 0.35},
+                1: {"start": 0.36, "end": 0.72},
+                2: {"start": 0.75, "end": 1.1},
+            },
+            3,
+            1.2,
+        )
+        self.assertTrue(result["passed"])
+        self.assertEqual(result["checked_words"], 3)
+
+    def test_missing_word_timestamp_fails_closed(self):
+        result = video_app._validate_word_timestamp_sequence(
+            {0: {"start": 0.0, "end": 0.35}, 2: {"start": 0.75, "end": 1.1}},
+            3,
+            1.2,
+        )
+        self.assertFalse(result["passed"])
+
+    def test_overlapping_word_timestamps_fail(self):
+        result = video_app._validate_word_timestamp_sequence(
+            {
+                0: {"start": 0.0, "end": 0.65},
+                1: {"start": 0.40, "end": 0.85},
+            },
+            2,
+            1.2,
+        )
+        self.assertFalse(result["passed"])
+        self.assertIn("overlap", result["reason"])
+
+    def test_timestamp_beyond_audio_duration_fails(self):
+        result = video_app._validate_word_timestamp_sequence(
+            {0: {"start": 0.8, "end": 1.3}},
+            1,
+            1.0,
+        )
+        self.assertFalse(result["passed"])
+
+    def test_non_finite_timestamp_fails(self):
+        result = video_app._validate_word_timestamp_sequence(
+            {0: {"start": 0.1, "end": float("nan")}},
+            1,
+            1.0,
+        )
+        self.assertFalse(result["passed"])
