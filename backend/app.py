@@ -3899,8 +3899,23 @@ def render(job_id: str, script: str, mode: str, audio_path: Optional[Path], capt
         frame_list, frame_count = make_caption_frames(script, duration, backgrounds, folder, caption_offset, audio_path, job_id, scene_interval, visual_scene_texts, caption_word_timestamps)
         print(f"VIDEO_STAGE job={job_id} stage=subtitles_done frames={frame_count} method=pillow_word_highlight", flush=True)
         with LOCK:
+            JOBS[job_id]["progress"] = 47
+            JOBS[job_id]["message"] = "প্রতিটি সাবটাইটেল ফ্রেমে বাংলা ও ইংরেজি OCR পরীক্ষা হচ্ছে"
+        subtitle_ocr = _verify_subtitle_frames_with_ocr(frame_list, script, folder)
+        with LOCK:
+            JOBS[job_id]["subtitle_ocr"] = subtitle_ocr
             JOBS[job_id]["progress"] = 49
-            JOBS[job_id]["message"] = "শব্দের সঙ্গে মিলিয়ে সাবটাইটেল তৈরি হয়েছে"
+            JOBS[job_id]["message"] = (
+                "সাবটাইটেল OCR পরীক্ষা সম্পূর্ণ হয়েছে"
+                if subtitle_ocr.get("status") == "passed"
+                else "সাবটাইটেল OCR নিশ্চিত করতে পারেনি; প্রকাশের অনুমতি বন্ধ থাকবে"
+            )
+        print(
+            f"SUBTITLE_OCR status={subtitle_ocr.get('status')} "
+            f"frames={subtitle_ocr.get('frames_checked')} "
+            f"words_detected={subtitle_ocr.get('words_detected')}",
+            flush=True,
+        )
         output = folder / "video.mp4"
         # Pre-rendered caption images avoid FFmpeg/libass memory spikes on Render Free.
         vf = "scale=360:640:flags=lanczos,format=yuv420p"
@@ -3943,7 +3958,7 @@ def render(job_id: str, script: str, mode: str, audio_path: Optional[Path], capt
         else:
             audio_verification["reason"] = "সার্ভার সেটিংসে অডিও প্রতিলিপি ও শব্দ-সময় যাচাই বন্ধ আছে; সাবটাইটেলের সময় অনুমানভিত্তিক।"
         with LOCK:
-            JOBS[job_id].update(status="completed", progress=100, message="ভিডিও তৈরি হয়েছে", download_url=f"/api/jobs/{job_id}/download", duration=round(duration, 2), scene_count=len(backgrounds), narration_scene_count=len(visual_scene_texts), scene_interval_seconds=scene_interval, caption_frame_count=frame_count, semantic_review=semantic_review, audio_verification=audio_verification, ai_brain=brain_plan, script_characters=len(script), video_mode=mode, completed_at=time.time())
+            JOBS[job_id].update(status="completed", progress=100, message="ভিডিও তৈরি হয়েছে", download_url=f"/api/jobs/{job_id}/download", duration=round(duration, 2), scene_count=len(backgrounds), narration_scene_count=len(visual_scene_texts), scene_interval_seconds=scene_interval, caption_frame_count=frame_count, semantic_review=semantic_review, audio_verification=audio_verification, subtitle_ocr=subtitle_ocr, ai_brain=brain_plan, script_characters=len(script), video_mode=mode, completed_at=time.time())
     except Exception as exc:
         print(f"VIDEO_STAGE job={job_id} stage=failed error={type(exc).__name__}: {str(exc)[:500]}", flush=True)
         with LOCK:
@@ -4369,6 +4384,10 @@ def video_quality_report(job_id: str):
         "caption_alignment": snapshot.get("caption_alignment") or {
             "status": "unavailable", "verified": False, "word_timestamps_from_asr": False
         },
+        "subtitle_ocr": snapshot.get("subtitle_ocr") or {
+            "status": "unavailable", "frames_checked": 0, "words_detected": 0,
+            "words_missing": None, "reason": "সাবটাইটেল OCR পরীক্ষা সম্পন্ন হয়নি।"
+        },
         "image_source_counts": image_source_counts,
         "scene_audit": scene_audit,
         "file_exists": True,
@@ -4476,6 +4495,15 @@ def video_quality_report(job_id: str):
     report_text += "প্রকাশের উপযোগিতা: " + ("প্রকাশ বন্ধ রাখা হয়েছে। " if publication_status == "blocked" else "আরও যাচাই প্রয়োজন। ")
     report_text += "কারণ: " + " ".join(publication_reasons) + " "
     report_text += _audio_token_diagnostics_report(audio_verification)
+    subtitle_ocr = snapshot.get("subtitle_ocr") or {
+        "status": "unavailable", "frames_checked": 0, "words_detected": 0,
+        "words_missing": None, "reason": "সাবটাইটেল OCR পরীক্ষা সম্পন্ন হয়নি।"
+    }
+    report_text += (
+        f"সাবটাইটেল OCR-এ {subtitle_ocr.get('frames_checked', 0)}টি ফ্রেম পরীক্ষা হয়েছে; "
+        f"{subtitle_ocr.get('words_detected', 0)}টি সক্রিয় শব্দ শনাক্ত হয়েছে। "
+        + str(subtitle_ocr.get("reason") or "") + " "
+    )
     audio_similarity = audio_verification.get("similarity")
     if audio_similarity is not None:
         report_text += f"অডিও ও মূল লেখার স্বয়ংক্রিয় শব্দ-মিল {round(audio_similarity * 100)} শতাংশ। "
@@ -4575,6 +4603,7 @@ def video_quality_report(job_id: str):
         "share_allowed": release_gate["share_allowed"],
         "publication_reasons": publication_reasons,
         "audio_verification": audio_verification,
+        "subtitle_ocr": subtitle_ocr,
         "ai_brain": brain_report,
         "caption_alignment": caption_alignment,
         "summary": summary,
@@ -4585,7 +4614,11 @@ def video_quality_report(job_id: str):
         "scene_check": scene_check,
         "limitations": [
             "কণ্ঠে লেখা হুবহু পড়া হয়েছে কি না স্বয়ংক্রিয়ভাবে নিশ্চিত করা হয়নি।",
-            "সাবটাইটেলের বানান ও সময়ের সঙ্গে কণ্ঠের মিল OCR বা মানুষের পর্যালোচনা ছাড়া নিশ্চিত নয়।",
+            (
+                "প্রতিটি সাবটাইটেল ফ্রেমের সক্রিয় শব্দ Tesseract OCR-এ শনাক্ত হয়েছে; এটি মানব পর্যালোচনা বা পূর্ণ বাক্য-স্তরের স্বাধীন যাচাই নয়।"
+                if subtitle_ocr.get("status") == "passed"
+                else "সাবটাইটেলের লেখা OCR দিয়ে সম্পূর্ণ যাচাই করা যায়নি; প্রকাশের অনুমতি বন্ধ রাখা হয়েছে।"
+            ),
             (
                 "Whisper-এর স্পষ্ট শব্দ-সময় স্ক্রিপ্টের সঙ্গে মিলিয়ে ব্যবহার করা হয়েছে; স্বাধীন মানব যাচাই নয়।"
                 if caption_alignment.get("word_timestamps_from_asr")
