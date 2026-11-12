@@ -3135,6 +3135,11 @@ def make_scene_backgrounds(script: str, folder: Path, progress_callback=None, du
                         final_visual_status = "not_reviewed"
                         final_visual_description = ""
                     print(f"IMAGE_SCENE repeated_image index={index + 1} action=accepted_new_composition", flush=True)
+        # Re-check the final selected image, not only the first attempt. A retry or
+        # fallback can still return a duplicate; publication must remain blocked.
+        duplicate_remaining = any(
+            _scene_images_too_similar(background, prior) for prior in backgrounds
+        )
         try:
             source_info = json.loads((scene_dir / "scene-source.json").read_text(encoding="utf-8"))
             source_name = str(source_info.get("source") or "unknown")
@@ -3153,6 +3158,7 @@ def make_scene_backgrounds(script: str, folder: Path, progress_callback=None, du
             "final_visual_status": final_visual_status,
             "final_visual_description": final_visual_description[:240],
             "duplicate_detected": duplicate_detected,
+            "duplicate_remaining": duplicate_remaining,
             "duplicate_retry_action": duplicate_retry_action,
         })
         backgrounds.append(background)
@@ -3773,6 +3779,12 @@ def _publication_gate_decision(
         or any(status not in accepted_visual_statuses for status in final_visual_statuses)
     ):
         reasons.append("প্রতিটি চূড়ান্ত পটভূমির ছবি আলাদাভাবে পরীক্ষা করে বিষয়ের সঙ্গে মিল নিশ্চিত হয়নি।")
+
+    if any(
+        isinstance(item, dict) and item.get("duplicate_remaining") is True
+        for item in scene_audit
+    ):
+        reasons.append("এক বা একাধিক চূড়ান্ত দৃশ্যের ছবি আগের দৃশ্যের সঙ্গে প্রায় একই; আলাদা ছবি নিশ্চিত হয়নি।")
 
     audio_status = audio_verification.get("status")
     missing_tokens = audio_verification.get("missing_tokens")
