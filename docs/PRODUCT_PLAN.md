@@ -86,7 +86,7 @@ Known limitations that must remain visible to users:
 - Word highlight timing is estimated from sentence duration and silence detection, not a true forced-alignment model. Technical reports do not verify spoken words or caption spelling.
 - AI images may be irrelevant or repetitive despite prompt planning and similarity checks. Topic graphics are a fallback, not photographic images.
 - A separate title-card builder, animated scene transitions and a dedicated in-app social sharing flow are not yet implemented; the completed MP4 can be saved through Android's Downloads manager.
-- The GitHub Releases APK is a debug build for direct device testing, not a production-signed Play Store package.
+- The GitHub Release APK is built with the persistent signing key and pinned certificate so it can update the same installed application. It is a direct-distribution APK, not a Google Play Store production release.
 - Job state is held in process memory and files in temporary storage. The free backend accepts one active video job at a time and removes completed/failed job folders after the configured retention window (24 hours by default). Render restarts can still make active jobs or recent downloads unavailable.
 - The free Render service can sleep and has limited CPU/RAM. Long scripts, external image providers and cloning services can be slow or fail.
 - There is no guaranteed unlimited service, no paid provider is enabled, and no external provider's privacy behavior is represented as controlled by this app.
@@ -99,3 +99,13 @@ Known limitations that must remain visible to users:
 - During voice recording, an Android microphone foreground service displays an ongoing notification and holds a partial CPU wake lock; it stops when recording ends. During video generation, a data-sync foreground service does the same until the generation flow completes or fails.
 - Screen-off/background operation is supported while Android keeps the app/service alive. Force-stop, device shutdown, aggressive OEM battery controls, network loss, Android foreground-service time limits, or process termination can still interrupt work; this must not be described as an absolute guarantee.
 - The foreground service currently protects the app process while the activity's generation coroutine polls the backend. It does not yet persist and resume a lost polling coroutine after a process death. A future milestone should move the complete job lifecycle and job ID persistence into the service or WorkManager with foreground execution.
+
+
+## Consolidated verification and release-safety milestone — 2026-11-13
+
+- Added a repository-wide project audit at docs/PROJECT_AUDIT.md covering commit history, AI models, external providers, hosting/build infrastructure, verified implementation, and unfinished work.
+- The publication gate now requires every final scene image to have a verified semantic match, rejects unresolved duplicate final images, requires exact script/transcript token coverage, explicit complete word timestamps with integrity checks, subtitle OCR success, and technical video/audio checks. The download endpoint repeats the gate at download time.
+- Missing/unreadable image similarity comparisons now fail closed as duplicate/unknown instead of being treated as distinct; regression coverage is added.
+- README claims were synchronized with current scene planning, Whisper timestamps, OCR and persistent APK signing.
+- Known constraint: scene semantic review is sampled by default (12 scenes), while the publication gate requires every final scene to be semantically verified. Videos with more scenes can remain blocked until a safe all-scene verification strategy is implemented. Topic-graphic fallback is also not accepted by the current photographic semantic-review gate.
+- Current Render service health/deploy/log/environment state and latest GitHub Actions/Release success still require live verification. Source code or workflow configuration alone is not proof of a successful deploy/build.
