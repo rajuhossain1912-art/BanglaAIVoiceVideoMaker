@@ -176,3 +176,43 @@ GitHub-এ পাওয়া প্রথম commit ২০২৬-১০-১৫। 
 7. শেষে TalkBack-এ report শুনে প্রতিটি gate-এর কারণ স্পষ্টভাবে বলা এবং বাস্তব ফোনে পরীক্ষা।
 
 **অডিট নীতি:** কোনো provider, model, server, test, deployment বা APK-কে active/successful বলা হবে না, যতক্ষণ না তার বর্তমান অবস্থা থেকে প্রমাণ পাওয়া যায়। নতুন কাজের আগে এই নথির “অমীমাংসিত বিষয়” ও commit history দেখে নিতে হবে।
+
+
+## ৭. Live Render account verification — ২০২৬-১১-১৩
+
+Workspace: My Workspace (ID kept out of this public audit).
+
+### Bangla AI Voice Video Maker API
+- Render service: bangla-ai-voice-video-maker-api
+- Service ID: srv-db7u1d49v7es73ctjqj0
+- State: not suspended; latest deploy is live.
+- URL: https://bangla-ai-voice-video-maker-api.onrender.com
+- Region: Singapore; Free plan; Docker; one instance.
+- Connected repository/branch: rajuhossain1912-art/BanglaAIVoiceVideoMaker, main.
+- Auto deploy: enabled on commits.
+- Latest inspected deploy: dep-dbr0a9fprmrc73d7mfsg; commit 286d4bb52767af52d38571b15ae38c87396dbb04; deployment and build events both report succeeded.
+- Container logs show application startup complete, Uvicorn listening on port 10000, Render reports service live, and a GET / request returned HTTP 200.
+- Important configuration drift: repository render.yaml sets healthCheckPath=/health, but the live Render service details report healthCheckPath empty. The inspected startup log did not show a request to /health. Do not treat the health endpoint as verified until this is reconciled and tested.
+- The latest deployment includes the recent backend safety code commits; the currently live commit is a later documentation-only commit on top of them.
+
+### Other Render service in the same workspace
+- Service: AIAppBuilder; ID srv-daqnkko473hc73brduhg.
+- URL: https://aiappbuilder-5k2f.onrender.com
+- Free plan, Python runtime, Ohio, not suspended; auto deploy on main.
+- Latest deployment found: 2026-10-14, commit 9d68a2763697beb78a9614588292a37d38c31c7a, status live at deployment time.
+- No events were returned for the default recent 7-day window; the 30-day query showed its last successful deployment on 2026-10-14. No recent application logs were returned. Therefore current HTTP health/actual availability is not verified by this audit.
+
+### Render storage inventory
+- No Render Postgres instances found.
+- No Render Key Value instances found.
+- The video API therefore uses the code's temporary filesystem/in-memory job handling; no Render-managed database or Redis/Key Value service is attached in this workspace.
+
+### Environment variable visibility limitation
+- The available Render account actions expose service metadata and deployments but do not provide a read-only listing of environment-variable names/presence. No secret values were read or changed.
+- Backend source references CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_AI_API_TOKEN (legacy CLOUDFLARE_API_TOKEN), HF_TOKEN/HUGGINGFACE_HUB_TOKEN, plus optional model/provider tuning variables. Their live presence and validity are not confirmed.
+- Never put API tokens, signing passwords, keystore content, or other secret values in this public audit file.
+
+### GitHub Actions verification limitation
+- Latest commit combined status returned an empty status list; the available commit-workflow wrapper returned no runs because it only exposes pull-request-triggered runs. This does not prove that push-triggered backend smoke tests passed or failed.
+- The backend smoke workflow is configured to run on backend source/test changes. A real workflow run and its job logs must be checked in GitHub Actions before claiming test success.
+- The Android APK workflow only triggers automatically for app/build configuration paths or manual dispatch. Backend-only commits do not automatically create a new APK. No new APK build/release is confirmed by this Render inspection.
