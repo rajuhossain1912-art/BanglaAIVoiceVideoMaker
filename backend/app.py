@@ -2160,6 +2160,10 @@ def _vary_visual_prompt(base_prompt: Optional[str], variation_seed: int = 0):
     prompt = (base_prompt or "").strip()
     if not prompt:
         return prompt
+    # Keep the full narration-grounded recovery instruction intact. Adding a
+    # composition suffix here can truncate the critical rejected-subject warning.
+    if "avoid this rejected visual content:" in prompt.lower():
+        return prompt[:1050]
     compositions = (
         "Use a wide establishing documentary shot, showing the subject within its real environment.",
         "Use a medium eye-level documentary shot, showing the subject actively doing the stated task.",
