@@ -1332,6 +1332,9 @@ def _review_scene_visual_prompts(scenes, prompts, model_names, planner_model, co
                 f"error={type(exc).__name__}: {str(exc)[:100]}",
                 flush=True,
             )
+            if _cloudflare_should_stop_fallback(exc):
+                print("LANGUAGE_MODEL review=stopped reason=account_limit_or_timeout", flush=True)
+                break
     return prompts
 
 
@@ -1539,6 +1542,18 @@ def _fetch_public_research_context(queries, language="unknown"):
     return results
 
 
+def _cloudflare_should_stop_fallback(exc):
+    """Stop trying alternate models when the account is unauthorized, rate-limited, or timed out."""
+    if isinstance(exc, urllib.error.HTTPError):
+        return exc.code in (401, 403, 429)
+    if isinstance(exc, TimeoutError):
+        return True
+    if isinstance(exc, urllib.error.URLError):
+        reason = getattr(exc, "reason", exc)
+        return isinstance(reason, TimeoutError) or "timed out" in str(reason).lower()
+    return False
+
+
 def _analyze_video_brief(script):
     """Understand language, purpose and research needs before planning images and video."""
     source = str(script or "").strip()
@@ -1728,6 +1743,9 @@ def _plan_scene_visual_prompts(scenes, context_scenes=None, context_offset=0, br
                 print("LANGUAGE_MODEL fallback=next_model provider=cloudflare model=" + model + " reason=invalid_model_response", flush=True)
             except Exception as exc:
                 print(f"LANGUAGE_MODEL fallback=next_model provider=cloudflare model={model} error={type(exc).__name__}: {str(exc)[:120]}", flush=True)
+                if _cloudflare_should_stop_fallback(exc):
+                    print("LANGUAGE_MODEL fallback=stopped reason=account_limit_or_timeout", flush=True)
+                    break
     elif not cf_account_id or not cf_api_token:
         missing = "account_id" if not cf_account_id else "api_token"
         print(f"LANGUAGE_MODEL fallback=local reason=missing_cloudflare_{missing}", flush=True)
