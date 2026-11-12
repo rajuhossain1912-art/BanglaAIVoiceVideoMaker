@@ -1773,7 +1773,13 @@ def _plan_scene_visual_prompts(scenes, context_scenes=None, context_offset=0, br
 def _english_visual_prompt(script: str, model_visual_prompt: Optional[str] = None):
     """Create a focused prompt and explicitly suppress common off-topic map/globe imagery."""
     concepts = _matched_visual_concepts(script, limit=2)
-    planner_detail = re.sub(r"\s+", " ", str(model_visual_prompt or "")).strip()[:360]
+    planner_detail = re.sub(r"\s+", " ", str(model_visual_prompt or "")).strip()[:1050]
+    # A semantic-recovery prompt is already rebuilt from the exact narration
+    # and explicitly names the rejected visual. Preserve it through the provider
+    # adapter; otherwise this function silently discards the recovery instruction
+    # and can regenerate the same generic image again.
+    if planner_detail and "avoid this rejected visual content:" in planner_detail.lower():
+        return planner_detail
     # The narration is the source of truth. Never let a broad or mistaken
     # storyboard-model description replace a concrete subject detected in
     # the actual sentence; use the model output only as supporting detail.
