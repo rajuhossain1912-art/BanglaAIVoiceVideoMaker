@@ -3309,6 +3309,34 @@ def _scene_index_to_background_index(scene_index: int, scene_count: int, backgro
     return min(background_count - 1, int(scene_index * background_count / scene_count))
 
 
+def _validate_word_timestamp_sequence(timed_map, script_word_count, duration):
+    """Require complete, ordered, in-range, non-overlapping ASR timing before highlighting."""
+    if not isinstance(timed_map, dict) or not isinstance(script_word_count, int) or script_word_count <= 0:
+        return {"passed": False, "reason": "শব্দের সময়ের তথ্য অসম্পূর্ণ।", "checked_words": 0}
+    if len(timed_map) != script_word_count or any(index not in timed_map for index in range(script_word_count)):
+        return {"passed": False, "reason": "স্ক্রিপ্টের প্রতিটি শব্দের জন্য আলাদা সময় পাওয়া যায়নি।", "checked_words": len(timed_map)}
+    try:
+        total_duration = float(duration)
+    except (TypeError, ValueError):
+        total_duration = 0.0
+    if not math.isfinite(total_duration) or total_duration <= 0:
+        return {"passed": False, "reason": "অডিওর মোট সময় নির্ভরযোগ্য নয়।", "checked_words": 0}
+    previous_end = 0.0
+    for index in range(script_word_count):
+        item = timed_map[index]
+        try:
+            start = float(item["start"])
+            end = float(item["end"])
+        except (KeyError, TypeError, ValueError):
+            return {"passed": False, "reason": "একটি শব্দের সময় পড়া যায়নি।", "checked_words": index}
+        if not math.isfinite(start) or not math.isfinite(end) or start < 0 or end <= start or end > total_duration + 0.05:
+            return {"passed": False, "reason": "একটি শব্দের সময় অডিওর সীমার বাইরে বা অবৈধ।", "checked_words": index}
+        if index and start < previous_end - 0.08:
+            return {"passed": False, "reason": "শব্দের সময়ে ক্রমভঙ্গ বা অতিরিক্ত overlap পাওয়া গেছে।", "checked_words": index}
+        previous_end = end
+    return {"passed": True, "reason": "সব শব্দের সময় সম্পূর্ণ, ধারাবাহিক এবং অডিওর সীমার মধ্যে।", "checked_words": script_word_count}
+
+
 def make_caption_frames(script: str, duration: float, background: Path, folder: Path, caption_offset: float = 0.0, audio_path: Optional[Path] = None, job_id: Optional[str] = None, scene_interval: int = 5, visual_scene_texts=None, word_timestamps=None):
     """Render small Pillow caption cards with per-word highlighting, avoiding FFmpeg's memory-heavy libass filter."""
     frame_dir = folder / "caption-frames"
@@ -3341,7 +3369,12 @@ def make_caption_frames(script: str, duration: float, background: Path, folder: 
                     timed_index = block.b + offset
                     if timed_index < len(timed_entries):
                         timed_map[source_index] = timed_entries[timed_index]
-    use_asr_word_times = len(timed_map) >= max(1, int(len(script_tokens) * 0.90))
+    timing_integrity = _validate_word_timestamp_sequence(timed_map, len(script_tokens), duration)
+    use_asr_word_times = (
+        len(timed_map) == len(script_tokens)
+        and bool(script_tokens)
+        and timing_integrity.get("passed") is True
+    )
     alignment_report = {
         "status": "asr_word_timestamps" if use_asr_word_times else "estimated",
         "sentence_timing_method": sentence_timing_method,
@@ -3350,6 +3383,9 @@ def make_caption_frames(script: str, duration: float, background: Path, folder: 
         "matched_word_timestamps": len(timed_map),
         "script_word_count": len(script_tokens),
         "transcript_alignment_similarity": round(alignment_ratio, 4),
+        "timing_integrity_passed": bool(use_asr_word_times),
+        "timing_integrity_checked_words": timing_integrity.get("checked_words", 0),
+        "timing_integrity_reason": timing_integrity.get("reason", "সময় যাচাই হয়নি।"),
         "verified": False,
         "note": "Whisper-এর দেওয়া শব্দের সময় স্ক্রিপ্টের সঙ্গে মিলিয়ে ব্যবহার করা হয়েছে; এটি স্বাধীন মানব যাচাই নয়।" if use_asr_word_times else "Whisper প্রতিক্রিয়ায় ব্যবহারযোগ্য শব্দ-সময় পাওয়া যায়নি বা স্ক্রিপ্টের সঙ্গে যথেষ্ট মেলেনি; তাই বাক্যের সময়ের মধ্যে শব্দের দৈর্ঘ্য অনুযায়ী সময় ভাগ করা হয়েছে।",
     }
@@ -3756,6 +3792,7 @@ def _publication_gate_decision(
         or not isinstance(script_words, int)
         or script_words <= 0
         or aligned_words != script_words
+        or caption_alignment.get("timing_integrity_passed") is not True
     ):
         reasons.append("সাবটাইটেলের প্রতিটি শব্দের প্রকৃত সময় সম্পূর্ণভাবে যাচাই হয়নি; অনুমান গ্রহণযোগ্য নয়।")
     if subtitle_ocr.get("status") != "passed":
