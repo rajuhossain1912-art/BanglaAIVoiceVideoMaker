@@ -4505,7 +4505,16 @@ def video_quality_report(job_id: str):
         caption_alignment=snapshot.get("caption_alignment") or {},
         subtitle_ocr=snapshot.get("subtitle_ocr") or {},
         scene_audit=scene_audit,
-        technical_ok=overall not in ("problem", "visual_warning"),
+        technical_ok=(
+            overall not in ("problem", "visual_warning")
+            and video_stream is not None
+            and audio_stream is not None
+            and duration > 0
+            and audio_check == "অডিও ট্র্যাক আছে এবং শব্দের সংকেত পাওয়া গেছে।"
+            and isinstance(visual_sample_count, int)
+            and visual_sample_count > 0
+            and isinstance(dark_sample_count, int)
+        ),
     )
     publication_status = release_gate["publication_status"]
     publication_reasons = list(dict.fromkeys(publication_reasons + release_gate["reasons"]))
