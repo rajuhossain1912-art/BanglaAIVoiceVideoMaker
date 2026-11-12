@@ -1039,6 +1039,16 @@ def find_openverse_image(script: str, folder: Path, model_visual_prompt: Optiona
         return None, ""
     results = []
     seen = set()
+    provider_key = "Openverse-Search"
+    with IMAGE_PROVIDER_COOLDOWN_LOCK:
+        cooldown_until = IMAGE_PROVIDER_COOLDOWN_UNTIL.get(provider_key, 0)
+    if cooldown_until > time.time():
+        print(
+            f"IMAGE_SEARCH skipped=Openverse reason=cooldown "
+            f"remaining_seconds={int(cooldown_until - time.time())}",
+            flush=True,
+        )
+        return None, ""
     for query in _image_search_query_variants(keywords):
         query_results = _image_search_cache_get("openverse", query)
         if query_results is None:
@@ -1062,6 +1072,15 @@ def find_openverse_image(script: str, folder: Path, model_visual_prompt: Optiona
                 if isinstance(exc, urllib.error.HTTPError):
                     detail = f"HTTP {exc.code}: {detail}"
                 print(f"IMAGE_SEARCH openverse_failed query={query[:70]} error={type(exc).__name__}: {detail}", flush=True)
+                is_timeout = isinstance(exc, (TimeoutError, socket.timeout)) or (
+                    isinstance(exc, urllib.error.URLError)
+                    and isinstance(getattr(exc, "reason", None), (TimeoutError, socket.timeout))
+                )
+                if is_timeout:
+                    with IMAGE_PROVIDER_COOLDOWN_LOCK:
+                        IMAGE_PROVIDER_COOLDOWN_UNTIL[provider_key] = time.time() + 180
+                    print("IMAGE_SEARCH cooldown provider=Openverse seconds=180 reason=timeout", flush=True)
+                    break
                 continue
         for item in query_results:
             identity = str(item.get("id") or item.get("url") or item.get("thumbnail") or "")
@@ -2799,13 +2818,22 @@ def _review_generated_image_against_scene(image_path: Path, narration: str, visu
             if not raw:
                 raw = _extract_vision_response_text(data.get("response") or data.get("output"))
             review = _parse_scene_match_response(raw)
+            # A bare MATCH/MISMATCH label cannot tell us what is visibly in the
+            # image. Treat it as unavailable rather than rejecting or accepting
+            # a scene without evidence; the simpler second question may recover
+            # a useful caption, otherwise QA remains explicitly unverified.
+            if review and not str(review.get("description") or "").strip():
+                review = None
+                reason = "missing_visible_content_description"
+            else:
+                reason = "empty_or_unparseable"
             if review:
                 if attempt > 1:
                     print(f"IMAGE_REVIEW retry=short_question attempt={attempt} response_received=true", flush=True)
                 break
             print(
                 f"IMAGE_REVIEW retry=short_question attempt={attempt} "
-                f"reason=empty_or_unparseable raw_length={len(raw)}",
+                f"reason={reason} raw_length={len(raw)}",
                 flush=True,
             )
         if not review:
