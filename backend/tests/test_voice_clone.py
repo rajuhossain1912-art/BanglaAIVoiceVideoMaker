@@ -707,6 +707,54 @@ class NarrationTranscriptionReuseTests(unittest.TestCase):
         )
 
 
+
+class PublicationReleaseGateTests(unittest.TestCase):
+    def _good_checks(self):
+        return {
+            "image_count": 2,
+            "semantic_review": {"reviewed": 2, "matched": 2, "unavailable": 0},
+            "audio_verification": {"status": "matched"},
+            "caption_alignment": {"status": "asr_word_timestamps"},
+            "subtitle_ocr": {"status": "passed"},
+            "technical_ok": True,
+        }
+
+    def test_share_allowed_only_when_every_required_check_passes(self):
+        result = video_app._publication_gate_decision(**self._good_checks())
+        self.assertTrue(result["share_allowed"])
+        self.assertEqual(result["publication_status"], "ready")
+        self.assertEqual(result["reasons"], [])
+
+    def test_missing_image_review_blocks_sharing(self):
+        checks = self._good_checks()
+        checks["semantic_review"] = {"reviewed": 1, "matched": 1, "unavailable": 0}
+        result = video_app._publication_gate_decision(**checks)
+        self.assertFalse(result["share_allowed"])
+        self.assertEqual(result["publication_status"], "blocked")
+        self.assertTrue(any("সব পটভূমির ছবি" in reason for reason in result["reasons"]))
+
+    def test_estimated_caption_timing_blocks_sharing(self):
+        checks = self._good_checks()
+        checks["caption_alignment"] = {"status": "estimated"}
+        result = video_app._publication_gate_decision(**checks)
+        self.assertFalse(result["share_allowed"])
+        self.assertTrue(any("অনুমানভিত্তিক সময়" in reason for reason in result["reasons"]))
+
+    def test_missing_subtitle_ocr_blocks_sharing_even_with_word_timestamps(self):
+        checks = self._good_checks()
+        checks["subtitle_ocr"] = {}
+        result = video_app._publication_gate_decision(**checks)
+        self.assertFalse(result["share_allowed"])
+        self.assertTrue(any("OCR দিয়ে যাচাই হয়নি" in reason for reason in result["reasons"]))
+
+    def test_audio_mismatch_or_unavailable_blocks_sharing(self):
+        for status in ("mismatch", "unavailable", "review_required"):
+            checks = self._good_checks()
+            checks["audio_verification"] = {"status": status}
+            result = video_app._publication_gate_decision(**checks)
+            self.assertFalse(result["share_allowed"])
+
+
 if __name__ == "__main__":
     unittest.main()
 
