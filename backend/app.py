@@ -1494,7 +1494,7 @@ def _parse_video_brain_response(raw, script):
         "tone": clean_text(data.get("tone"), 80) or "clear and informative",
         "audience": clean_text(data.get("audience"), 100) or "general audience",
         "visual_style": clean_text(data.get("visual_style"), 100) or "realistic documentary photography",
-        "research_needed": bool(data.get("research_needed")) and bool(queries),
+        "research_needed": data.get("research_needed") is True and bool(queries),
         "research_queries": queries,
         "planning_status": "ai_planned",
     }
