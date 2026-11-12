@@ -8,6 +8,30 @@ from backend import app as video_app
 
 
 class VoiceCloneUnitTests(unittest.TestCase):
+    def test_transcription_reports_cloudflare_rate_limit_without_hiding_root_cause(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            folder = Path(temp_dir)
+            audio = folder / "rendered.mp4"
+            audio.write_bytes(b"video")
+            def fake_run(command, timeout=240):
+                chunk_pattern = Path(command[-1])
+                chunk_path = Path(str(chunk_pattern).replace("%04d", "0000"))
+                chunk_path.write_bytes(b"audio chunk")
+                return b""
+            rate_limit = video_app.urllib.error.HTTPError(
+                "https://api.cloudflare.com/", 429, "Too Many Requests", {}, None
+            )
+            with (
+                patch.dict("os.environ", {
+                    "CLOUDFLARE_ACCOUNT_ID": "test-account",
+                    "CLOUDFLARE_AI_API_TOKEN": "test-token",
+                }),
+                patch.object(video_app, "run", side_effect=fake_run),
+                patch.object(video_app.urllib.request, "urlopen", side_effect=rate_limit),
+            ):
+                with self.assertRaisesRegex(RuntimeError, "বিনামূল্যের সীমা বা অনুরোধের হার"):
+                    video_app.transcribe_uploaded_audio(audio, folder)
+
     def test_voice_gradio_client_uses_optional_huggingface_token(self):
         from types import SimpleNamespace
         fake_client = Mock()
