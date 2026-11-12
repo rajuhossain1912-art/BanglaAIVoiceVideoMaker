@@ -714,7 +714,7 @@ class PublicationReleaseGateTests(unittest.TestCase):
             "image_count": 2,
             "semantic_review": {"reviewed": 2, "matched": 2, "unavailable": 0},
             "audio_verification": {"status": "matched", "missing_tokens": 0, "extra_tokens": 0},
-            "caption_alignment": {"status": "asr_word_timestamps", "matched_word_timestamps": 8, "script_word_count": 8},
+            "caption_alignment": {"status": "asr_word_timestamps", "matched_word_timestamps": 8, "script_word_count": 8, "timing_integrity_passed": True},
             "subtitle_ocr": {"status": "passed"},
             "scene_audit": [
                 {"final_visual_status": "matched"},
@@ -775,6 +775,13 @@ class PublicationReleaseGateTests(unittest.TestCase):
             checks["audio_verification"][field] = 1
             result = video_app._publication_gate_decision(**checks)
             self.assertFalse(result["share_allowed"])
+
+    def test_missing_timing_integrity_flag_blocks_sharing(self):
+        checks = self._good_checks()
+        checks["caption_alignment"].pop("timing_integrity_passed")
+        result = video_app._publication_gate_decision(**checks)
+        self.assertFalse(result["share_allowed"])
+        self.assertTrue(any("অনুমান গ্রহণযোগ্য নয়" in reason for reason in result["reasons"]))
 
     def test_partial_asr_word_alignment_blocks_sharing(self):
         checks = self._good_checks()
