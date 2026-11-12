@@ -783,6 +783,14 @@ class PublicationReleaseGateTests(unittest.TestCase):
         self.assertFalse(result["share_allowed"])
 
 
+    def test_unverified_technical_audio_or_video_blocks_sharing(self):
+        checks = self._good_checks()
+        checks["technical_ok"] = False
+        result = video_app._publication_gate_decision(**checks)
+        self.assertFalse(result["share_allowed"])
+        self.assertEqual(result["publication_status"], "blocked")
+
+
 
 class SubtitleOCRVerificationTests(unittest.TestCase):
     def test_tesseract_tsv_words_are_assigned_to_the_correct_panel(self):
