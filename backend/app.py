@@ -1595,6 +1595,18 @@ def _analyze_video_brief(script):
                 if parsed:
                     plan.update(parsed)
                     break
+            except urllib.error.HTTPError as exc:
+                print(f"AI_BRAIN model_error model={model} http_status={exc.code}", flush=True)
+                # Authentication, permission and quota errors affect the whole
+                # account, so trying every model only wastes time and free quota.
+                if exc.code in (401, 403, 429):
+                    break
+            except (TimeoutError, urllib.error.URLError) as exc:
+                reason = getattr(exc, "reason", exc)
+                if isinstance(reason, TimeoutError) or "timed out" in str(reason).lower():
+                    print(f"AI_BRAIN stopped_after_timeout model={model}", flush=True)
+                    break
+                print(f"AI_BRAIN fallback=next_model model={model} error={type(exc).__name__}: {str(exc)[:120]}", flush=True)
             except Exception as exc:
                 print(f"AI_BRAIN fallback=next_model model={model} error={type(exc).__name__}: {str(exc)[:120]}", flush=True)
     if plan["research_needed"]:
