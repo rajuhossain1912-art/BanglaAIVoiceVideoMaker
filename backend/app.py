@@ -52,6 +52,8 @@ IMAGE_SEARCH_CACHE_TTL_SECONDS = 6 * 60 * 60
 IMAGE_SEARCH_CACHE_MAX_ENTRIES = 128
 _IMAGE_SEARCH_CACHE = {}
 _IMAGE_SEARCH_CACHE_LOCK = threading.Lock()
+_IMAGE_REVIEW_QUOTA_EXHAUSTED = False
+_IMAGE_REVIEW_QUOTA_LOCK = threading.Lock()
 WORK_DIR = Path(os.getenv("WORK_DIR", "/tmp/bangla-video-jobs"))
 WORK_DIR.mkdir(parents=True, exist_ok=True)
 MAX_SCRIPT_CHARS = int(os.getenv("MAX_SCRIPT_CHARS", "50000"))
@@ -2722,6 +2724,10 @@ def _review_generated_image_against_scene(image_path: Path, narration: str, visu
     api_token = os.getenv("CLOUDFLARE_AI_API_TOKEN", os.getenv("CLOUDFLARE_API_TOKEN", "")).strip()
     if not account_id or not api_token or not image_path or not image_path.is_file():
         return None
+    with _IMAGE_REVIEW_QUOTA_LOCK:
+        if _IMAGE_REVIEW_QUOTA_EXHAUSTED:
+            print("IMAGE_REVIEW skipped reason=quota_exhausted_for_process", flush=True)
+            return None
     model = os.getenv("CLOUDFLARE_VISION_REVIEW_MODEL", "@cf/moondream/moondream3.1-9B-A2B").strip()
     try:
         with Image.open(image_path) as source:
@@ -2824,6 +2830,11 @@ def _review_generated_image_against_scene(image_path: Path, narration: str, visu
             detail = re.sub(r"\s+", " ", exc.read(6000).decode("utf-8", errors="replace")).strip()
         except Exception:
             detail = ""
+        if exc.code == 429:
+            with _IMAGE_REVIEW_QUOTA_LOCK:
+                global _IMAGE_REVIEW_QUOTA_EXHAUSTED
+                _IMAGE_REVIEW_QUOTA_EXHAUSTED = True
+            print("IMAGE_REVIEW circuit_breaker=enabled reason=http_429", flush=True)
         print(
             f"IMAGE_REVIEW unavailable model={model} http_status={exc.code} "
             f"reason={str(exc.reason)[:90]} detail={detail[:220]}",
