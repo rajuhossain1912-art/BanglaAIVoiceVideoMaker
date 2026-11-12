@@ -463,7 +463,7 @@ class SceneImageSimilarityTests(unittest.TestCase):
                     image, "একজন কৃষক ধান কাটছেন"
                 )
             self.assertIsNone(review)
-            self.assertEqual(mocked.call_count, 2)
+            self.assertEqual(mocked.call_count, 1)
 
     def test_openverse_timeout_activates_provider_cooldown(self):
         with tempfile.TemporaryDirectory() as temp_dir:
