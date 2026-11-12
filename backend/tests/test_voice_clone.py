@@ -775,6 +775,76 @@ class PublicationReleaseGateTests(unittest.TestCase):
         self.assertFalse(result["share_allowed"])
 
 
+
+class SubtitleOCRVerificationTests(unittest.TestCase):
+    def test_tesseract_tsv_words_are_assigned_to_the_correct_panel(self):
+        tsv = (
+            "level\\tpage_num\\tblock_num\\tpar_num\\tline_num\\tword_num\\tleft\\ttop\\twidth\\theight\\tconf\\ttext\\n"
+            "5\\t1\\t1\\t1\\t1\\t1\\t10\\t40\\t80\\t25\\t95\\tবাংলা\\n"
+            "5\\t1\\t1\\t1\\t1\\t2\\t10\\t400\\t60\\t25\\t92\\ttest\\n"
+        )
+        panels = video_app._parse_tesseract_tsv_panels(tsv, 364, 388, 2)
+        self.assertIn("বাংলা", panels[0])
+        self.assertNotIn("test", panels[0])
+        self.assertIn("test", panels[1])
+
+    def test_every_caption_frame_active_word_must_be_detected(self):
+        from types import SimpleNamespace
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            frames = root / "caption-frames"
+            frames.mkdir()
+            first = frames / "frame-000000.png"
+            second = frames / "frame-000001.png"
+            video_app.Image.new("RGB", (360, 640), "black").save(first)
+            video_app.Image.new("RGB", (360, 640), "black").save(second)
+            listing = root / "caption-frames.txt"
+            listing.write_text(
+                f"file '{first.as_posix()}'\\nduration 1.0\\n"
+                f"file '{second.as_posix()}'\\nduration 1.0\\n",
+                encoding="utf-8",
+            )
+            tsv = (
+                "level\\tpage_num\\tblock_num\\tpar_num\\tline_num\\tword_num\\tleft\\ttop\\twidth\\theight\\tconf\\ttext\\n"
+                "5\\t1\\t1\\t1\\t1\\t1\\t10\\t40\\t80\\t25\\t95\\tবাংলা\\n"
+                "5\\t1\\t1\\t1\\t1\\t2\\t10\\t400\\t60\\t25\\t92\\ttest\\n"
+            )
+            fake = SimpleNamespace(returncode=0, stdout="List of available languages (2):\\nben\\neng\\n", stderr="")
+            ocr = SimpleNamespace(returncode=0, stdout=tsv, stderr="")
+            with patch.object(video_app.subprocess, "run", side_effect=[fake, ocr]):
+                result = video_app._verify_subtitle_frames_with_ocr(listing, "বাংলা test", root)
+            self.assertEqual(result["status"], "passed")
+            self.assertEqual(result["frames_checked"], 2)
+            self.assertEqual(result["words_detected"], 2)
+
+    def test_missing_active_caption_word_fails_ocr_verification(self):
+        from types import SimpleNamespace
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            frames = root / "caption-frames"
+            frames.mkdir()
+            first = frames / "frame-000000.png"
+            second = frames / "frame-000001.png"
+            video_app.Image.new("RGB", (360, 640), "black").save(first)
+            video_app.Image.new("RGB", (360, 640), "black").save(second)
+            listing = root / "caption-frames.txt"
+            listing.write_text(
+                f"file '{first.as_posix()}'\\nduration 1.0\\n"
+                f"file '{second.as_posix()}'\\nduration 1.0\\n",
+                encoding="utf-8",
+            )
+            tsv = (
+                "level\\tpage_num\\tblock_num\\tpar_num\\tline_num\\tword_num\\tleft\\ttop\\twidth\\theight\\tconf\\ttext\\n"
+                "5\\t1\\t1\\t1\\t1\\t1\\t10\\t40\\t80\\t25\\t95\\tবাংলা\\n"
+            )
+            fake = SimpleNamespace(returncode=0, stdout="List of available languages (2):\\nben\\neng\\n", stderr="")
+            ocr = SimpleNamespace(returncode=0, stdout=tsv, stderr="")
+            with patch.object(video_app.subprocess, "run", side_effect=[fake, ocr]):
+                result = video_app._verify_subtitle_frames_with_ocr(listing, "বাংলা test", root)
+            self.assertEqual(result["status"], "failed")
+            self.assertEqual(result["words_missing"], 1)
+
+
 if __name__ == "__main__":
     unittest.main()
 
