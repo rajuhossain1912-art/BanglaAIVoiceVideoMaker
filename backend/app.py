@@ -2715,12 +2715,19 @@ def _review_generated_image_against_scene(image_path: Path, narration: str, visu
         # English visual description. Bengali narration remains supporting context;
         # do not make the vision model infer the scene from Bengali text alone.
         comparison_text = visual_text or narration_text
+        # Ask for the visible content description as well as the decision. The
+        # rejected description is fed into the next image-generation attempt;
+        # a bare MATCH/MISMATCH answer leaves that recovery prompt uninformed.
         questions = [
-            "Look at the image. Does it clearly show this scene: " + comparison_text
-            + "? Bengali narration context: " + narration_text[:120]
-            + ". Reply with exactly MATCH or MISMATCH. Judge the visible subject and action, not text.",
-            "Compare the visible image with this scene description: " + comparison_text
-            + ". Is the main subject or action clearly shown? Answer only MATCH or MISMATCH.",
+            "Inspect the image and compare its visible main subject and action with this exact scene: "
+            + comparison_text + ". Bengali narration context: " + narration_text[:120]
+            + ". Return ONLY JSON with keys match (true or false), confidence (0 to 1), "
+            + "description (briefly describe what is visibly in this image), and reason "
+            + "(briefly explain whether the visible subject/action fits the scene). "
+            + "Do not judge text in the image.",
+            "Describe the main visible subject and action, then compare them with this scene: "
+            + comparison_text + ". Return only JSON: match, confidence, description, reason. "
+            + "Set match true only when the actual visible subject and action clearly fit.",
         ]
         model_path = urllib.parse.quote(model, safe="@/-")
         raw = ""
