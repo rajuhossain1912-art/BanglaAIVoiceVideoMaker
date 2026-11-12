@@ -431,9 +431,11 @@ class SceneImageSimilarityTests(unittest.TestCase):
             error = __import__("urllib.error", fromlist=["HTTPError"]).HTTPError(
                 "https://api.cloudflare.com", 429, "Too Many Requests", {}, io.BytesIO(b"quota exhausted")
             )
-            with patch.object(video_app, "_IMAGE_REVIEW_QUOTA_EXHAUSTED", False), \\
-                 patch.dict("os.environ", {"CLOUDFLARE_ACCOUNT_ID": "test", "CLOUDFLARE_AI_API_TOKEN": "test"}), \\
-                 patch.object(video_app.urllib.request, "urlopen", side_effect=error) as mocked:
+            with (
+                patch.object(video_app, "_IMAGE_REVIEW_QUOTA_EXHAUSTED", False),
+                patch.dict("os.environ", {"CLOUDFLARE_ACCOUNT_ID": "test", "CLOUDFLARE_AI_API_TOKEN": "test"}),
+                patch.object(video_app.urllib.request, "urlopen", side_effect=error) as mocked,
+            ):
                 first = video_app._review_generated_image_against_scene(image, "একজন কৃষক ধান কাটছেন")
                 second = video_app._review_generated_image_against_scene(image, "একজন কৃষক ধান কাটছেন")
             self.assertIsNone(first)
