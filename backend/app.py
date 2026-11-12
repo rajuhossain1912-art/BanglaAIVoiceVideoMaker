@@ -2570,8 +2570,10 @@ def _scene_images_too_similar(first: Path, second: Path) -> bool:
         difference = sum(abs(ac - bc) for ap, bp in zip(a, b) for ac, bc in zip(ap, bp)) / (len(a) * 3)
         return difference < 12.0
     except Exception as exc:
+        # Unknown similarity is not evidence of a distinct image. Treat unreadable
+        # or missing files as duplicates so the publication gate fails closed.
         print(f"IMAGE_SCENE compare_failed error={type(exc).__name__}", flush=True)
-        return False
+        return True
 
 
 def _visual_scenes_for_interval(scenes, duration: float, interval: int, max_scenes: Optional[int] = None):
