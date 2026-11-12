@@ -386,8 +386,8 @@ class SceneImageSimilarityTests(unittest.TestCase):
             "A generic city skyline with tall buildings and traffic."
         )
         self.assertIn("Bangladeshi farmer working in a green rice field", prompt)
-        self.assertIn("additional scene detail", prompt)
-        self.assertIn("generic city skyline", prompt)
+        self.assertNotIn("additional scene detail", prompt)
+        self.assertNotIn("generic city skyline", prompt)
         self.assertTrue(prompt.startswith("Main subject and action"))
         self.assertLess(prompt.index("Bangladeshi farmer working in a green rice field"), 220)
 
@@ -403,6 +403,40 @@ class SceneImageSimilarityTests(unittest.TestCase):
         self.assertNotIn("crowded market street", prompt.lower())
         self.assertNotIn("additional scene detail", prompt.lower())
         self.assertIn("rejected visual content", prompt.lower())
+
+
+
+    def test_video_brain_parser_validates_language_and_research_queries(self):
+        parsed = video_app._parse_video_brain_response(
+            '{"language":"mixed","topic":"কৃষি ও প্রযুক্তি","content_type":"educational",'
+            '"tone":"informative","audience":"general","visual_style":"documentary",'
+            '"research_needed":true,"research_queries":["Bangladesh agriculture","Bangladesh agriculture",""]}',
+            "কৃষি ও technology",
+        )
+        self.assertEqual(parsed["language"], "mixed")
+        self.assertEqual(parsed["content_type"], "educational")
+        self.assertEqual(parsed["research_queries"], ["Bangladesh agriculture"])
+        self.assertTrue(parsed["research_needed"])
+
+    def test_video_brain_rejects_malformed_response_and_uses_no_research(self):
+        self.assertIsNone(video_app._parse_video_brain_response("not json", "বাংলা লেখা"))
+        parsed = video_app._parse_video_brain_response(
+            '{"language":"unknown","research_needed":true,"research_queries":[]}', "বাংলা লেখা"
+        )
+        self.assertFalse(parsed["research_needed"])
+        self.assertEqual(parsed["research_queries"], [])
+
+    def test_video_brain_context_uses_research_as_context_not_scene_override(self):
+        context = video_app._video_brain_visual_context({
+            "topic": "বাংলাদেশের কৃষি", "content_type": "educational",
+            "tone": "informative", "audience": "students",
+            "visual_style": "documentary",
+            "research_sources": [{"source": "Wikipedia", "title": "Rice",
+                                  "snippet": "Rice is a staple crop.", "url": "https://en.wikipedia.org/?curid=1"}],
+        })
+        self.assertIn("Overall topic", context)
+        self.assertIn("Rice", context)
+        self.assertIn("Rice is a staple crop", context)
 
 
 if __name__ == "__main__":
