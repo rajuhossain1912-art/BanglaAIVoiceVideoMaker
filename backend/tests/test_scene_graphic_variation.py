@@ -399,9 +399,9 @@ class SceneImageSimilarityTests(unittest.TestCase):
             "A city bus on a busy road",
         )
         self.assertIn("farmer", prompt.lower())
-        self.assertIn("rice", prompt.lower())
-        self.assertIn("harvesting", prompt.lower())
-        self.assertNotIn("city bus driving", prompt.lower())
+        self.assertIn("rice field", prompt.lower())
+        self.assertNotIn("crowded market street", prompt.lower())
+        self.assertNotIn("additional scene detail", prompt.lower())
         self.assertIn("rejected visual content", prompt.lower())
 
 
