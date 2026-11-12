@@ -2778,10 +2778,7 @@ def _review_generated_image_against_scene(image_path: Path, narration: str, visu
             + ". Return ONLY JSON with keys match (true or false), confidence (0 to 1), "
             + "description (briefly describe what is visibly in this image), and reason "
             + "(briefly explain whether the visible subject/action fits the scene). "
-            + "Do not judge text in the image.",
-            "Describe the main visible subject and action, then compare them with this scene: "
-            + comparison_text + ". Return only JSON: match, confidence, description, reason. "
-            + "Set match true only when the actual visible subject and action clearly fit.",
+            + "Do not judge text in the image."
         ]
         model_path = urllib.parse.quote(model, safe="@/-")
         raw = ""
