@@ -405,6 +405,22 @@ class SceneImageSimilarityTests(unittest.TestCase):
         self.assertIn("rejected visual content", prompt.lower())
 
 
+    def test_rejected_image_recovery_prompt_survives_provider_adapter(self):
+        retry = video_app._scene_mismatch_retry_prompt(
+            "একজন কৃষক ধানক্ষেতে ধান কাটছেন",
+            "A city bus driving through a crowded market street",
+            "A city bus on a busy road",
+        )
+        provider_prompt = video_app._english_visual_prompt(
+            "একজন কৃষক ধানক্ষেতে ধান কাটছেন", retry
+        )
+        self.assertIn("farmer", provider_prompt.lower())
+        self.assertIn("rice field", provider_prompt.lower())
+        self.assertIn("avoid this rejected visual content", provider_prompt.lower())
+        self.assertIn("city bus", provider_prompt.lower())
+        self.assertNotIn("crowded market street", provider_prompt.lower())
+
+
     def test_vision_review_parser_keeps_rejected_image_description(self):
         review = video_app._parse_scene_match_response(
             '{"match":false,"confidence":0.94,'
