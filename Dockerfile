@@ -8,7 +8,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     WORK_DIR=/tmp/bangla-video-jobs
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ffmpeg espeak-ng fonts-noto-core fonts-noto-extra \
+    ffmpeg espeak-ng fonts-noto-core fonts-noto-extra tesseract-ocr tesseract-ocr-ben tesseract-ocr-eng \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /service
