@@ -49,6 +49,15 @@ jobs:
                   removed: (commit.files || []).filter(file => file.status === 'removed').map(file => file.filename)
                 });
               }
+              for (const item of commits) {
+                if (!item.added && !item.modified && !item.removed) {
+                  const response = await github.rest.repos.getCommit({ owner, repo, ref: item.id });
+                  const files = response.data.files || [];
+                  item.added = files.filter(file => file.status === 'added').map(file => file.filename);
+                  item.modified = files.filter(file => file.status === 'modified').map(file => file.filename);
+                  item.removed = files.filter(file => file.status === 'removed').map(file => file.filename);
+                }
+              }
               const changed = [...new Set(commits.flatMap(c => [
                 ...(c.added || []), ...(c.modified || []), ...(c.removed || [])
               ]))].sort();
