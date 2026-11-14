@@ -92,7 +92,7 @@ jobs:
 
             const marker = '<!-- AUTO_LOG_END -->';
             const { data: file } = await github.rest.repos.getContent({
-              owner, repo, path, ref: 'main'
+              owner, repo, path, ref: 'audit-log'
             });
             if (!file || Array.isArray(file) || !file.content) {
               throw new Error('Audit report file was not found; refusing to create an incomplete log.');
@@ -107,6 +107,6 @@ jobs:
               message: `audit: record ${eventName} ${context.sha.slice(0, 7)}`,
               content: Buffer.from(updated, 'utf8').toString('base64'),
               sha: file.sha,
-              branch: 'main'
+              branch: 'audit-log'
             });
             core.info(`Recorded ${eventName} in ${path}`);
