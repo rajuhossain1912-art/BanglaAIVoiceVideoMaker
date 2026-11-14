@@ -535,3 +535,34 @@ jobs:
       - name: Show backend logs on failure
         if: failure()
         run: docker logs bangla-video-api || true
+      - name: Verify live Render production health endpoint
+        env:
+          API_BASE_URL: https://bangla-ai-voice-video-maker-api.onrender.com
+        run: |
+          set -e
+          ready=0
+          for i in $(seq 1 30); do
+            code=$(curl --silent --output production-health.json --write-out '%{http_code}' "$API_BASE_URL/health" || true)
+            if [ "$code" = "200" ] && python - <<'PY'
+          import json
+          from pathlib import Path
+          try:
+              data = json.loads(Path("production-health.json").read_text(encoding="utf-8"))
+              assert data.get("status") == "ok", data
+              tools = data.get("tools", {})
+              assert all(tools.get(name) is True for name in ("ffmpeg", "ffprobe", "espeak-ng")), data
+          except Exception:
+              raise SystemExit(1)
+          PY
+            then
+              ready=1
+              break
+            fi
+            sleep 10
+          done
+          if [ "$ready" -ne 1 ]; then
+            echo "Live Render /health did not pass within 5 minutes"
+            cat production-health.json 2>/dev/null || true
+            exit 1
+          fi
+          cat production-health.json
