@@ -216,3 +216,39 @@ Workspace: My Workspace (ID kept out of this public audit).
 - Latest commit combined status returned an empty status list; the available commit-workflow wrapper returned no runs because it only exposes pull-request-triggered runs. This does not prove that push-triggered backend smoke tests passed or failed.
 - The backend smoke workflow is configured to run on backend source/test changes. A real workflow run and its job logs must be checked in GitHub Actions before claiming test success.
 - The Android APK workflow only triggers automatically for app/build configuration paths or manual dispatch. Backend-only commits do not automatically create a new APK. No new APK build/release is confirmed by this Render inspection.
+
+
+## ৮. CI, APK release ও পরবর্তী live verification — ২০২৬-১১-১৪
+
+### Backend CI — প্রকৃত GitHub Actions ফলাফল
+- Workflow: Backend end-to-end smoke test, run #454.
+- Run ID: 43279949106.
+- Tested commit: 2b66fe2ebe877f21f9fd2f15e37b9c11bf81b525.
+- Event: push; conclusion: success.
+- Job `video-smoke-test`: success.
+- Verified steps include Docker image build, full backend unit tests, API startup and /health, Bengali/English Tesseract packs, Cloudflare chat fallback tests, transcript comparison, image planning/recovery, Bangla/English/mixed end-to-end generation and publication-gate report checks.
+- All listed steps completed successfully; failure-log step was correctly skipped.
+- A second adjacent run #453 for code commit 86f878bed1dcb55d7503caa090fd0917ccbbaae5 also succeeded.
+- This confirms the backend test suite for the latest backend code changes. It does not prove every external live provider's quota, credentials or image/voice quality.
+
+### Android APK release
+- Latest release found: v0.3.222, published 2026-11-11T18:43:11Z.
+- Release target commit: 63cf1f752782c146f3e9a2fe8e8281abe1b5ba49.
+- Android workflow run #222; run ID 43080180005; conclusion: success.
+- Steps confirmed successful: persistent signing key loaded, release APK built, stable application ID/version verified, single APK prepared, signing certificate verified, artifact uploaded, GitHub Release published.
+- Release contains one APK asset: `BanglaAIVoiceVideoMaker-v0.3.222.apk`, size 10,736,616 bytes.
+- No newer Android APK workflow run or release was found in the 100 most recent workflow runs. Backend-only code changes do not match the Android workflow's automatic path filters, so no new APK is expected from those commits.
+- The current backend main commit is newer than the APK's target commit, but the APK calls the live API. An APK refresh is needed only when Android app/build files change or an explicit new APK is requested.
+
+### Updated Render state — ২০২৬-১১-১৪
+- The previously in-progress Render deploy for audit commit 0e698abae7a48c9c72a7e91cf860581eaa846a09 is now `live`; build and deploy succeeded.
+- From 2026-11-13 onward, the inspected Render application error logs and HTTP 500/502/503 request logs returned no entries.
+- CPU, memory, HTTP request, latency and instance metrics returned empty series for the inspected time window. Treat these metrics as unavailable, not as zero usage or proof of health.
+- Live service details still show an empty healthCheckPath although repository render.yaml specifies `/health`. The application source does implement GET /health and the backend CI successfully tested it, but the live Render HTTP health-check setting has not been reconciled or verified. Render currently appears to use its default TCP health probe.
+- No Render service configuration was changed during this check.
+
+### Next actions
+1. Resolve the Render healthCheckPath mismatch through the existing service's Dashboard or an already-managed Blueprint after confirming the correct configuration source. Do not create a second service or duplicate Blueprint.
+2. Obtain a read-only method to inspect required environment-variable names/presence without exposing values, then verify Cloudflare/Hugging Face provider connectivity safely.
+3. Continue investigating the semantic-review cap (default 12 scenes) versus the strict all-scenes publication gate. Do not weaken the gate or silently treat unreviewed images as verified. Any move to review all scenes must consider free provider quotas, rate limits and Render Free runtime limits.
+4. Revisit topic-graphic fallback review: the current vision reviewer intentionally skips non-photographic local graphics, while the publication gate expects matched/retry_matched. Keep the gate strict until a reliable, separately tested verification method exists.
