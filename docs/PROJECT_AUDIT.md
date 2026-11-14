@@ -190,7 +190,7 @@ Workspace: My Workspace (ID kept out of this public audit).
 - Region: Singapore; Free plan; Docker; one instance.
 - Connected repository/branch: rajuhossain1912-art/BanglaAIVoiceVideoMaker, main.
 - Auto deploy: enabled on commits.
-- Latest inspected deploy: dep-dbr0a9fprmrc73d7mfsg; commit 286d4bb52767af52d38571b15ae38c87396dbb04; deployment and build events both report succeeded.
+- Latest inspected deploy at the initial audit: dep-dbr0a9fprmrc73d7mfsg; commit 286d4bb52767af52d38571b15ae38c87396dbb04. A later audit-doc commit 0e698abae7a48c9c72a7e91cf860581eaa846a09 also deployed successfully (dep-dbr0d07f3r2c73ah6910).
 - Container logs show application startup complete, Uvicorn listening on port 10000, Render reports service live, and a GET / request returned HTTP 200.
 - Important configuration drift: repository render.yaml sets healthCheckPath=/health, but the live Render service details report healthCheckPath empty. The inspected startup log did not show a request to /health. Do not treat the health endpoint as verified until this is reconciled and tested.
 - The latest deployment includes the recent backend safety code commits; the currently live commit is a later documentation-only commit on top of them.
@@ -213,9 +213,7 @@ Workspace: My Workspace (ID kept out of this public audit).
 - Never put API tokens, signing passwords, keystore content, or other secret values in this public audit file.
 
 ### GitHub Actions verification limitation
-- Latest commit combined status returned an empty status list; the available commit-workflow wrapper returned no runs because it only exposes pull-request-triggered runs. This does not prove that push-triggered backend smoke tests passed or failed.
-- The backend smoke workflow is configured to run on backend source/test changes. A real workflow run and its job logs must be checked in GitHub Actions before claiming test success.
-- The Android APK workflow only triggers automatically for app/build configuration paths or manual dispatch. Backend-only commits do not automatically create a new APK. No new APK build/release is confirmed by this Render inspection.
+- The earlier commit-status query was empty and the narrow commit-workflow wrapper did not expose push runs; this was superseded by direct read-only GitHub Actions API retrieval recorded in section ৮ below.
 
 
 ## ৮. CI, APK release ও পরবর্তী live verification — ২০২৬-১১-১৪
@@ -252,3 +250,10 @@ Workspace: My Workspace (ID kept out of this public audit).
 2. Obtain a read-only method to inspect required environment-variable names/presence without exposing values, then verify Cloudflare/Hugging Face provider connectivity safely.
 3. Continue investigating the semantic-review cap (default 12 scenes) versus the strict all-scenes publication gate. Do not weaken the gate or silently treat unreviewed images as verified. Any move to review all scenes must consider free provider quotas, rate limits and Render Free runtime limits.
 4. Revisit topic-graphic fallback review: the current vision reviewer intentionally skips non-photographic local graphics, while the publication gate expects matched/retry_matched. Keep the gate strict until a reliable, separately tested verification method exists.
+
+
+## ৯. অডিট সংশোধনী — CI ও APK-এর সরাসরি প্রমাণ
+
+Section ৭-এর GitHub Actions সীমাবদ্ধতার বিবরণ section ৮-এর সরাসরি Actions API evidence দ্বারা superseded. Backend run #454 এবং Android run #222-এর job-level step summaries পরীক্ষা করা হয়েছে। Backend-এর সব কার্যকর smoke/unit-test ধাপ এবং Android signing/build/release ধাপ সফল ছিল। Section ৮-এ তারিখ, run ID, commit SHA এবং release asset digest নথিভুক্ত আছে।
+
+এখনো অমীমাংসিত: live Render healthCheckPath configuration mismatch; Render metrics data unavailable; secret variable presence/provider connectivity not independently verified; semantic review cap ও topic-graphic publication gate mismatch.
