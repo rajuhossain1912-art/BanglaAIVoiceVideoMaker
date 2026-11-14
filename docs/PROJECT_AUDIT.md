@@ -257,3 +257,13 @@ Workspace: My Workspace (ID kept out of this public audit).
 Section ৭-এর GitHub Actions সীমাবদ্ধতার বিবরণ section ৮-এর সরাসরি Actions API evidence দ্বারা superseded. Backend run #454 এবং Android run #222-এর job-level step summaries পরীক্ষা করা হয়েছে। Backend-এর সব কার্যকর smoke/unit-test ধাপ এবং Android signing/build/release ধাপ সফল ছিল। Section ৮-এ তারিখ, run ID, commit SHA এবং release asset digest নথিভুক্ত আছে।
 
 এখনো অমীমাংসিত: live Render healthCheckPath configuration mismatch; Render metrics data unavailable; secret variable presence/provider connectivity not independently verified; semantic review cap ও topic-graphic publication gate mismatch.
+
+
+## ১০. All-scene visual verification default — ২০২৬-১১-১৪
+
+- Code change: IMAGE_SEMANTIC_REVIEW_MAX_SCENES now defaults to 0, interpreted as review every final scene rather than selecting a 12-scene sample.
+- A positive configured value remains an explicit operator cap and selects a distributed sample; scenes outside that cap remain not_reviewed, so the strict publication gate still blocks sharing.
+- Added unit tests for default all-scene selection, evenly distributed explicit caps, cap-at-or-above-count behavior, and empty input.
+- Topic-graphic fallback remains unreviewed by the photographic vision reviewer and is not accepted by the publication gate. No claim is made that this issue is solved.
+- Full-scene review can consume more free vision quota and time. Provider quota exhaustion or unavailable vision review continues to block publication rather than silently approving a video.
+- Verification status: source and regression tests committed; wait for the new Backend end-to-end smoke test and Render auto-deploy result before marking the change operationally verified.

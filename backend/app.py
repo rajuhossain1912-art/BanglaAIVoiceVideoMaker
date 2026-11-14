@@ -2872,6 +2872,26 @@ def _review_generated_image_against_scene(image_path: Path, narration: str, visu
         print(f"IMAGE_REVIEW unavailable model={model} error={type(exc).__name__}: {str(exc)[:180]}", flush=True)
         return None
 
+def _semantic_review_indices(scene_count: int, max_review_scenes: int = 0):
+    """Select scenes for semantic review; zero means review every scene.
+
+    A positive cap is an explicit operator override for constrained environments.
+    The publication gate remains fail-closed for any final scene left unreviewed.
+    """
+    total = max(0, int(scene_count))
+    limit = max(0, int(max_review_scenes))
+    if total == 0:
+        return set()
+    if limit == 0 or limit >= total:
+        return set(range(total))
+    if limit == 1:
+        return {0}
+    return {
+        round(slot * (total - 1) / (limit - 1))
+        for slot in range(limit)
+    }
+
+
 def make_scene_backgrounds(script: str, folder: Path, progress_callback=None, duration: float = 0.0, scene_interval: int = 5, brain_context: str = ""):
     """Plan as many visual scenes as the duration and selected interval require."""
     scenes = _split_script_into_scenes(script, max_scenes=None, target_words=8)
@@ -2897,17 +2917,13 @@ def make_scene_backgrounds(script: str, folder: Path, progress_callback=None, du
         "image_sources": {"ai_generated": 0, "licensed_contextual": 0, "topic_graphic": 0, "unknown": 0},
     }
     try:
-        review_limit = max(0, int(os.getenv("IMAGE_SEMANTIC_REVIEW_MAX_SCENES", "12")))
+        # Default to reviewing every final scene. A positive environment value is
+        # an explicit constrained-host override; unreviewed scenes remain blocked
+        # by the publication gate rather than being treated as verified.
+        review_limit = max(0, int(os.getenv("IMAGE_SEMANTIC_REVIEW_MAX_SCENES", "0")))
     except (TypeError, ValueError):
-        review_limit = 12
-    review_indices = set()
-    if review_limit > 0 and len(visual_scenes) <= review_limit:
-        review_indices = set(range(len(visual_scenes)))
-    elif review_limit > 0 and len(visual_scenes) > review_limit:
-        review_indices = {
-            round(slot * (len(visual_scenes) - 1) / max(1, review_limit - 1))
-            for slot in range(review_limit)
-        }
+        review_limit = 0
+    review_indices = _semantic_review_indices(len(visual_scenes), review_limit)
     for index, scene_text in enumerate(visual_scenes):
         if progress_callback:
             percent = 36 + int(4 * index / max(1, len(visual_scenes)))
@@ -2917,9 +2933,9 @@ def make_scene_backgrounds(script: str, folder: Path, progress_callback=None, du
         print(f"IMAGE_SCENE index={index + 1}/{len(scenes)} words={len(scene_text.split())}", flush=True)
         scene_visual_prompt = visual_prompts[index] if visual_prompts else None
         background = make_background(scene_text, scene_dir, scene_visual_prompt, variation_seed=index, scene_index=index + 1)
-        # Inspect an evenly distributed sample only when it is a real generated or
-        # contextual photograph. Local topic graphics cannot pass a vision comparison,
-        # so reviewing them would waste the limited vision-model allocation.
+        # Inspect every selected AI-generated or licensed contextual photograph.
+        # Local topic graphics remain explicitly unreviewed and cannot pass the
+        # publication gate until a dedicated illustration-review path is implemented.
         scene_review_status = "not_reviewed"
         duplicate_detected = False
         duplicate_retry_action = "not_needed"

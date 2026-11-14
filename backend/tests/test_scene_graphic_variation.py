@@ -17,6 +17,31 @@ class SceneImageSimilarityTests(unittest.TestCase):
         Image.new("RGB", (120, 180), color).save(path)
         return path
 
+    def test_semantic_review_default_selects_every_scene(self):
+        self.assertEqual(
+            video_app._semantic_review_indices(37),
+            set(range(37)),
+        )
+
+    def test_semantic_review_positive_cap_samples_evenly(self):
+        self.assertEqual(
+            video_app._semantic_review_indices(10, 4),
+            {0, 3, 6, 9},
+        )
+
+    def test_semantic_review_cap_at_or_above_scene_count_selects_all(self):
+        self.assertEqual(
+            video_app._semantic_review_indices(5, 5),
+            set(range(5)),
+        )
+        self.assertEqual(
+            video_app._semantic_review_indices(5, 9),
+            set(range(5)),
+        )
+
+    def test_semantic_review_zero_scenes_is_empty(self):
+        self.assertEqual(video_app._semantic_review_indices(0), set())
+
     def test_bengali_bus_keyword_does_not_match_inside_biswas(self):
         self.assertFalse(video_app._contains_visual_term("নিজের ওপর বিশ্বাস রাখুন", "বাস"))
         self.assertTrue(video_app._contains_visual_term("বাসস্ট্যান্ডে একটি বাস দাঁড়িয়ে আছে", "বাস"))
