@@ -1,11 +1,11 @@
 name: Automatic project audit register
 
 on:
+  workflow_dispatch:
   push:
     branches: [main]
     paths-ignore:
       - 'docs/AUDIT_REPORT.md'
-      - '.github/workflows/audit-register.yml'
   workflow_run:
     workflows:
       - Backend end-to-end smoke test
