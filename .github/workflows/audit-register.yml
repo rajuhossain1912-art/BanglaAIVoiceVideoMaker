@@ -38,6 +38,17 @@ jobs:
 
             if (eventName === 'push') {
               const commits = context.payload.commits || [];
+              if (!commits.length) {
+                const response = await github.rest.repos.getCommit({ owner, repo, ref: context.sha });
+                const commit = response.data;
+                commits.push({
+                  id: commit.sha,
+                  message: commit.commit.message,
+                  added: (commit.files || []).filter(file => file.status === 'added').map(file => file.filename),
+                  modified: (commit.files || []).filter(file => file.status === 'modified').map(file => file.filename),
+                  removed: (commit.files || []).filter(file => file.status === 'removed').map(file => file.filename)
+                });
+              }
               const changed = [...new Set(commits.flatMap(c => [
                 ...(c.added || []), ...(c.modified || []), ...(c.removed || [])
               ]))].sort();
