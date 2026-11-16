@@ -321,7 +321,15 @@ Section ৭-এর GitHub Actions সীমাবদ্ধতার বিবর
 - Render workspace: My Workspace; service `bangla-ai-voice-video-maker-api` (`srv-db7u1d49v7es73ctjqj0`) আবার read-onlyভাবে পরীক্ষা করা হয়েছে।
 - বর্তমান service state: not suspended; Free Docker web service; Singapore; one instance; auto-deploy on main enabled।
 - **আগের healthCheckPath mismatch আর বর্তমান service configuration-এ নেই**: Render service details এখন `healthCheckPath=/health` দেখাচ্ছে। আগের audit snapshot-এ এটি empty ছিল; বর্তমান live metadata দিয়ে সেই পুরোনো পর্যবেক্ষণ superseded।
-- সর্বশেষ inspected deploy `dep-dbtl9tfb9u1s73at7r7g` status **live**, commit `03de24678ba4b033233b89ffa86dbc4b6051388d` (audit documentation update)।
+- Render service re-check-এর সময় deploy `dep-dbtl9tfb9u1s73at7r7g` **live** ছিল; পরবর্তীতে README ও PRODUCT_PLAN synchronization commit `57ef214d23e7bd106062776301e8e22a64046c5b`-এর deploy `dep-dbtlbdg81cvs73dk92f0`-ও **live** হয়েছে।
 - Render log query-তে পুরোনো ১২ নভেম্বরের Openverse image-search timeouts, Cloudflare model timeouts/response-shape error, image download 424 এবং একটি AUDIO_QC unavailable event পাওয়া গেছে। এগুলো historical entries; বর্তমান সময়ে একই সমস্যা ঘটছে—এমন প্রমাণ নয়। এই query-তে সাম্প্রতিক runtime error entry পাওয়া যায়নি।
 - `/health` path-filtered request-log query-তে কোনো entry ফেরত আসেনি। তাই service metadata-তে healthCheckPath ঠিক থাকলেও request log দিয়ে live health probe hit আলাদাভাবে নিশ্চিত করা যায়নি।
 - Free service-এর ephemeral filesystem ও in-memory job state-এর সীমাবদ্ধতা অপরিবর্তিত। No Postgres/Key Value/durable job store is attached.
+
+## ১৩. README ও Product Plan synchronization — ২০২৬-১১-১৭
+
+- README-র stale ১২-scene review cap, topic graphic fallback, IndicF5 Space fallback এবং পুরোনো APK status সংশোধন করা হয়েছে। এখন v0.3.224 release, all-scene default review, separate topic-graphic vision review, external voice provider limitations এবং Android job-ID resume behavior সঠিকভাবে বলা আছে।
+- docs/PRODUCT_PLAN.md-এ ২০২৬-১১-১৭-এর verified implementation status যোগ হয়েছে; আগের ২ নভেম্বরের milestone-কে historical context হিসেবে রেখে নতুন বাস্তব অবস্থা স্পষ্ট করা হয়েছে।
+- README commit: `a91431746ab2cd4e8d53d84e429eb0d90c39f1f4`; PRODUCT_PLAN commit: `57ef214d23e7bd106062776301e8e22a64046c5b`.
+- Latest inspected Render deployment for the synchronized product documentation: `dep-dbtlbdg81cvs73dk92f0`, commit `57ef214d23e7bd106062776301e8e22a64046c5b`, status **live**.
+- Audit-log branch updated in commit `88a12a7bb990cbc7e818c056599f9f40ff3b3bf0` with PR #41, v0.3.224, Render re-check and documentation updates.
