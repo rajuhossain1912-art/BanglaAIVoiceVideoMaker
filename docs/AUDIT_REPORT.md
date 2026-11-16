@@ -337,3 +337,12 @@ GitHub commit history অনুযায়ী প্রকল্পের প্�
 - `backend/tests`-এ বর্তমানে scene graphic variation, scene image similarity, scene interval diagnostics, voice chat এবং voice clone—এই পাঁচটি test module পাওয়া গেছে।
 - Job registry persistence, process restart recovery, daemon worker interruption, Android Activity destruction এবং WorkManager recovery-এর dedicated test module পাওয়া যায়নি।
 - এই ঘাটতি ভবিষ্যৎ durable job implementation-এর আগে regression test হিসেবে যোগ করতে হবে।
+
+
+### Free-tier storage options — official provider documentation checked
+- Render documents that Free web services have ephemeral filesystems; local files, including SQLite databases, are lost on redeploy, restart, or spin-down. Free web services cannot attach persistent disks. Free Render Postgres expires after 30 days; Free Key Value is memory-only and may lose data on restart. Therefore neither is a safe durable job store for this production requirement. Sources: https://render.com/docs/free and https://render.com/docs/disks
+- Cloudflare R2 official pricing currently lists a Standard storage free allowance of 10 GB-month, 1 million Class A operations and 10 million Class B operations per month, with Internet egress free. Source: https://developers.cloudflare.com/r2/pricing/
+- Cloudflare D1 official FAQ confirms a permanent Workers Free plan for prototyping/experimentation and that daily/storage limits cause query failures until limits reset or data is cleaned up. Source: https://developers.cloudflare.com/d1/reference/faq/
+- Candidate architecture for a free-tier trial: D1 for durable job metadata/state and R2 for uploaded inputs, intermediate assets and completed MP4; worker orchestration must also be restart-safe and idempotent. This is a candidate only, not yet implemented or proven suitable for this workload.
+- Important cost/privacy safeguards before enabling: verify actual Cloudflare account billing/plan and required API permissions; enforce per-user/job quotas, maximum file sizes, TTL cleanup, private object access, signed/short-lived download URLs, and never log voice samples or secrets. Free allowances are limits, not a guarantee of unlimited free operation.
+- No Cloudflare resources were created and no credentials or billing settings were changed.
