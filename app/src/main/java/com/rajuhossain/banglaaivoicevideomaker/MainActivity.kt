@@ -726,8 +726,13 @@ private fun VideoMakerScreen() {
                                     when (info.optString("status")) {
                                         "completed" -> {
                                             currentJobId = jobId
-                                            downloadPath = info.optString("download_url", "/api/jobs/" + jobId + "/download")
-                                            status = "ভিডিও তৈরি হয়েছে। চাইলে আগে ভিডিও পরীক্ষা ও প্রতিবেদন শুনুন, অথবা ভিডিও ডাউনলোড করুন।"
+                                            val shareAllowed = info.optBoolean("share_allowed", false)
+                                            downloadPath = if (shareAllowed) info.optString("download_url", "") else ""
+                                            status = if (shareAllowed) {
+                                                "ভিডিও তৈরি হয়েছে এবং সব নিরাপত্তা যাচাই পাস করেছে। চাইলে ভিডিও পরীক্ষা ও প্রতিবেদন শুনুন, অথবা ডাউনলোড করুন।"
+                                            } else {
+                                                "ভিডিও তৈরি হয়েছে, কিন্তু নিরাপত্তা যাচাই সম্পূর্ণ সফল হয়নি। তাই শেয়ার ও ডাউনলোড বন্ধ রাখা হয়েছে। কারণ জানতে ভিডিও পরীক্ষা ও প্রতিবেদন শুনুন।"
+                                            }
                                             finished = true
                                         }
                                         "failed" -> {
@@ -782,6 +787,8 @@ private fun VideoMakerScreen() {
                 },
                 modifier = Modifier.fillMaxWidth()
             ) { Text("ভিডিও ডাউনলোড করুন") }
+        }
+        if (currentJobId.isNotBlank()) {
             Button(
                 onClick = {
                     val baseUrl = BuildConfig.API_BASE_URL.trim().trimEnd('/')
@@ -833,7 +840,8 @@ private fun VideoMakerScreen() {
                                         append(matchStatus)
                                         val finalVisualStatus = when (scene.optString("final_visual_status")) {
                                             "matched" -> "চূড়ান্ত ছবির সঙ্গে বিষয়ের মিল পাওয়া গেছে"
-                                            "unavailable" -> "চূড়ান্ত ছবির বিষয়ের মিল যাচাই করা যায়নি"
+                                            "unavailable", "topic_graphic_unavailable" -> "চূড়ান্ত ছবির বিষয়ের মিল যাচাই করা যায়নি"
+                                            "topic_graphic_mismatched" -> "বিষয়ভিত্তিক গ্রাফিকের সঙ্গে বর্ণনার মিল পাওয়া যায়নি"
                                             "not_reviewed" -> "চূড়ান্ত ছবির বিষয়ের মিল যাচাই করা হয়নি"
                                             "topic_graphic_unreviewed" -> "শেষে বিষয়ভিত্তিক গ্রাফিক নেওয়া হয়েছে; এর ছবি-অর্থ যাচাই করা হয়নি"
                                             else -> "চূড়ান্ত ছবির আলাদা যাচাইয়ের তথ্য নেই"
