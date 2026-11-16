@@ -745,3 +745,12 @@ GitHub commit history অনুযায়ী প্রকল্পের প্�
 - PR: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/pull/40
 - Backend Check: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/actions/runs/43933301405
 - E2E run: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/actions/runs/43933402979
+
+
+### Bengali voice fallback correction — পূর্ণ E2E যাচাই — ২০২৬-১১-১৭
+- Main backend workflow run `43933402979`, commit `2e315b84bb0973b3e252d80b8c74d1a15c1c9078`: **success**.
+- Job `video-smoke-test`: **success**; all 48 numbered workflow steps completed successfully, including backend container build, backend unit tests, server startup, health endpoint, Bengali/English transcript and subtitle checks, consent-gated voice cloning, Bangla ও English video generation end-to-end (step 31), image provider and vision review checks, final visual audit, and live Render production health verification (step 48).
+- Failure-log step 47 was skipped normally because the workflow succeeded.
+- Render deployment `dep-dbtl1rqjnfac73eh4g9g` for this exact commit had already reached **live**; this E2E run independently verified the live Render health endpoint.
+- Run: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/actions/runs/43933402979
+- This confirms automated backend E2E success, not physical Android installation, TalkBack acceptance, or guaranteed availability of the external voice-cloning demo.
