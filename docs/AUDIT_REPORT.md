@@ -402,6 +402,17 @@ GitHub commit history অনুযায়ী প্রকল্পের প্�
   - Step 22. Post Checkout source: success
   - Step 23. Complete job: success
 
+
+### Source update — 2026-11-16T18:52:42.440Z
+- Branch: `main`
+- Push range: `985a794d1266725bf9af37537880cbd26c7f66e9` → `2e315b84bb0973b3e252d80b8c74d1a15c1c9078`
+- Pushed by: rajuhossain1912-art
+- Commit: [2e315b84bb09](https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/commit/2e315b84bb0973b3e252d80b8c74d1a15c1c9078) — fix: remove invalid Bengali voice clone fallback
+- Changed files:
+  - `backend/app.py`
+  - `backend/tests/test_voice_clone.py`
+- Result: **push recorded**; this is not a test or deployment success claim.
+
 <!-- AUTO_LOG_END -->
 
 
