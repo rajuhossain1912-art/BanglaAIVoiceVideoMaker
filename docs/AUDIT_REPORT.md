@@ -353,3 +353,29 @@ GitHub commit history অনুযায়ী প্রকল্পের প্�
 - সর্বশেষ deploy `dep-dbt8sr7f3r2c73c9h96g` status `live`; commit `68ab8ddc122bccdf2d03dd05644c4de432d1bb79` অপরিবর্তিত। এটি health-check configuration update, নতুন application source build নয়।
 - Live service এখনো Free plan, ১টি instance, auto-deploy enabled এবং main branch-এ যুক্ত।
 - Android persistence ও backend restart recovery-এর source-level সীমাবদ্ধতা আগের অংশে নথিভুক্ত; এই পর্যায়ে সেগুলো production-এ পরিবর্তন করা হয়নি।
+
+
+## Publication gate ও live log পুনঃযাচাই — ২০২৬-১১-১৭
+
+### সরাসরি কোড পরীক্ষা
+- `_publication_gate_decision`-এ প্রতিটি চূড়ান্ত দৃশ্যের status অবশ্যই `matched` বা `retry_matched` হতে হবে; একটি `topic_graphic_unreviewed`, `not_reviewed`, `unavailable` বা অনুপস্থিত scene audit থাকলেও share বন্ধ থাকে।
+- অডিও যাচাইয়ে status `matched`, `missing_tokens=0` এবং `extra_tokens=0` বাধ্যতামূলক।
+- সাবটাইটেল যাচাইয়ে প্রতিটি script word-এর ASR timestamp, timing integrity এবং rendered subtitle OCR pass—সবগুলো বাধ্যতামূলক।
+- ভিডিও stream, audio stream, duration, audio signal এবং visual sampling-এর প্রযুক্তিগত শর্তও pass করতে হয়।
+- ফলে বর্তমান gate ইচ্ছাকৃতভাবে কঠোর; শুধু MP4 তৈরি হওয়া বা প্রাথমিক technical check সফল হওয়া মানেই প্রকাশের অনুমতি নয়।
+
+### Test coverage gap
+- বিদ্যমান `backend/tests/test_scene_graphic_variation.py`-এ semantic scene selection, image source, image recovery ও provider failure-এর test আছে।
+- এই test file-এ `_publication_gate_decision`-এর সরাসরি unit test পাওয়া যায়নি। বিশেষ করে topic graphic/unreviewed scene, missing scene audit, audio mismatch, missing word timestamp এবং OCR failure-এর প্রত্যেকটি আলাদাভাবে gate বন্ধ রাখে—এমন regression test যোগ করা প্রয়োজন।
+- এটি test coverage-এর ঘাটতি; বর্তমান production gate দুর্বল বা bypass হয়েছে—এমন প্রমাণ নয়।
+- নিরাপত্তা যাচাইয়ের আগে test-only পরিবর্তনও production branch-এ push করা হয়নি, কারণ Render auto-deploy main branch-এর commit অনুসরণ করে।
+
+### Render live log পর্যবেক্ষণ
+- Render-এর সাম্প্রতিক ফেরত দেওয়া log page-এ `GET /health` request-গুলো `200 OK` দেখা গেছে।
+- ওই page-এ video-generation API request বা application error দেখা যায়নি। এটি কেবল ফেরত পাওয়া log window-এর পর্যবেক্ষণ; পুরো service history বা ব্যবহারকারীর app-এ video generation সফল হওয়ার প্রমাণ নয়।
+- Service metadata-তে health path `/health`, Free plan, একটি instance এবং main branch auto-deploy—আগের যাচাইয়ের সঙ্গে মিলে গেছে।
+
+### এই ধাপের পরিবর্তন
+- Production source, Android app, secrets, Render resources বা Cloudflare resources পরিবর্তন করা হয়নি।
+- এই ধাপের ফল audit branch-এ নথিভুক্ত; main branch-এ push বা production deployment ঘটানো হয়নি।
+- পরবর্তী নিরাপদ কাজ: publication gate-এর dedicated regression tests তৈরি করে আলাদা test workflow-তে চালানো, যাতে test-only commit-এর কারণে Render production redeploy না হয়।
