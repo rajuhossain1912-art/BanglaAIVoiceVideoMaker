@@ -338,6 +338,7 @@ Section ৭-এর GitHub Actions সীমাবদ্ধতার বিবর
 
 - MainActivity-এর ভিডিও polling LaunchedEffect/Activity coroutine scope-এ চলে; VideoWorkService নিজে ভিডিও polling বা backend job চালায় না। Service-এর কাজ foreground notification দেখানো এবং partial wake lock ধরে রাখা।
 - Service START_NOT_STICKY ব্যবহার করে; process kill হলে Android service-টিকে স্বয়ংক্রিয়ভাবে পুনরায় চালু করার নিশ্চয়তা নেই। App process/Activity বন্ধ হলে client polling coroutine-ও বাতিল হতে পারে।
+- কাজ শেষ বা ব্যর্থ হলে MainActivity এখন stop command পাঠাতে নতুন background service start করার বদলে সরাসরি stopService ব্যবহার করে; Android-এর background service-start restriction-এ stop command আটকে গিয়ে foreground notification/wake lock অনিচ্ছাকৃতভাবে থেকে যাওয়ার ঝুঁকি কমে। onDestroy-এ wake lock release নিশ্চিত করা হয়েছে।
 - PR #41-এর SharedPreferences job-ID recovery অ্যাপ পুনরায় খোলার পর backend job status polling আবার শুরু করার চেষ্টা করে। এটি polling পুনরুদ্ধার; guaranteed background execution নয়।
 - Wake lock সর্বোচ্চ ৪ ঘণ্টার জন্য acquire করা হয়। Android-এর foreground-service policy, battery saver এবং নির্মাতার background restrictions অতিরিক্ত সীমা আরোপ করতে পারে।
 - Backend-এর in-memory job ও ephemeral output Render restart/spin-down-এ হারাতে পারে। তাই স্ক্রিন বন্ধ থাকলে বা process kill হলেও ভিডিও নিশ্চিতভাবে শেষ হবে—এমন দাবি করা যাবে না।
