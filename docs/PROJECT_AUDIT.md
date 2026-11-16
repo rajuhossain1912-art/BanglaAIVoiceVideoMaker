@@ -333,3 +333,13 @@ Section ৭-এর GitHub Actions সীমাবদ্ধতার বিবর
 - README commit: `a91431746ab2cd4e8d53d84e429eb0d90c39f1f4`; PRODUCT_PLAN commit: `57ef214d23e7bd106062776301e8e22a64046c5b`.
 - Latest inspected Render deployment for the synchronized product documentation: `dep-dbtlbdg81cvs73dk92f0`, commit `57ef214d23e7bd106062776301e8e22a64046c5b`, status **live**.
 - Audit-log branch updated in commit `88a12a7bb990cbc7e818c056599f9f40ff3b3bf0` with PR #41, v0.3.224, Render re-check and documentation updates.
+
+## ১৪. Android ব্যাকগ্রাউন্ড কাজের সীমা — ২০২৬-১১-১৭
+
+- MainActivity-এর ভিডিও polling LaunchedEffect/Activity coroutine scope-এ চলে; VideoWorkService নিজে ভিডিও polling বা backend job চালায় না। Service-এর কাজ foreground notification দেখানো এবং partial wake lock ধরে রাখা।
+- Service START_NOT_STICKY ব্যবহার করে; process kill হলে Android service-টিকে স্বয়ংক্রিয়ভাবে পুনরায় চালু করার নিশ্চয়তা নেই। App process/Activity বন্ধ হলে client polling coroutine-ও বাতিল হতে পারে।
+- PR #41-এর SharedPreferences job-ID recovery অ্যাপ পুনরায় খোলার পর backend job status polling আবার শুরু করার চেষ্টা করে। এটি polling পুনরুদ্ধার; guaranteed background execution নয়।
+- Wake lock সর্বোচ্চ ৪ ঘণ্টার জন্য acquire করা হয়। Android-এর foreground-service policy, battery saver এবং নির্মাতার background restrictions অতিরিক্ত সীমা আরোপ করতে পারে।
+- Backend-এর in-memory job ও ephemeral output Render restart/spin-down-এ হারাতে পারে। তাই স্ক্রিন বন্ধ থাকলে বা process kill হলেও ভিডিও নিশ্চিতভাবে শেষ হবে—এমন দাবি করা যাবে না।
+- Settings-এর বাংলা ব্যাখ্যা সংশোধন করা হয়েছে: background service কাজ চালু রাখার চেষ্টা করে; Android/ব্যাটারি/সার্ভার সীমাবদ্ধতা থাকলে কাজ থামতে পারে; অ্যাপ আবার খুললে saved job পুনরায় খোঁজা হয়।
+- Verification scope: source-code inspection; PR Android build check pending. Physical device, Android 16, TalkBack, screen-off, battery-saver and process-kill acceptance tests have not been run.
