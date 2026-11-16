@@ -2739,7 +2739,7 @@ def _record_duplicate_retry_review(review, semantic_review):
     return "mismatched"
 
 
-def _review_generated_image_against_scene(image_path: Path, narration: str, visual_prompt: Optional[str] = None):
+def _review_generated_image_against_scene(image_path: Path, narration: str, visual_prompt: Optional[str] = None, image_kind: str = "photo"):
     """Ask Moondream to inspect a generated image and judge whether it depicts this narration."""
     global _IMAGE_REVIEW_QUOTA_EXHAUSTED
     account_id = os.getenv("CLOUDFLARE_ACCOUNT_ID", "").strip()
@@ -2774,14 +2774,21 @@ def _review_generated_image_against_scene(image_path: Path, narration: str, visu
         # Ask for the visible content description as well as the decision. The
         # rejected description is fed into the next image-generation attempt;
         # a bare MATCH/MISMATCH answer leaves that recovery prompt uninformed.
-        questions = [
-            "Inspect the image and compare its visible main subject and action with this exact scene: "
-            + comparison_text + ". Bengali narration context: " + narration_text[:120]
-            + ". Return ONLY JSON with keys match (true or false), confidence (0 to 1), "
-            + "description (briefly describe what is visibly in this image), and reason "
-            + "(briefly explain whether the visible subject/action fits the scene). "
-            + "Do not judge text in the image."
-        ]
+        if image_kind == "topic_graphic":
+            questions = [
+                "This is a simple locally drawn topic illustration, not a photograph. Inspect its visible symbols, objects, shapes and actions. Decide whether the actual illustration clearly represents this exact narration scene: "
+                + comparison_text + ". Bengali narration context: " + narration_text[:120]
+                + ". Do not assume that a background color or decorative shape proves a match. Do not rely on written words or captions. If the depicted subject or action is unclear or does not fit, return match false. Return ONLY JSON with keys match (true or false), confidence (0 to 1), description (describe the visible illustration), and reason (explain the visual match)."
+            ]
+        else:
+            questions = [
+                "Inspect the image and compare its visible main subject and action with this exact scene: "
+                + comparison_text + ". Bengali narration context: " + narration_text[:120]
+                + ". Return ONLY JSON with keys match (true or false), confidence (0 to 1), "
+                + "description (briefly describe what is visibly in this image), and reason "
+                + "(briefly explain whether the visible subject/action fits the scene). "
+                + "Do not judge text in the image."
+            ]
         model_path = urllib.parse.quote(model, safe="@/-")
         raw = ""
         review = None
@@ -2844,7 +2851,8 @@ def _review_generated_image_against_scene(image_path: Path, narration: str, visu
             )
             return None
         confidence = review["confidence"]
-        accepted = review["match"] and confidence >= 0.62
+        minimum_confidence = 0.80 if image_kind == "topic_graphic" else 0.62
+        accepted = review["match"] and confidence >= minimum_confidence
         description = re.sub(r"\s+", " ", review["description"]).strip()[:240]
         reason = re.sub(r"\s+", " ", review["reason"]).strip()[:180]
         print(
@@ -2914,6 +2922,8 @@ def make_scene_backgrounds(script: str, folder: Path, progress_callback=None, du
         "retried": 0, "retry_matched": 0, "retry_mismatched": 0, "unavailable": 0,
         "duplicate_retry_reviewed": 0, "duplicate_retry_matched": 0,
         "duplicate_retry_mismatched": 0, "duplicate_retry_unavailable": 0,
+        "topic_graphic_reviewed": 0, "topic_graphic_matched": 0,
+        "topic_graphic_mismatched": 0, "topic_graphic_unavailable": 0,
         "image_sources": {"ai_generated": 0, "licensed_contextual": 0, "topic_graphic": 0, "unknown": 0},
     }
     try:
@@ -3165,6 +3175,30 @@ def make_scene_backgrounds(script: str, folder: Path, progress_callback=None, du
                 source_name = "unknown"
         except Exception:
             source_name = "unknown"
+        # Topic graphics use a separate, stricter vision question because their
+        # symbolic vector artwork is not a photograph. Review the FINAL selected
+        # asset after all duplicate/recovery fallbacks; unknown results stay blocked.
+        if source_name == "topic_graphic":
+            semantic_review["topic_graphic_reviewed"] += 1
+            graphic_review = _review_generated_image_against_scene(
+                background, scene_text, scene_visual_prompt, image_kind="topic_graphic"
+            )
+            if graphic_review is None:
+                final_visual_status = "topic_graphic_unavailable"
+                semantic_review["topic_graphic_unavailable"] += 1
+            elif graphic_review["match"]:
+                final_visual_status = "matched"
+                final_visual_description = str(graphic_review.get("description") or "")
+                semantic_review["topic_graphic_matched"] += 1
+            else:
+                final_visual_status = "topic_graphic_mismatched"
+                final_visual_description = str(graphic_review.get("description") or "")
+                semantic_review["topic_graphic_mismatched"] += 1
+            print(
+                f"IMAGE_REVIEW topic_graphic scene={index + 1} "
+                f"status={final_visual_status}",
+                flush=True,
+            )
         semantic_review["image_sources"][source_name] += 1
         scene_audit.append({
             "scene_number": index + 1,
