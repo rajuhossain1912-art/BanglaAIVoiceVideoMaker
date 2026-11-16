@@ -368,6 +368,16 @@ GitHub commit history অনুযায়ী প্রকল্পের প্�
   - Step 96. Post Checkout source: success
   - Step 97. Complete job: success
 
+
+### Source update — 2026-11-16T18:43:47.705Z
+- Branch: `main`
+- Push range: `f410458b070f02b89f48197d719d5bfc556540e2` → `985a794d1266725bf9af37537880cbd26c7f66e9`
+- Pushed by: rajuhossain1912-art
+- Commit: [985a794d1266](https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/commit/985a794d1266725bf9af37537880cbd26c7f66e9) — fix: hide download action when safety gate blocks video
+- Changed files:
+  - `app/src/main/java/com/rajuhossain/banglaaivoicevideomaker/MainActivity.kt`
+- Result: **push recorded**; this is not a test or deployment success claim.
+
 <!-- AUTO_LOG_END -->
 
 
