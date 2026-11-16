@@ -398,3 +398,13 @@ GitHub commit history অনুযায়ী প্রকল্পের প্�
 - Draft PR: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/pull/37
 - PR-টি main branch-এ merge করা হয়নি; production source পরিবর্তন হয়নি এবং Render redeploy ঘটেনি।
 - PR backend workflow-এর ফল এখনো পাওয়া যায়নি; তাই test pass হয়েছে বলে দাবি করা হচ্ছে না। ফল পাওয়া গেলে তবেই merge বিবেচনা করা হবে।
+
+
+### Publication gate regression tests merged — ২০২৬-১১-১৭
+- PR #37 সফল PR backend workflow-এর পর squash merge হয়েছে।
+- PR workflow #40: **success**; dependency installation, Python syntax check এবং সম্পূর্ণ backend unit-test discovery ধাপ সফল।
+- Merge commit: `df6e129dc7fd876543e3aba9ce3c246b031d66b0`।
+- Main branch-এ এখন `backend/tests/test_publication_gate.py`-এর ৮টি regression test আছে।
+- Merge-এর পর main-branch backend end-to-end workflow #43929133753 শুরু হয়েছে; সর্বশেষ যাচাইয়ে Docker build চলছিল, তাই পূর্ণ E2E ফল তখনো pending।
+- Render auto-deploy `dep-dbtkmfm8bjmc73b8b5m0` একই merge commit-এ build শুরু করেছে; সর্বশেষ যাচাইয়ে build_in_progress। Live হওয়া নিশ্চিত না হওয়া পর্যন্ত deployment success বলা যাবে না।
+- Merge-এ production application logic বদলায়নি; শুধু test file যুক্ত হয়েছে। তবুও Render-এর main-branch auto-deploy সক্রিয় থাকায় স্বাভাবিক build/deploy শুরু হয়েছে।
