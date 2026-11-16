@@ -379,3 +379,12 @@ GitHub commit history অনুযায়ী প্রকল্পের প্�
 - Production source, Android app, secrets, Render resources বা Cloudflare resources পরিবর্তন করা হয়নি।
 - এই ধাপের ফল audit branch-এ নথিভুক্ত; main branch-এ push বা production deployment ঘটানো হয়নি।
 - পরবর্তী নিরাপদ কাজ: publication gate-এর dedicated regression tests তৈরি করে আলাদা test workflow-তে চালানো, যাতে test-only commit-এর কারণে Render production redeploy না হয়।
+
+
+### Publication gate regression-test PR — ২০২৬-১১-১৭
+- Production gate-এর সরাসরি test coverage gap পূরণের জন্য আলাদা branch `safety/publication-gate-regression-tests` তৈরি হয়েছে।
+- নতুন test file: `backend/tests/test_publication_gate.py`; ৮টি test case যোগ করা হয়েছে—সব যাচাই সম্পূর্ণ হলে অনুমতি, unreviewed topic graphic, missing scene audit, audio word mismatch, অসম্পূর্ণ word timestamp, subtitle OCR failure, duplicate image এবং technical failure।
+- Commit: `b28cbb102becce1c686489f7c8c31e5dd2b9e072`।
+- Draft PR: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/pull/37
+- PR-টি main branch-এ merge করা হয়নি; production source পরিবর্তন হয়নি এবং Render redeploy ঘটেনি।
+- PR backend workflow-এর ফল এখনো পাওয়া যায়নি; তাই test pass হয়েছে বলে দাবি করা হচ্ছে না। ফল পাওয়া গেলে তবেই merge বিবেচনা করা হবে।
