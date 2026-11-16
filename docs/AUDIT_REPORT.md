@@ -231,6 +231,52 @@ GitHub commit history অনুযায়ী প্রকল্পের প্�
 
 <!-- AUTO_LOG_END -->
 
+
+## পূর্ণাঙ্গ সরাসরি অডিট — ২০২৬-১১-১৬
+
+### Repository ও source inventory
+- GitHub repository: public; default branch: main; repository read/write permission confirmed for the connected integration.
+- Latest main commit inspected: 68ab8ddc122bccdf2d03dd05644c4de432d1bb79 — "fix: review every final photo scene by default" (2026-11-14).
+- Recursive source tree inspected: Android Jetpack Compose app, FastAPI backend, Dockerfile, Render Blueprint, GitHub Actions workflows, backend tests, product plan and audit documentation.
+- Backend source inspected: backend/app.py (4,772 lines); Android MainActivity.kt (1,230 lines); VideoWorkService.kt; Android manifest/build configuration; Dockerfile and backend requirements.
+
+### Latest verified backend CI and production deployment
+- Backend workflow run #456, run ID 43622346619, commit 68ab8ddc122bccdf2d03dd05644c4de432d1bb79: **success**.
+- Job video-smoke-test: all substantive steps succeeded, including Docker build, backend unit tests, local /health, Bengali/English Tesseract, Bangla/English E2E video generation, scene count, topic graphic routing, photo recovery, visual planner, duplicate replacement review, and live Render production health endpoint. Failure-log step was skipped as expected.
+- Render service bangla-ai-voice-video-maker-api, service ID srv-db7u1d49v7es73ctjqj0: latest deploy dep-dbs9pth5efls73eh7ijg for commit 68ab8ddc122bccdf2d03dd05644c4de432d1bb79 is **live**; build and deploy events succeeded on 2026-11-14.
+- Render service metadata still reports an empty healthCheckPath while render.yaml specifies /health. CI's explicit live production health endpoint check succeeded, but configuration drift remains and should be reconciled through the existing service/Blueprint without creating a duplicate service.
+- Render metrics for CPU, memory, HTTP requests and latency returned empty series in the inspected window. This is **unavailable evidence**, not zero use or proof of failure/health. No application/request error logs were returned for the inspected recent window.
+
+### Android release and UI
+- Latest published APK remains v0.3.222, target commit 63cf1f752782c146f3e9a2fe8e8281abe1b5ba49, one APK asset (10,736,616 bytes); signing, package identity, version, artifact upload and release publication steps passed in Android workflow #222.
+- MainActivity.kt last changed 2026-11-11 (commit ea98fe90d23a2e38ec3fb879a3c9d112a4258033); later main-branch commits inspected were backend/CI/audit changes. No newer Android build is currently indicated by an app-source change.
+- Real NEXG N28 installation/update, TalkBack interaction, recording, screen-off execution and downloaded-video review remain **not verified on the user's physical device**.
+
+### Database, storage and job lifecycle
+- Render account inventory: **no PostgreSQL instances and no Key Value/Redis instances** found in the workspace.
+- Backend uses in-memory JOBS state and /tmp/bangla-video-jobs; files are ephemeral and jobs are not recoverable after a process restart. Retention cleanup is configured (default 24 hours), but it is not durable storage.
+- Android starts a foreground VideoWorkService and holds a bounded wake lock; job submission/status polling remains in a rememberCoroutineScope inside MainActivity. There is no WorkManager/persisted job-resume implementation in the inspected app dependencies/source. Activity/process death can therefore lose client polling state even if server work continues.
+
+### AI/provider and voice findings
+- Source includes Cloudflare Workers AI for language planning/chat, image generation and vision review; Whisper for speech transcription; Pollinations and Hugging Face Spaces for image/voice fallbacks; Openverse/Wikimedia for licensed photo fallback; gTTS and eSpeak NG for narration fallback; Tesseract ben/eng for subtitle OCR.
+- Code presence and mocked CI coverage do not prove current external provider credentials, quotas, queue availability or output quality. Environment secret values were not accessed; live provider connectivity/quota remains unverified.
+- Voice sample is stored locally on device and sent to external Hugging Face demo when clone is requested. The current integration does not persist a private reusable cloned model/Voice ID. Provider retention is outside app control.
+
+### Remaining high-priority gaps (do not weaken safety gates)
+1. Local topic-graphic fallback remains explicitly unreviewed by the photographic vision reviewer; strict publication gate correctly blocks it. A reliable graphic-specific verification path is still needed.
+2. Render service healthCheckPath configuration drift (/health in Blueprint, empty in live service metadata) remains unresolved despite successful explicit production health check in CI.
+3. In-memory job state and ephemeral Render files mean no durable resume/recovery after server restart; no database or persistent disk is attached.
+4. Android job polling is Activity coroutine scoped and not persisted; WorkManager/resume after process death is a future reliability improvement.
+5. External AI provider live credential/quota/quality checks are not independently verified.
+6. Permanent private voice clone profile is not provided by the current free external demo integrations; do not describe the saved sample as a persistent clone.
+7. Physical-device accessibility and installation/update tests remain pending.
+
+### Safety and change policy
+- Keep publication gate fail-closed: never mark unreviewed topic graphics, estimated word timestamps, missing OCR or unverified scene matches as shareable.
+- Do not provision paid infrastructure or change secrets without explicit authorization.
+- Before implementing persistence, compare free options and data/privacy implications; do not silently upload personal voice samples to a new provider.
+- Before any Android release, preserve applicationId and pinned signing certificate; only build a new APK when app source/build changes or the user requests it.
+
 ## ফলাফলের অর্থ
 
 - **success / সফল:** সংশ্লিষ্ট GitHub workflow/job/step সফলভাবে শেষ হয়েছে।
