@@ -638,3 +638,12 @@ GitHub commit history অনুযায়ী প্রকল্পের প্�
 - Release page: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/releases/tag/v0.3.223
 - APK: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/releases/download/v0.3.223/BanglaAIVoiceVideoMaker-v0.3.223.apk
 - This confirms release publication and signature workflow checks, not installation/update on the user's physical Android device or TalkBack acceptance testing.
+
+
+### v0.3.223 APK artifact identity confirmation — ২০২৬-১১-১৭
+- Release API independently confirms tag `v0.3.223` targets the Android UI safety-fix commit `985a794d1266725bf9af37537880cbd26c7f66e9`.
+- APK asset size: 10,736,620 bytes; GitHub asset SHA-256: `38d2d391769f8079ee59523e734a596c09cde1b4e4b0da43f63a40ba7f5d845e`.
+- Android application ID in Gradle: `com.rajuhossain.banglaaivoicemaker` (stable upgrade identity); CI workflow derives versionCode from run number `223` and versionName `0.3.223`.
+- CI workflow pins the expected signing certificate SHA-256 to `8696b890339820efaaa4765a1133dea499d5a2475d4c79e5d72f7f02a661a0ba`; APK signature verification step passed.
+- Backend status route returns the job dictionary including `share_allowed`; Android's explicit-approval check is aligned with that response. Download endpoint also re-runs the publication gate before serving the MP4.
+- The current Render service remains on Free plan, one instance, main auto-deploy, health check `/health`; this Android-only merge did not change backend service code.
