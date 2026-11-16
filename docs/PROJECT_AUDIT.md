@@ -305,3 +305,13 @@ Section ৭-এর GitHub Actions সীমাবদ্ধতার বিবর
 - Automatic audit-register workflow #43936012665-এ event append ধাপ সফল হয়েছে; workflow তখনও in progress ছিল।
 - সীমাবদ্ধতা: এটি app-process restart-এর পর polling পুনরুদ্ধার করে, কিন্তু Render Free backend restart/spin-down-এ in-memory job হারালে ভিডিও/job পুনরুদ্ধার করতে পারে না। WorkManager-ভিত্তিক guaranteed background execution বা durable backend job storage নয়।
 - বাস্তব Android ফোনে install/update, TalkBack এবং screen-off acceptance test এখনো করা হয়নি।
+
+### ১১ নম্বর অংশের ফলাফল সংশোধন — ২০২৬-১১-১৭
+- Android release workflow #224, run ID 43936012789: **success**; merge commit `0e5430b542360e70ba32f9eaeebe988015981dcb` থেকে release তৈরি হয়েছে।
+- প্রকাশিত সংস্করণ: **v0.3.224**; APK: `BanglaAIVoiceVideoMaker-v0.3.224.apk`; আকার 10,736,620 bytes।
+- Release asset SHA-256: `f267275668250d0007e3413d2f103bb998e2aa78f3a770152f9162c931733bc2`।
+- Release link: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/releases/tag/v0.3.224
+- Direct APK: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/releases/download/v0.3.224/BanglaAIVoiceVideoMaker-v0.3.224.apk
+- Release workflow-এ persistent signing key load, release build, application identity/version verification, APK signature verification, artifact upload এবং GitHub Release publication—সব ধাপ সফল।
+- Automatic audit-register workflow #43936012665-ও success; event append step completed।
+- এই CI/release ফলাফল বাস্তব ফোনে update install বা TalkBack usability প্রমাণ করে না; physical-device acceptance test এখনো বাকি।
