@@ -238,6 +238,7 @@ private fun VideoMakerScreen() {
                     }
                     "failed" -> status = "ভিডিও তৈরি করা যায়নি: " + info.optString("message", "অজানা সমস্যা")
                 }
+                videoJobPreferences.edit().remove("active_job_id").apply()
             } catch (error: Exception) {
                 status = "আগের ভিডিওর অগ্রগতি এখন পাওয়া যাচ্ছে না। ইন্টারনেট ঠিক হলে অ্যাপ আবার খুলে চেষ্টা করুন।"
             } finally {
