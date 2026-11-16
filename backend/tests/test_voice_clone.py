@@ -300,7 +300,7 @@ class VoiceCloneUnitTests(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError, "নিজের কণ্ঠে অডিও তৈরি করা যায়নি"):
                     video_app.synthesize_cloned_voice("বাংলা পরীক্ষা", reference, folder)
 
-            self.assertEqual(calls, ["cosyvoice-space"])
+            self.assertEqual(calls, [["cosyvoice-space"]])
             self.assertEqual(provider.call_count, 1)
 
     def test_bengali_quota_exhaustion_does_not_try_vakya_fallback(self):
