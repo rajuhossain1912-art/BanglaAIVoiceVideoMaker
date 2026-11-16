@@ -346,3 +346,10 @@ GitHub commit history অনুযায়ী প্রকল্পের প্�
 - Candidate architecture for a free-tier trial: D1 for durable job metadata/state and R2 for uploaded inputs, intermediate assets and completed MP4; worker orchestration must also be restart-safe and idempotent. This is a candidate only, not yet implemented or proven suitable for this workload.
 - Important cost/privacy safeguards before enabling: verify actual Cloudflare account billing/plan and required API permissions; enforce per-user/job quotas, maximum file sizes, TTL cleanup, private object access, signed/short-lived download URLs, and never log voice samples or secrets. Free allowances are limits, not a guarantee of unlimited free operation.
 - No Cloudflare resources were created and no credentials or billing settings were changed.
+
+### Render health-check configuration — ২০২৬-১১-১৬
+- ব্যবহারকারীর নির্দেশিত Dashboard পরিবর্তনের পর live service metadata পুনরায় পরীক্ষা করা হয়েছে। `serviceDetails.healthCheckPath` এখন `/health`; আগের খালি মান আর নেই।
+- Render event `evt-dbt8sr5uproc73cpdfj0` নিশ্চিত করে পরিবর্তনের কারণে deploy শুরু হয়েছে; event `evt-dbt8t3h9aqoc73aitlig`-এ deploy status `succeeded`।
+- সর্বশেষ deploy `dep-dbt8sr7f3r2c73c9h96g` status `live`; commit `68ab8ddc122bccdf2d03dd05644c4de432d1bb79` অপরিবর্তিত। এটি health-check configuration update, নতুন application source build নয়।
+- Live service এখনো Free plan, ১টি instance, auto-deploy enabled এবং main branch-এ যুক্ত।
+- Android persistence ও backend restart recovery-এর source-level সীমাবদ্ধতা আগের অংশে নথিভুক্ত; এই পর্যায়ে সেগুলো production-এ পরিবর্তন করা হয়নি।
