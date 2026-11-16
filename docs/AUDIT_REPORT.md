@@ -498,3 +498,17 @@ GitHub commit history অনুযায়ী প্রকল্পের প্�
 - সম্পূর্ণ workflow: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/actions/runs/43929133753
 - একই commit Render-এ live; deployment ID `dep-dbtkmfm8bjmc73b8b5m0`।
 - এই CI ফল backend-এর automated test/E2E সক্ষমতার প্রমাণ; এটি ব্যবহারকারীর Android ফোনে TalkBack accessibility, APK update/install বা ব্যক্তিগত ভিডিওর দৃশ্যমান মান যাচাইয়ের বিকল্প নয়।
+
+
+### Topic Graphic vision review — ২০২৬-১১-১৭
+- Branch: `safety/topic-graphic-vision-review`; PR #38 merged successfully.
+- PR backend validation run `43930336749`: **success**; Python syntax check and `python -m unittest discover -s backend/tests -v` both passed.
+- Main merge commit: `f410458b070f02b89f48197d719d5bfc556540e2`.
+- Added a separate vision-review prompt for local vector/topic graphics. The prompt judges visible illustrated symbols/objects/actions, does not rely on captions or background color, and asks for a visible-content description.
+- Topic graphics require confidence >= 0.80 (photo threshold remains 0.62). The final selected asset is checked after duplicate/recovery fallbacks.
+- Final graphic review outcome is recorded as matched, topic_graphic_mismatched, or topic_graphic_unavailable. Only matched can pass the existing publication gate; mismatch/unavailable remains blocked.
+- Added three regression cases: unavailable graphic review blocks, mismatch blocks, and explicit verified match may pass (subject to all other gates).
+- Render deployment for merge commit: `dep-dbtkq317lnhs73a4d2u0`, currently `build_in_progress` at audit update time.
+- Main E2E workflow #43930505770 and automatic audit workflow #43930505587 were still in progress at audit update time.
+- PR: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/pull/38
+- Main E2E: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/actions/runs/43930505770
