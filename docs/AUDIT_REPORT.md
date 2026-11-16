@@ -594,3 +594,13 @@ GitHub commit history অনুযায়ী প্রকল্পের প্�
 - PR #39 changes Android to require explicit `share_allowed=true`, hides download when blocked, retains the report button for completed jobs, and describes graphic mismatch/unavailable results in Bangla.
 - Android PR build workflow #43931391180 was in progress at audit update time; no merge or device accessibility claim yet.
 - PR: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/pull/39
+
+
+### Android publication-gate UI correction merged — ২০২৬-১১-১৭
+- PR #39 merged successfully; merge commit `985a794d1266725bf9af37537880cbd26c7f66e9`.
+- PR Android Build Check run `43931391180`: **success**; debug APK build completed.
+- Android now requires explicit backend `share_allowed=true` and a supplied download URL before displaying download. It no longer manufactures a fallback download URL for blocked jobs.
+- Completed jobs retain the TalkBack-friendly technical report button even when download is blocked; report wording now explains topic graphic mismatch/unavailable statuses.
+- Main Android Build and Release workflow `43931861924` was **in_progress** immediately after merge. This does not yet prove a new release was published or installed on a device.
+- PR: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/pull/39
+- Android release workflow: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/actions/runs/43931861924
