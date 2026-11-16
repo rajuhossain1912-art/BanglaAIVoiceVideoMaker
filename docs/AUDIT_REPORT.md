@@ -647,3 +647,10 @@ GitHub commit history অনুযায়ী প্রকল্পের প্�
 - CI workflow pins the expected signing certificate SHA-256 to `8696b890339820efaaa4765a1133dea499d5a2475d4c79e5d72f7f02a661a0ba`; APK signature verification step passed.
 - Backend status route returns the job dictionary including `share_allowed`; Android's explicit-approval check is aligned with that response. Download endpoint also re-runs the publication gate before serving the MP4.
 - The current Render service remains on Free plan, one instance, main auto-deploy, health check `/health`; this Android-only merge did not change backend service code.
+
+
+### Previous installed release compatibility cross-check — ২০২৬-১১-১৭
+- The prior published `v0.3.222` targets commit `63cf1f752782c146f3e9a2fe8e8281abe1b5ba49`; its Android release workflow run `43080180005` completed **success**.
+- Prior release CI also ran and passed the persistent signing-key load, stable application ID/version verification, APK signature verification, artifact upload and Release publication steps.
+- The prior release workflow file at that exact commit pins the same certificate SHA-256 as v0.3.223: `8696b890339820efaaa4765a1133dea499d5a2475d4c79e5d72f7f02a661a0ba`.
+- Prior release workflow run number/versionCode: `222`; new release run number/versionCode: `223`. Both use application ID `com.rajuhossain.banglaaivoicemaker`. This strongly supports in-place update compatibility from v0.3.222 to v0.3.223, though physical-device installation has not been tested.
