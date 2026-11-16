@@ -42,6 +42,29 @@ class PublicationGateTests(unittest.TestCase):
         self.assertFalse(decision["share_allowed"])
         self.assertEqual(decision["publication_status"], "blocked")
 
+    def test_topic_graphic_without_vision_review_blocks_publication(self):
+        decision = self._decision(
+            scene_audit=[{"final_visual_status": "topic_graphic_unavailable"}]
+        )
+        self.assertFalse(decision["share_allowed"])
+        self.assertEqual(decision["publication_status"], "blocked")
+
+    def test_topic_graphic_mismatch_blocks_publication(self):
+        decision = self._decision(
+            scene_audit=[{"final_visual_status": "topic_graphic_mismatched"}]
+        )
+        self.assertFalse(decision["share_allowed"])
+
+    def test_topic_graphic_passes_only_after_explicit_vision_match(self):
+        decision = self._decision(
+            scene_audit=[{
+                "image_source": "topic_graphic",
+                "final_visual_status": "matched",
+                "final_visual_description": "A person climbing steps toward a goal",
+            }]
+        )
+        self.assertTrue(decision["share_allowed"])
+
     def test_missing_scene_audit_blocks_publication(self):
         decision = self._decision(scene_audit=[])
         self.assertFalse(decision["share_allowed"])
