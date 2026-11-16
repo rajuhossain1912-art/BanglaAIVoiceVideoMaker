@@ -229,6 +229,16 @@ GitHub commit history অনুযায়ী প্রকল্পের প্�
   - Step 96. Post Checkout source: success
   - Step 97. Complete job: success
 
+
+### Source update — 2026-11-16T18:28:20.513Z
+- Branch: `main`
+- Push range: `68ab8ddc122bccdf2d03dd05644c4de432d1bb79` → `df6e129dc7fd876543e3aba9ce3c246b031d66b0`
+- Pushed by: rajuhossain1912-art
+- Commit: [df6e129dc7fd](https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/commit/df6e129dc7fd876543e3aba9ce3c246b031d66b0) — test: add publication gate regression coverage
+- Changed files:
+  - `backend/tests/test_publication_gate.py`
+- Result: **push recorded**; this is not a test or deployment success claim.
+
 <!-- AUTO_LOG_END -->
 
 
