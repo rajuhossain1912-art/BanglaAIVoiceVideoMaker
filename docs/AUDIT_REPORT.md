@@ -571,3 +571,16 @@ GitHub commit history অনুযায়ী প্রকল্পের প্�
 - Main E2E workflow #43930505770 and automatic audit workflow #43930505587 were still in progress at audit update time.
 - PR: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/pull/38
 - Main E2E: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/actions/runs/43930505770
+
+
+### Topic Graphic release verification — ২০২৬-১১-১৭
+- Merge commit `f410458b070f02b89f48197d719d5bfc556540e2` Render deploy `dep-dbtkq317lnhs73a4d2u0` reached **live**.
+- Render service metadata confirms Free plan, one instance, main auto-deploy and `/health`; post-deploy application logs show repeated `GET /health` responses with `200 OK`.
+- Main backend E2E workflow #43930505770 / run ID `43930505770`: **success**. All 48 workflow steps completed successfully; Bangla and English video generation step 31 passed, as did provider handling, vision response parsing, visual audit, and live Render health verification. Failure-log step 47 was skipped normally.
+- Run: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/actions/runs/43930505770
+
+### Android publication-gate UI correction — pending review
+- Found that Android client used a fallback download URL even when backend returned `share_allowed=false` and `download_url=null`. Backend download endpoint still rejected the request, but UI incorrectly displayed a download action.
+- PR #39 changes Android to require explicit `share_allowed=true`, hides download when blocked, retains the report button for completed jobs, and describes graphic mismatch/unavailable results in Bangla.
+- Android PR build workflow #43931391180 was in progress at audit update time; no merge or device accessibility claim yet.
+- PR: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/pull/39
