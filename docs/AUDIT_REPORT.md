@@ -286,3 +286,25 @@ GitHub commit history অনুযায়ী প্রকল্পের প্�
 - **not_verified / যাচাই হয়নি:** প্রয়োজনীয় live বা device evidence পাওয়া যায়নি।
 
 **নিরাপত্তা নীতি:** কোনো API token, password, keystore, signing secret বা ব্যক্তিগত voice sample এই রিপোর্টে লেখা হবে না।
+
+
+## পরবর্তী যাচাই — ২০২৬-১১-১৬
+
+### Render Health Check সংশোধন
+- ব্যবহারকারী Render Dashboard-এর Health Check Path-এ `/health` দিয়ে Save Changes করেছেন।
+- Live Render service metadata পুনরায় পরীক্ষা করে `serviceDetails.healthCheckPath=/health` পাওয়া গেছে।
+- Render event history-তে health check path পরিবর্তনের জন্য নতুন deployment শুরু ও শেষ—দুটিই পাওয়া গেছে।
+- নতুন deployment ID: `dep-dbt8sr7f3r2c73c9h96g`; চূড়ান্ত অবস্থা: **succeeded**।
+- এটি configuration ও deployment সফল হওয়ার প্রমাণ; একে Android device acceptance test হিসেবে গণ্য করা যাবে না।
+
+### Semantic scene review বিষয়ে কোড-ভিত্তিক পুনঃযাচাই
+- `backend/app.py`-এর বর্তমান main branch-এ `IMAGE_SEMANTIC_REVIEW_MAX_SCENES`-এর default `0`; `_semantic_review_indices`-এ এই default সব visual scene review করার উদ্দেশ্যে ব্যবহৃত হয়।
+- পরিবেশে positive limit সেট করা হলে সীমিত scene review হতে পারে; publication gate তখনও প্রতিটি final scene-এর `matched` বা `retry_matched` status বাধ্যতামূলক করে।
+- অতএব আগের অডিটের “default 12 scenes” বক্তব্য বর্তমান source-এর সঙ্গে মেলে না; সেটি পুরোনো/অপ্রচলিত তথ্য হিসেবে সংশোধিত হলো।
+- Local `topic_graphic` এখনো photographic vision reviewer দিয়ে যাচাই করা হয় না এবং publication gate-এ pass করে না। এই নিরাপত্তা বাধা অক্ষত রাখা হয়েছে।
+
+### এই ধাপে পরিবর্তনের সীমা
+- এই ধাপে production application source code পরিবর্তন করা হয়নি।
+- Audit branch-এ যাচাইযোগ্য live configuration এবং source-code finding নথিভুক্ত করা হয়েছে।
+- Android APK পুনর্নির্মাণ প্রয়োজন হয়নি; Android app source পরিবর্তন করা হয়নি।
+- পরবর্তী কাজ: topic graphic-এর জন্য আলাদা, উপযুক্ত ও fail-closed verification; Render ephemeral job storage ও Android process-death resume—এগুলোর নিরাপদ free-tier design review।
