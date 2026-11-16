@@ -308,3 +308,26 @@ GitHub commit history অনুযায়ী প্রকল্পের প্�
 - Audit branch-এ যাচাইযোগ্য live configuration এবং source-code finding নথিভুক্ত করা হয়েছে।
 - Android APK পুনর্নির্মাণ প্রয়োজন হয়নি; Android app source পরিবর্তন করা হয়নি।
 - পরবর্তী কাজ: topic graphic-এর জন্য আলাদা, উপযুক্ত ও fail-closed verification; Render ephemeral job storage ও Android process-death resume—এগুলোর নিরাপদ free-tier design review।
+
+
+## কাজ পুনরুদ্ধার ও Android ব্যাকগ্রাউন্ড অগ্রগতি — ২০২৬-১১-১৬
+
+### Backend job lifecycle — সরাসরি source inspection
+- `backend/app.py`-এ job registry হলো process-local Python dictionary `JOBS = {}`।
+- ভিডিওর ফাইল `WORK_DIR`-এ রাখা হয়; default `/tmp/bangla-video-jobs`। এটি Render-এর ephemeral filesystem; durable database/object storage নয়।
+- `POST /api/jobs` অনুরোধ গ্রহণ করে `threading.Thread(target=render, ..., daemon=True).start()` দিয়ে কাজ চালায়।
+- `GET /api/jobs/{job_id}` process-local `JOBS`-এ job না পেলে 404 দেয় এবং স্পষ্টভাবে জানায় সার্ভার restart হলে অস্থায়ী কাজের তথ্য মুছে যেতে পারে।
+- ফলে process restart/deploy/crash হলে চলমান daemon render thread থেমে যায়, job state memory থেকে হারায় এবং ওই job-এর ফল নির্ভরযোগ্যভাবে পুনরুদ্ধার করা যায় না। শুধু JSON metadata লিখলেই সমাধান হবে না; rendering inputs, uploaded audio, intermediate files, output এবং worker lease/recovery-ও durable হতে হবে।
+
+### Android foreground service — সরাসরি source inspection
+- `VideoWorkService.kt` foreground notification ও সর্বোচ্চ ৪ ঘণ্টার bounded partial wake lock দেয়; এটি CPU-কে screen-off অবস্থায় চলতে সহায়তা করে।
+- কিন্তু সার্ভারে job submit ও polling loop `MainActivity.kt`-এর Compose `rememberCoroutineScope().launch`-এর ভিতরে চলে; Service নিজে job ID সংরক্ষণ, network polling, retry বা process-death recovery করে না।
+- `VideoWorkService`-এর `START_NOT_STICKY`; Android process/service বন্ধ হলে কাজ নিজে থেকে পুনরায় শুরু হওয়ার নিশ্চয়তা নেই।
+- `WorkManager` বা DataStore job recovery ব্যবহার বর্তমান MainActivity source-এ পাওয়া যায়নি।
+- অতএব notification/wake lock থাকা মানেই অ্যাপ বন্ধ, Activity destroy বা OS process kill হলেও ভিডিও কাজ ও অগ্রগতি টিকে থাকবে—এমন নিশ্চয়তা নয়।
+
+### নিরাপদ পরবর্তী নকশা ও সিদ্ধান্ত
+- Backend recovery-এর জন্য durable job store + durable input/output storage + restart-safe worker orchestration প্রয়োজন। বর্তমানে Render workspace-এ PostgreSQL/Key Value নেই এবং ব্যবহারকারীর শর্ত free-only; তাই কোনো paid DB, paid disk, paid API বা অপ্রমাণিত free-tier object store চালু করা হয়নি।
+- Android-এর জন্য persistent WorkManager worker, encrypted/local job metadata এবং server job ID পুনরায় poll করার flow প্রয়োজন; তবে backend job ID restart-এর পর টিকে না থাকলে শুধু Android পরিবর্তন যথেষ্ট নয়।
+- এই ধাপে production source code পরিবর্তন করা হয়নি; ভুল নিরাপত্তা-আশ্বাস এড়াতে architecture limitation নথিভুক্ত করা হয়েছে।
+- Manual action এখন প্রয়োজন নেই। আগে free-only durable backend storage/orchestration-এর বাস্তব সীমা যাচাই করে তবেই implementation ও test plan করা হবে।
