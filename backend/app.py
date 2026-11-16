@@ -26,12 +26,12 @@ APP_DIR = Path(__file__).resolve().parent
 VOICE_CLONE_SPACE = os.getenv("VOICE_CLONE_SPACE", "kawshikbuet17/bengali-cosyvoice3-tts-demo")
 # Optional comma-separated public Gradio Spaces with the same API contract.
 VOICE_CLONE_BN_SPACES = [x.strip() for x in os.getenv("VOICE_CLONE_BN_SPACES", VOICE_CLONE_SPACE).split(",") if x.strip()]
-# Independent IndicF5 Bengali fallback. The official Space exposes the
-# public Gradio API, while its model weights are managed by the Space owner.
+# Optional independent Bengali voice-clone Spaces. Do not default to
+# "ai4bharat/IndicF5": that identifier is a model repository, not a Gradio
+# Space, so GradioClient cannot call it as a hosted demo. Keep this empty until
+# a real, independently verified Space is configured.
 VOICE_CLONE_BN_VAKYA_SPACES = [
-    x.strip() for x in os.getenv(
-        "VOICE_CLONE_BN_VAKYA_SPACES", "ai4bharat/IndicF5"
-    ).split(",") if x.strip()
+    x.strip() for x in os.getenv("VOICE_CLONE_BN_VAKYA_SPACES", "").split(",") if x.strip()
 ]
 VOICE_CLONE_EN_SPACE = os.getenv("VOICE_CLONE_EN_SPACE", "ResembleAI/Chatterbox")
 # The original English-only Space can exhaust its ZeroGPU allowance. Keep the
@@ -638,6 +638,10 @@ def synthesize_cloned_voice(script: str, reference_audio: Path, folder: Path, pr
                     # transient model failure. Do not waste another provider
                     # call against the same exhausted Hugging Face allowance.
                     if "zerogpu quota exhausted" in str(primary_error).lower():
+                        raise
+                    if not VOICE_CLONE_BN_VAKYA_SPACES:
+                        # Avoid making a guaranteed-invalid Gradio request to a
+                        # model repository that is not an independently hosted Space.
                         raise
                     candidate, provider = _clone_with_provider_fallback(
                         text_chunk, normalized, VOICE_CLONE_BN_VAKYA_SPACES, _clone_with_vakya,

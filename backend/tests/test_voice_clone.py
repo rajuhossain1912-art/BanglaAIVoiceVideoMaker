@@ -275,6 +275,34 @@ class VoiceCloneUnitTests(unittest.TestCase):
 
             self.assertEqual(calls, ["first-space"])
 
+    def test_bengali_provider_failure_does_not_call_model_repository_as_space(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            folder = Path(temp_dir)
+            reference = folder / "reference.m4a"
+            reference.write_bytes(b"reference audio")
+            calls = []
+
+            def fake_run(command, timeout=240):
+                Path(command[-1]).write_bytes(b"normalized audio" * 20)
+                return b""
+
+            def primary_failure(*args, **kwargs):
+                calls.append(args[2])
+                raise RuntimeError("CosyVoice primary provider unavailable")
+
+            with (
+                patch.object(video_app, "VOICE_CLONE_ENABLED", True),
+                patch.object(video_app, "VOICE_CLONE_BN_SPACES", ["cosyvoice-space"]),
+                patch.object(video_app, "VOICE_CLONE_BN_VAKYA_SPACES", []),
+                patch.object(video_app, "run", side_effect=fake_run),
+                patch.object(video_app, "_clone_with_provider_fallback", side_effect=primary_failure) as provider,
+            ):
+                with self.assertRaisesRegex(RuntimeError, "নিজের কণ্ঠে অডিও তৈরি করা যায়নি"):
+                    video_app.synthesize_cloned_voice("বাংলা পরীক্ষা", reference, folder)
+
+            self.assertEqual(calls, [["cosyvoice-space"]])
+            self.assertEqual(provider.call_count, 1)
+
     def test_bengali_quota_exhaustion_does_not_try_vakya_fallback(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             folder = Path(temp_dir)
