@@ -848,3 +848,24 @@ GitHub commit history অনুযায়ী প্রকল্পের প্�
 - Render deployment `dep-dbtl1rqjnfac73eh4g9g` for this exact commit had already reached **live**; this E2E run independently verified the live Render health endpoint.
 - Run: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/actions/runs/43933402979
 - This confirms automated backend E2E success, not physical Android installation, TalkBack acceptance, or guaranteed availability of the external voice-cloning demo.
+
+### Android job-resume recovery merged and APK v0.3.224 published — ২০২৬-১১-১৭
+- PR #41 Android Build Check run 43935390937: success.
+- PR #41 squash-merged; merge commit 0e5430b542360e70ba32f9eaeebe988015981dcb.
+- Android persists the active backend job ID in SharedPreferences and attempts to resume polling after Activity/process recreation. Temporary polling interruption keeps the ID; a terminal backend response clears it.
+- Main-branch Android release workflow #224 / run 43936012789: success. Release build, app identity/version checks, persistent signing key, APK signature verification, artifact upload and GitHub Release publication all passed.
+- Published release: v0.3.224; APK BanglaAIVoiceVideoMaker-v0.3.224.apk; size 10,736,620 bytes; SHA-256 f267275668250d0007e3413d2f103bb998e2aa78f3a770152f9162c931733bc2.
+- Release: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/releases/tag/v0.3.224
+- Direct APK: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/releases/download/v0.3.224/BanglaAIVoiceVideoMaker-v0.3.224.apk
+- Limitation: client polling resumes only while backend retains the job and output. Render Free in-memory jobs and ephemeral files can still be lost on restart/spin-down. This is not durable job storage or guaranteed WorkManager execution.
+- No physical Android install/update, TalkBack, or screen-off acceptance test has been performed.
+
+### Current Render service and documentation synchronization — ২০২৬-১১-১৭
+- Render service bangla-ai-voice-video-maker-api remains not suspended on Free Docker, one instance, auto-deploy from main.
+- Current service metadata reports healthCheckPath=/health, superseding the earlier audit snapshot where it was empty.
+- Latest inspected live deployment at the time of check: dep-dbtl9tfb9u1s73at7r7g, commit 03de24678ba4b033233b89ffa86dbc4b6051388d.
+- A /health request-log query returned no entries, so the configured path is confirmed in service metadata but a specific probe request was not independently evidenced in logs.
+- README and PRODUCT_PLAN were corrected to remove stale claims about a 12-scene review cap, an invalid IndicF5 Space fallback, and current APK release status. README points to v0.3.224 and explains current job-resume and fail-closed review limitations.
+- Product documentation commits: README a91431746ab2cd4e8d53d84e429eb0d90c39f1f4; PRODUCT_PLAN 57ef214d23e7bd106062776301e8e22a64046c5b.
+- Latest documentation-triggered Render deploy for commit 57ef214d23e7bd106062776301e8e22a64046c5b was queued at the time of the check; do not mark it live until verified.
+- Automatic audit-register workflow run 43936975457 successfully completed its append step.
