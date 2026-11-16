@@ -110,3 +110,39 @@ Known limitations that must remain visible to users:
 - Visual semantic review now defaults to every final AI-generated or licensed contextual photo scene. A positive IMAGE_SEMANTIC_REVIEW_MAX_SCENES value is an explicit operator cap; any scene outside that cap remains unreviewed and the publication gate continues to block sharing. Topic-graphic fallback is still not accepted by the photographic semantic-review gate and remains a known blocker requiring a separately validated illustration-review path.
 - Full-scene review can consume more free vision-model quota and increase render time. If the provider rate-limits or becomes unavailable, the gate fails closed; this is intentional and must be explained in the app rather than bypassed.
 - Current Render service health/deploy/log/environment state and latest GitHub Actions/Release success still require live verification. Source code or workflow configuration alone is not proof of a successful deploy/build.
+
+## Current verified implementation status — 2026-11-17
+
+This section supersedes older statements above wherever they describe the current implementation.
+
+### Android release and job recovery
+- Latest verified direct-distribution APK: v0.3.224. Release workflow #224 / run 43936012789 succeeded, including release build, package/version identity, persistent signing key, APK signature verification, artifact upload and GitHub Release publication.
+- PR #41 is merged. Android stores the active backend job ID in SharedPreferences and, after Activity/process recreation, attempts to resume status polling for that existing server job. Temporary polling interruption retains the ID; a terminal server status clears it.
+- This is not guaranteed background execution and does not recover a job whose in-memory state or output file has already been lost by a Render restart/spin-down. Durable backend storage and a WorkManager/service-owned lifecycle remain future work.
+- No physical-device install/update, TalkBack acceptance or screen-off test has been completed.
+
+### Visual verification and publication safety
+- `IMAGE_SEMANTIC_REVIEW_MAX_SCENES` defaults to 0, meaning all final scene images are selected for semantic review. A positive configured cap leaves scenes outside the cap unreviewed; the publication gate blocks any video without a verified final-scene match.
+- Topic graphics are checked through a separate vision-review path after the final graphic has been selected. A matched review is recorded as final visual status `matched`; mismatch or unavailable review remains blocked. Unreviewed topic graphics are not accepted.
+- The gate also requires exact narration/transcript token coverage, complete explicit word timestamps with timing integrity, subtitle OCR success, no unresolved duplicate final images, and technical audio/video checks. The download endpoint repeats the gate.
+- These automated checks do not guarantee human-level semantic correctness, perfect subtitle spelling, or suitability for every audience. Keep publication fail-closed when a check is unknown.
+
+### Voice cloning reality
+- Bengali default provider is the public Bengali CosyVoice3 demo. The optional Bengali Vakya backup list defaults to empty unless an operator configures a verified compatible Space.
+- English defaults to Chatterbox, with Chatterbox Multilingual as a configured fallback.
+- `ai4bharat/IndicF5` is a model repository, not a hosted Gradio Space, and must not be represented as a working Space fallback.
+- External public demos may be unavailable, rate-limited, changed, or have unknown data-retention behavior. The app cannot guarantee uptime, quota, privacy controls or voice similarity.
+- Render Free has no persistent storage attached; durable reusable cloned-voice profiles are not supported by the current backend. User samples remain on the phone until cloning is requested, at which point the sample/text are sent to the external provider.
+
+### Hosting and live verification
+- Render service `bangla-ai-voice-video-maker-api` is currently not suspended, on Free Docker, one instance, auto-deploy from main; current service metadata reports healthCheckPath `/health`.
+- Latest inspected deploy `dep-dbtl9tfb9u1s73at7r7g` is live. The request-log query did not return a `/health` entry, so metadata and deploy are confirmed but an individual health-probe request is not independently evidenced by logs.
+- Job state remains in memory and files remain on ephemeral storage. No Render Postgres or Key Value service is attached. A server restart may lose active jobs and generated files.
+- Historical Render logs include external image-search/provider timeouts and an audio-QC unavailable event; they are not evidence of a current outage, but provider reliability remains a risk.
+
+### Remaining acceptance work
+1. Test v0.3.224 update installation on the user's Android phone, with TalkBack, without asking for visual-only inspection.
+2. Exercise job resume with app process recreation while the backend job is still alive; separately document backend restart loss.
+3. Run a real Bangla, English and mixed-language voice-clone test with explicit consent and assess pronunciation, voice similarity and provider availability.
+4. Verify current provider timeouts and image diversity under realistic Free-tier constraints; do not bypass semantic review or publication gate.
+5. Add durable job/file storage only if a genuinely free and supportable option is available and explicitly approved; do not silently add paid services.
