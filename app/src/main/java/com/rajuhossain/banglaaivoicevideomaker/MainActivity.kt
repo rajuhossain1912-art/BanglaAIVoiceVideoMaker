@@ -239,9 +239,8 @@ private fun VideoMakerScreen() {
                     "failed" -> status = "ভিডিও তৈরি করা যায়নি: " + info.optString("message", "অজানা সমস্যা")
                 }
             } catch (error: Exception) {
-                status = "আগের ভিডিও তৈরির কাজটি আর সার্ভারে পাওয়া যায়নি বা সংযোগ বিচ্ছিন্ন হয়েছে। নতুন করে চেষ্টা করুন।"
+                status = "আগের ভিডিওর অগ্রগতি এখন পাওয়া যাচ্ছে না। ইন্টারনেট ঠিক হলে অ্যাপ আবার খুলে চেষ্টা করুন।"
             } finally {
-                videoJobPreferences.edit().remove("active_job_id").apply()
                 running = false
                 runCatching { context.startService(Intent(context, VideoWorkService::class.java).setAction(VideoWorkService.ACTION_STOP)) }
             }
@@ -738,6 +737,7 @@ private fun VideoMakerScreen() {
                         reportText = ""
                         status = "অনলাইন সার্ভারে কাজ পাঠানো হচ্ছে।"
                         scope.launch {
+                            var jobFinished = false
                             try {
                                 val job = withContext(Dispatchers.IO) { createJob(context, baseUrl, script.trim(), mode, audioUri, cloneConsent, captionOffset, sceneInterval) }
                                 val jobId = job.getString("id")
@@ -747,6 +747,7 @@ private fun VideoMakerScreen() {
                                     progress = maxOf(progress, update.optInt("progress", 0))
                                     status = update.optString("message", "ভিডিও তৈরি চলছে।")
                                 }
+                                jobFinished = true
                                 when (info.optString("status")) {
                                     "completed" -> {
                                         currentJobId = jobId
@@ -763,7 +764,7 @@ private fun VideoMakerScreen() {
                             } catch (e: Exception) {
                                 status = "সংযোগ বা ভিডিও তৈরিতে সমস্যা হয়েছে: " + (e.message ?: "অজানা সমস্যা")
                             } finally {
-                                videoJobPreferences.edit().remove("active_job_id").apply()
+                                if (jobFinished) videoJobPreferences.edit().remove("active_job_id").apply()
                                 cloneConsent = false
                                 running = false
                                 runCatching {
