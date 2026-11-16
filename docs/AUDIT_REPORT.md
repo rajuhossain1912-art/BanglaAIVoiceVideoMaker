@@ -628,3 +628,13 @@ GitHub commit history অনুযায়ী প্রকল্পের প্�
 - Main Android Build and Release workflow `43931861924` was **in_progress** immediately after merge. This does not yet prove a new release was published or installed on a device.
 - PR: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/pull/39
 - Android release workflow: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/actions/runs/43931861924
+
+
+### Android Release v0.3.223 প্রকাশ — ২০২৬-১১-১৭
+- Release workflow run `43931861924` completed with **success**; all 23 job steps completed successfully.
+- Release APK build: success; app identity/version verification: success; single APK packaging: success; APK signature verification: success; artifact upload: success; GitHub Release publication: success.
+- Published tag `v0.3.223`, target commit `985a794d1266725bf9af37537880cbd26c7f66e9`.
+- Asset: `BanglaAIVoiceVideoMaker-v0.3.223.apk`, size 10,736,620 bytes.
+- Release page: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/releases/tag/v0.3.223
+- APK: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/releases/download/v0.3.223/BanglaAIVoiceVideoMaker-v0.3.223.apk
+- This confirms release publication and signature workflow checks, not installation/update on the user's physical Android device or TalkBack acceptance testing.
