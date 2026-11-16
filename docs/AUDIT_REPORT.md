@@ -331,3 +331,9 @@ GitHub commit history অনুযায়ী প্রকল্পের প্�
 - Android-এর জন্য persistent WorkManager worker, encrypted/local job metadata এবং server job ID পুনরায় poll করার flow প্রয়োজন; তবে backend job ID restart-এর পর টিকে না থাকলে শুধু Android পরিবর্তন যথেষ্ট নয়।
 - এই ধাপে production source code পরিবর্তন করা হয়নি; ভুল নিরাপত্তা-আশ্বাস এড়াতে architecture limitation নথিভুক্ত করা হয়েছে।
 - Manual action এখন প্রয়োজন নেই। আগে free-only durable backend storage/orchestration-এর বাস্তব সীমা যাচাই করে তবেই implementation ও test plan করা হবে।
+
+
+### Restart-recovery test coverage inventory
+- `backend/tests`-এ বর্তমানে scene graphic variation, scene image similarity, scene interval diagnostics, voice chat এবং voice clone—এই পাঁচটি test module পাওয়া গেছে।
+- Job registry persistence, process restart recovery, daemon worker interruption, Android Activity destruction এবং WorkManager recovery-এর dedicated test module পাওয়া যায়নি।
+- এই ঘাটতি ভবিষ্যৎ durable job implementation-এর আগে regression test হিসেবে যোগ করতে হবে।
