@@ -152,6 +152,7 @@ private fun VideoMakerScreen() {
     var currentJobId by remember { mutableStateOf("") }
     var reportRunning by remember { mutableStateOf(false) }
     var reportText by remember { mutableStateOf("") }
+    val videoJobPreferences = remember(context) { context.getSharedPreferences("video_jobs", Context.MODE_PRIVATE) }
 
     var chatInput by remember { mutableStateOf("") }
     var chatBusy by remember { mutableStateOf(false) }
@@ -206,6 +207,43 @@ private fun VideoMakerScreen() {
                 chatMessages.add("সমস্যা: " + (error.message ?: "এখন উত্তর পাওয়া যায়নি।"))
             } finally {
                 chatBusy = false
+            }
+        }
+    }
+
+    // Recover polling after Activity recreation or Android process restart.
+    LaunchedEffect(Unit) {
+        val savedJobId = videoJobPreferences.getString("active_job_id", "").orEmpty()
+        if (savedJobId.matches(Regex("[a-fA-F0-9]{16,64}"))) {
+            running = true
+            currentJobId = savedJobId
+            status = "আগের ভিডিও তৈরির কাজের অবস্থা আবার খোঁজা হচ্ছে।"
+            runCatching {
+                ContextCompat.startForegroundService(context, Intent(context, VideoWorkService::class.java).setAction(VideoWorkService.ACTION_START))
+            }
+            try {
+                val info = awaitVideoJob(BuildConfig.API_BASE_URL, savedJobId) { update ->
+                    progress = maxOf(progress, update.optInt("progress", 0))
+                    status = update.optString("message", "আগের ভিডিও তৈরির কাজ চলছে।")
+                }
+                when (info.optString("status")) {
+                    "completed" -> {
+                        val shareAllowed = info.optBoolean("share_allowed", false)
+                        downloadPath = if (shareAllowed) info.optString("download_url", "") else ""
+                        status = if (shareAllowed) {
+                            "ভিডিও তৈরি হয়েছে এবং সব নিরাপত্তা যাচাই পাস করেছে। চাইলে ভিডিও পরীক্ষা ও প্রতিবেদন শুনুন, অথবা ডাউনলোড করুন।"
+                        } else {
+                            "ভিডিও তৈরি হয়েছে, কিন্তু নিরাপত্তা যাচাই সম্পূর্ণ সফল হয়নি। তাই শেয়ার ও ডাউনলোড বন্ধ রাখা হয়েছে। কারণ জানতে ভিডিও পরীক্ষা ও প্রতিবেদন শুনুন।"
+                        }
+                    }
+                    "failed" -> status = "ভিডিও তৈরি করা যায়নি: " + info.optString("message", "অজানা সমস্যা")
+                }
+            } catch (error: Exception) {
+                status = "আগের ভিডিও তৈরির কাজটি আর সার্ভারে পাওয়া যায়নি বা সংযোগ বিচ্ছিন্ন হয়েছে। নতুন করে চেষ্টা করুন।"
+            } finally {
+                videoJobPreferences.edit().remove("active_job_id").apply()
+                running = false
+                runCatching { context.startService(Intent(context, VideoWorkService::class.java).setAction(VideoWorkService.ACTION_STOP)) }
             }
         }
     }
@@ -703,48 +741,29 @@ private fun VideoMakerScreen() {
                             try {
                                 val job = withContext(Dispatchers.IO) { createJob(context, baseUrl, script.trim(), mode, audioUri, cloneConsent, captionOffset, sceneInterval) }
                                 val jobId = job.getString("id")
+                                videoJobPreferences.edit().putString("active_job_id", jobId).apply()
                                 status = "অনুরোধ গ্রহণ করা হয়েছে। ভিডিও তৈরি চলছে।"
-                                var finished = false
-                                var attempts = 0
-                                var consecutiveStatusErrors = 0
-                                while (!finished && attempts < 1800) {
-                                    delay(2500)
-                                    attempts++
-                                    val info = try {
-                                        withContext(Dispatchers.IO) { getJobStatus(baseUrl, jobId) }
-                                    } catch (statusError: Exception) {
-                                        consecutiveStatusErrors++
-                                        if (consecutiveStatusErrors >= 4) {
-                                            throw IllegalStateException("সার্ভারের অগ্রগতি বারবার পাওয়া যায়নি। ইন্টারনেট সংযোগ পরীক্ষা করে পরে আবার চেষ্টা করুন।", statusError)
-                                        }
-                                        status = "সার্ভারের অগ্রগতি সাময়িকভাবে পাওয়া যাচ্ছে না। আবার সংযোগের চেষ্টা করা হচ্ছে।"
-                                        continue
-                                    }
-                                    consecutiveStatusErrors = 0
-                                    progress = maxOf(progress, info.optInt("progress", 0))
-                                    status = info.optString("message", "ভিডিও তৈরি চলছে।")
-                                    when (info.optString("status")) {
-                                        "completed" -> {
-                                            currentJobId = jobId
-                                            val shareAllowed = info.optBoolean("share_allowed", false)
-                                            downloadPath = if (shareAllowed) info.optString("download_url", "") else ""
-                                            status = if (shareAllowed) {
-                                                "ভিডিও তৈরি হয়েছে এবং সব নিরাপত্তা যাচাই পাস করেছে। চাইলে ভিডিও পরীক্ষা ও প্রতিবেদন শুনুন, অথবা ডাউনলোড করুন।"
-                                            } else {
-                                                "ভিডিও তৈরি হয়েছে, কিন্তু নিরাপত্তা যাচাই সম্পূর্ণ সফল হয়নি। তাই শেয়ার ও ডাউনলোড বন্ধ রাখা হয়েছে। কারণ জানতে ভিডিও পরীক্ষা ও প্রতিবেদন শুনুন।"
-                                            }
-                                            finished = true
-                                        }
-                                        "failed" -> {
-                                            status = "ভিডিও তৈরি করা যায়নি: " + info.optString("message", "অজানা সমস্যা")
-                                            finished = true
-                                        }
-                                    }
+                                val info = awaitVideoJob(baseUrl, jobId) { update ->
+                                    progress = maxOf(progress, update.optInt("progress", 0))
+                                    status = update.optString("message", "ভিডিও তৈরি চলছে।")
                                 }
-                                if (!finished) status = "সার্ভার এখনো উত্তর দেয়নি। পরে আবার চেষ্টা করুন।"
+                                when (info.optString("status")) {
+                                    "completed" -> {
+                                        currentJobId = jobId
+                                        val shareAllowed = info.optBoolean("share_allowed", false)
+                                        downloadPath = if (shareAllowed) info.optString("download_url", "") else ""
+                                        status = if (shareAllowed) {
+                                            "ভিডিও তৈরি হয়েছে এবং সব নিরাপত্তা যাচাই পাস করেছে। চাইলে ভিডিও পরীক্ষা ও প্রতিবেদন শুনুন, অথবা ডাউনলোড করুন।"
+                                        } else {
+                                            "ভিডিও তৈরি হয়েছে, কিন্তু নিরাপত্তা যাচাই সম্পূর্ণ সফল হয়নি। তাই শেয়ার ও ডাউনলোড বন্ধ রাখা হয়েছে। কারণ জানতে ভিডিও পরীক্ষা ও প্রতিবেদন শুনুন।"
+                                        }
+                                    }
+                                    "failed" -> status = "ভিডিও তৈরি করা যায়নি: " + info.optString("message", "অজানা সমস্যা")
+                                }
                             } catch (e: Exception) {
                                 status = "সংযোগ বা ভিডিও তৈরিতে সমস্যা হয়েছে: " + (e.message ?: "অজানা সমস্যা")
                             } finally {
+                                videoJobPreferences.edit().remove("active_job_id").apply()
                                 cloneConsent = false
                                 running = false
                                 runCatching {
@@ -1130,6 +1149,34 @@ private fun sendChatMessage(baseUrl: String, transcript: List<String>): String {
         connection.disconnect()
     }
 }
+
+
+private suspend fun awaitVideoJob(
+    baseUrl: String,
+    jobId: String,
+    onUpdate: (JSONObject) -> Unit
+): JSONObject {
+    var attempts = 0
+    var consecutiveStatusErrors = 0
+    while (attempts < 1800) {
+        delay(2500)
+        attempts++
+        val info = try {
+            withContext(Dispatchers.IO) { getJobStatus(baseUrl, jobId) }
+        } catch (statusError: Exception) {
+            consecutiveStatusErrors++
+            if (consecutiveStatusErrors >= 4) {
+                throw IllegalStateException("সার্ভারের অগ্রগতি বারবার পাওয়া যায়নি। ইন্টারনেট সংযোগ পরীক্ষা করে পরে আবার চেষ্টা করুন।", statusError)
+            }
+            continue
+        }
+        consecutiveStatusErrors = 0
+        onUpdate(info)
+        if (info.optString("status") == "completed" || info.optString("status") == "failed") return info
+    }
+    throw IllegalStateException("সার্ভার এখনো উত্তর দেয়নি। পরে আবার চেষ্টা করুন।")
+}
+
 
 private fun createJob(context: Context, baseUrl: String, script: String, mode: String, audioUri: Uri?, cloneConsent: Boolean, captionOffset: Float, sceneInterval: Int): JSONObject {
     val boundary = "----BanglaAI" + UUID.randomUUID().toString()
