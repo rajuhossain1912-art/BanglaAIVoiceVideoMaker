@@ -315,3 +315,13 @@ Section ৭-এর GitHub Actions সীমাবদ্ধতার বিবর
 - Release workflow-এ persistent signing key load, release build, application identity/version verification, APK signature verification, artifact upload এবং GitHub Release publication—সব ধাপ সফল।
 - Automatic audit-register workflow #43936012665-ও success; event append step completed।
 - এই CI/release ফলাফল বাস্তব ফোনে update install বা TalkBack usability প্রমাণ করে না; physical-device acceptance test এখনো বাকি।
+
+## ১২. Render live service re-check — ২০২৬-১১-১৭
+
+- Render workspace: My Workspace; service `bangla-ai-voice-video-maker-api` (`srv-db7u1d49v7es73ctjqj0`) আবার read-onlyভাবে পরীক্ষা করা হয়েছে।
+- বর্তমান service state: not suspended; Free Docker web service; Singapore; one instance; auto-deploy on main enabled।
+- **আগের healthCheckPath mismatch আর বর্তমান service configuration-এ নেই**: Render service details এখন `healthCheckPath=/health` দেখাচ্ছে। আগের audit snapshot-এ এটি empty ছিল; বর্তমান live metadata দিয়ে সেই পুরোনো পর্যবেক্ষণ superseded।
+- সর্বশেষ inspected deploy `dep-dbtl9tfb9u1s73at7r7g` status **live**, commit `03de24678ba4b033233b89ffa86dbc4b6051388d` (audit documentation update)।
+- Render log query-তে পুরোনো ১২ নভেম্বরের Openverse image-search timeouts, Cloudflare model timeouts/response-shape error, image download 424 এবং একটি AUDIO_QC unavailable event পাওয়া গেছে। এগুলো historical entries; বর্তমান সময়ে একই সমস্যা ঘটছে—এমন প্রমাণ নয়। এই query-তে সাম্প্রতিক runtime error entry পাওয়া যায়নি।
+- `/health` path-filtered request-log query-তে কোনো entry ফেরত আসেনি। তাই service metadata-তে healthCheckPath ঠিক থাকলেও request log দিয়ে live health probe hit আলাদাভাবে নিশ্চিত করা যায়নি।
+- Free service-এর ephemeral filesystem ও in-memory job state-এর সীমাবদ্ধতা অপরিবর্তিত। No Postgres/Key Value/durable job store is attached.
