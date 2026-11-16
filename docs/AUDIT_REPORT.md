@@ -476,3 +476,14 @@ GitHub commit history অনুযায়ী প্রকল্পের প্�
 - Main backend E2E workflow #43929133753 (run ID `43929133753`) সর্বশেষ পরীক্ষা পর্যন্ত `in_progress`; Docker build, backend unit tests, server start, local health, language packs, voice token reuse, Bangla/English transcript comparison, subtitle timing diagnostics এবং image/scene verification steps ১–৩০ সফল। Step 31 “Generate Bangla and English videos end to end” তখনো চলমান; পরের ধাপগুলো pending। অতএব পূর্ণ E2E এখনো সফল বলা যাচ্ছে না।
 - Workflow: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/actions/runs/43929133753
 - Render deploy: https://dashboard.render.com/web/srv-db7u1d49v7es73ctjqj0/deploys/dep-dbtkmfm8bjmc73b8b5m0
+
+
+### Main backend E2E সম্পন্ন — ২০২৬-১১-১৭
+- Backend end-to-end smoke test workflow #43929133753, run ID `43929133753`, commit `df6e129dc7fd876543e3aba9ce3c246b031d66b0`: **success**।
+- Job `video-smoke-test`: **success**।
+- Bangla ও English ভিডিও end-to-end তৈরি: **success** (step 31)।
+- Image provider cooldown/rate-limit handling, Cloudflare image response/input, blank provider/output rejection, vision review parsing, long-script storyboard context, global scene numbering, neighboring narration context, repeated image composition, duplicate replacement semantic review এবং final visual audit—steps 32–46 সব **success**।
+- Live Render production health endpoint verification (step 48): **success**। Failure-log step 47 স্বাভাবিকভাবে **skipped**।
+- সম্পূর্ণ workflow: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/actions/runs/43929133753
+- একই commit Render-এ live; deployment ID `dep-dbtkmfm8bjmc73b8b5m0`।
+- এই CI ফল backend-এর automated test/E2E সক্ষমতার প্রমাণ; এটি ব্যবহারকারীর Android ফোনে TalkBack accessibility, APK update/install বা ব্যক্তিগত ভিডিওর দৃশ্যমান মান যাচাইয়ের বিকল্প নয়।
