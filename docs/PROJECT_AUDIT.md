@@ -267,3 +267,31 @@ Section ৭-এর GitHub Actions সীমাবদ্ধতার বিবর
 - Topic-graphic fallback remains unreviewed by the photographic vision reviewer and is not accepted by the publication gate. No claim is made that this issue is solved.
 - Full-scene review can consume more free vision quota and time. Provider quota exhaustion or unavailable vision review continues to block publication rather than silently approving a video.
 - Verification status: source and regression tests committed; wait for the new Backend end-to-end smoke test and Render auto-deploy result before marking the change operationally verified.
+
+
+## ৭. পরবর্তী যাচাইয়ে সংশোধিত অবস্থা — ২০২৬-১১-১৭
+
+এই অংশটি উপরের ১৩ নভেম্বরের snapshot-এর পরের verified updates। আগের অংশ ঐতিহাসিক audit হিসেবে রাখা হয়েছে; নিচের নতুন তথ্যই সংশ্লিষ্ট বিষয়ে সর্বশেষ অবস্থা।
+
+### সম্পন্ন ও যাচাইকৃত
+- Publication gate-এর সরাসরি regression tests যোগ হয়েছে: unreviewed topic graphic, missing scene audit, audio word mismatch, incomplete word timestamps, subtitle OCR failure, duplicate image এবং technical failure—প্রতিটি ক্ষেত্রে share/download block হয়; সব checks pass হলে অনুমতি সম্ভব। PR #37 merged; main E2E run #43929133753 passed.
+- Topic graphic-এর জন্য আলাদা vision-review path যোগ হয়েছে। চূড়ান্ত নির্বাচিত graphic review হয়; confidence threshold 0.80; mismatch বা review unavailable হলে publication gate বন্ধ থাকে। PR #38 merged; E2E run #43930505770 passed.
+- Android UI এখন backend-এর explicit `share_allowed=true` ও বাস্তব `download_url` ছাড়া download action দেখায় না। Blocked job-এ report action থাকে। PR #39 merged.
+- Signed Android release v0.3.223 প্রকাশিত হয়েছে; APK signature check ও release publication workflow সফল। আগের v0.3.222-এর সঙ্গে package ID ও signing certificate একই। এটি physical-device update install বা TalkBack acceptance test নয়.
+- Bengali voice-clone fallback config থেকে `ai4bharat/IndicF5`-কে Gradio Space হিসেবে ভুলভাবে ব্যবহারের default সরানো হয়েছে। এটি model repository, hosted Gradio Space নয়। PR #40 merged; regression test যোগ হয়েছে।
+- PR #40-এর main commit `2e315b84bb0973b3e252d80b8c74d1a15c1c9078` Render deployment `dep-dbtl1rqjnfac73eh4g9g`-এ **live**।
+- Main backend E2E workflow #43933402979: **success**; job `video-smoke-test`-এর সব ৪৮টি numbered steps completed successfully; Bangla ও English video generation step 31 এবং live Render health step 48 pass করেছে।
+
+### সংশোধিত সীমাবদ্ধতা
+- Bengali clone primary Hugging Face Space একটি পরীক্ষামূলক public demo। Running status free quota, uptime, retention বা production reliability নিশ্চিত করে না।
+- `ai4bharat/IndicF5` একটি MIT-licensed model repository; এটি নিজে hosted inference endpoint নয়। আলাদা compute/inference host ছাড়া Gradio Space fallback হিসেবে ব্যবহার করা যাবে না।
+- `ehzawad/indicf5-bangla-tts`-এর বর্তমান Research-Only Non-Commercial license production/hosted app use অনুমোদন করে না; লিখিত অনুমতি ছাড়া ব্যবহার করা হবে না।
+- Render Free filesystem ephemeral এবং Free service-এ persistent disk সংযুক্ত করা যায় না। ফলে বর্তমান backend-এ ব্যবহারকারীর স্থায়ী reusable voice-clone profile সংরক্ষণ সমর্থিত নয়।
+- স্থায়ী voice-clone model/profile বা নির্ভরযোগ্য free inference service এখনো **অসম্পন্ন**; এটি সফল voice-clone পরীক্ষা হিসেবে দাবি করা যাবে না।
+- Android v0.3.223 বাস্তব ফোনে install/update, TalkBack, screen-off processing এবং report/download ব্যবহারিক পরীক্ষা এখনো **যাচাই হয়নি**।
+- CI-তে generated Bangla/English video E2E pass মানে backend pipeline-এর automated test pass; এটি প্রত্যেক বাস্তব user video-এর visual correctness বা প্রকাশের নিশ্চয়তা নয়। Publication gate fail-closed থাকবে।
+
+### বর্তমান গুরুত্বপূর্ণ লিংক
+- Android v0.3.223: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/releases/tag/v0.3.223
+- Latest backend E2E: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/actions/runs/43933402979
+- Latest audit register: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/blob/audit-log/docs/AUDIT_REPORT.md
