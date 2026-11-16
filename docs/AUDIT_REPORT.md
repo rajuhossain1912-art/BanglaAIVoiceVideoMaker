@@ -408,3 +408,12 @@ GitHub commit history অনুযায়ী প্রকল্পের প্�
 - Merge-এর পর main-branch backend end-to-end workflow #43929133753 শুরু হয়েছে; সর্বশেষ যাচাইয়ে Docker build চলছিল, তাই পূর্ণ E2E ফল তখনো pending।
 - Render auto-deploy `dep-dbtkmfm8bjmc73b8b5m0` একই merge commit-এ build শুরু করেছে; সর্বশেষ যাচাইয়ে build_in_progress। Live হওয়া নিশ্চিত না হওয়া পর্যন্ত deployment success বলা যাবে না।
 - Merge-এ production application logic বদলায়নি; শুধু test file যুক্ত হয়েছে। তবুও Render-এর main-branch auto-deploy সক্রিয় থাকায় স্বাভাবিক build/deploy শুরু হয়েছে।
+
+
+### Render deployment confirmation — ২০২৬-১১-১৭
+- Merge commit `df6e129dc7fd876543e3aba9ce3c246b031d66b0`-এর Render deployment ID `dep-dbtkmfm8bjmc73b8b5m0` এখন **live**; deploy record-এ finishedAt পাওয়া গেছে।
+- Live service metadata: Free plan, ১টি instance, main branch auto-deploy, healthCheckPath `/health`।
+- Render application log-এ deploy-এর পর একাধিক `GET /health` request-এর `200 OK` পাওয়া গেছে।
+- Main backend E2E workflow #43929133753 (run ID `43929133753`) সর্বশেষ পরীক্ষা পর্যন্ত `in_progress`; Docker build, backend unit tests, server start, local health, language packs, voice token reuse, Bangla/English transcript comparison, subtitle timing diagnostics এবং image/scene verification steps ১–৩০ সফল। Step 31 “Generate Bangla and English videos end to end” তখনো চলমান; পরের ধাপগুলো pending। অতএব পূর্ণ E2E এখনো সফল বলা যাচ্ছে না।
+- Workflow: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/actions/runs/43929133753
+- Render deploy: https://dashboard.render.com/web/srv-db7u1d49v7es73ctjqj0/deploys/dep-dbtkmfm8bjmc73b8b5m0
