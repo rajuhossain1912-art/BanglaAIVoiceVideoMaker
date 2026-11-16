@@ -295,3 +295,13 @@ Section ৭-এর GitHub Actions সীমাবদ্ধতার বিবর
 - Android v0.3.223: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/releases/tag/v0.3.223
 - Latest backend E2E: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/actions/runs/43933402979
 - Latest audit register: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/blob/audit-log/docs/AUDIT_REPORT.md
+
+## ১১. Android job-resume change — ২০২৬-১১-১৭
+
+- PR #41 “Android: resume video progress after app restart” সফল Android PR Build Check #43935390937-এর পর squash-merge হয়েছে।
+- Merge commit: `0e5430b542360e70ba32f9eaeebe988015981dcb`.
+- পরিবর্তন: backend job ID ফোনের SharedPreferences-এ রাখা হয়; অ্যাপ পুনরায় চালু হলে সংরক্ষিত ID দিয়ে backend job status polling পুনরায় শুরু হয়; সাময়িক polling interruption-এ ID রাখা হয়; terminal server status পেলে ID পরিষ্কার হয়। Download action-এর জন্য আগের fail-closed `share_allowed=true` এবং বাস্তব `download_url` শর্ত অপরিবর্তিত।
+- Merge commit-এর Android release workflow #43936012789 শুরু হয়েছে; এই audit লেখার সময় build/signature/release ধাপ সম্পন্ন হয়নি। সফলতা, APK asset বা নতুন release tag এখনো নিশ্চিত নয়।
+- Automatic audit-register workflow #43936012665-এ event append ধাপ সফল হয়েছে; workflow তখনও in progress ছিল।
+- সীমাবদ্ধতা: এটি app-process restart-এর পর polling পুনরুদ্ধার করে, কিন্তু Render Free backend restart/spin-down-এ in-memory job হারালে ভিডিও/job পুনরুদ্ধার করতে পারে না। WorkManager-ভিত্তিক guaranteed background execution বা durable backend job storage নয়।
+- বাস্তব Android ফোনে install/update, TalkBack এবং screen-off acceptance test এখনো করা হয়নি।
