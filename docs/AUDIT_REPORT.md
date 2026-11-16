@@ -675,3 +675,14 @@ GitHub commit history অনুযায়ী প্রকল্পের প্�
 - A separate Bangladeshi Bengali fine-tune `ehzawad/indicf5-bangla-tts` changed to a Research-Only Non-Commercial license dated October 2026. Its current license prohibits production/hosted service use without written permission; do not use it in this app without permission. References: https://huggingface.co/ehzawad/indicf5-bangla-tts and https://huggingface.co/ehzawad/indicf5-bangla-tts/blob/main/LICENSE
 - Render Free web services have ephemeral local filesystems; free instances cannot attach persistent disks. Thus the existing Free Render backend is not a viable place to keep a durable, user-specific cloned voice model/profile. References: https://render.com/docs/free and https://render.com/docs/disks
 - Current conclusion: retain the consent-gated, experimental remote reference-audio path; do not promise durable voice-clone model training/profile or guaranteed free service. A real second provider or persistent user model storage requires a separately verified compatible license, hosted inference capacity, and durable storage. No paid plan or paid API was added.
+
+
+### Invalid Bengali fallback correction merged and deployed — ২০২৬-১১-১৭
+- PR #40 merged after the corrected Backend Check passed: run `43933301405` success; Python syntax and all voice-clone unit tests passed.
+- A first test attempt failed only because the new test asserted a provider argument as a string rather than its actual list shape; the assertion was corrected and the rerun passed. No production code rollback was required.
+- Merge commit: `2e315b84bb0973b3e252d80b8c74d1a15c1c9078`.
+- Render deploy `dep-dbtl1rqjnfac73eh4g9g` reached **live** for that exact commit.
+- Full backend E2E smoke workflow `43933402979` was still running at audit update time; do not treat it as passed until its completed conclusion is success.
+- PR: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/pull/40
+- Backend Check: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/actions/runs/43933301405
+- E2E run: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/actions/runs/43933402979
