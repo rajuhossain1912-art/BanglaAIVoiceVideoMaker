@@ -475,11 +475,12 @@ Section ৭-এর GitHub Actions সীমাবদ্ধতার বিবর
 
 ## ২৯. বাংলা সক্রিয় শব্দ OCR-এর অতিরিক্ত segmentation retry — 2026-11-17
 
-- আগের নতুন main Docker E2E run 44134712698-এ ৪৩টি synthetic subtitle frame-এর মধ্যে ৪২টি শব্দ শনাক্ত হয়েছিল; শুধু ৩৪ নম্বর শব্দ “স্বপ্ন” OCR-এ নিশ্চিত হয়নি।
-- PR #55: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/pull/55 — isolated yellow active-word crop-এর strict retry-তে Tesseract PSM 7 ও 11 যোগ করা হয়েছে; আগের PSM 8 ও 13-ও রাখা হয়েছে।
-- isolated crop-এর সম্পূর্ণ normalized text এখনও প্রত্যাশিত শব্দের সঙ্গে exact match হতে হবে। অতিরিক্ত/ভুল লেখা প্রত্যাখ্যাত; publication gate বা OCR acceptance threshold শিথিল করা হয়নি।
-- PR Backend Check run 44135551906 সফল হয়েছে; syntax check এবং unit-test ধাপ সফল।
-- PR #55 squash merge commit f2a9364d27e856d17a136dcb2d299c3831b634c8। Render deploy dep-dbu8pqnb9u1s73a7de9g **LIVE**; নতুন instance থেকে /health HTTP 200 নিশ্চিত হয়েছে।
-- Main Docker E2E run 44135940074-এ container build সফল, কিন্তু backend unit test-এ real Tesseract integration **ব্যর্থ**: ৪৩টি frame-এর মধ্যে ৪২টি শব্দ শনাক্ত; missing index [33] (এক-ভিত্তিক হিসাবে ৩৩ নম্বর শব্দ “রাখুন,”)। আগের PSM 7 ও 11 retry-ও এই শব্দ উদ্ধার করতে পারেনি। তাই ৪৩/৪৩ OCR এখনো পাস নয়।
-- PR #56: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/pull/56 — PR CI-তে Tesseract ও Bengali/English language pack যোগ করা হয়েছে। প্রথম CI রান 44136471406-এ ০/৪৩ শব্দ শনাক্ত হয়; তদন্তে বোঝা যায় PR runner-এ Docker-এর মতো Noto Bengali fonts অনুপস্থিত ছিল। PR branch-এ fonts-noto-core/fonts-noto-extra যোগ করা হয়েছে এবং ব্যর্থ frame-এর font path, crop bounds ও PSM 6/7/8/10/11/13 OCR ফল দেখানোর diagnostic যোগ হয়েছে। সর্বশেষ check run 44136628075 চলমান; diagnostic-সহ বাস্তব ফল না আসা পর্যন্ত ৪৩/৪৩ OCR সফল বলা যাবে না।
+- আগের নতুন main Docker E2E run 44134712698-এ ৪৩টি synthetic subtitle frame-এর মধ্যে ৪২টি শব্দ শনাক্ত হয়েছিল; পরবর্তী run 44135940074-এও ৪২/৪৩ শনাক্ত হয় এবং missing index [33] (এক-ভিত্তিক হিসাবে ৩৩ নম্বর শব্দ “রাখুন,”) নিশ্চিত হয়।
+- PR #55: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/pull/55 — isolated yellow active-word crop-এর strict retry-তে Tesseract PSM 7 ও 11 যোগ করা হয়েছিল; আগের PSM 8 ও 13-ও রাখা হয়। PR Backend Check run 44135551906 সফল; PR squash merge commit f2a9364d27e856d17a136dcb2d299c3831b634c8। Render deploy dep-dbu8pqnb9u1s73a7de9g LIVE; /health HTTP 200 নিশ্চিত।
+- PR #55-এর পর main Docker E2E-তে ৩৩ নম্বর শব্দটি তবুও শনাক্ত হয়নি; অর্থাৎ শুধু PSM 7/11 যথেষ্ট ছিল না। কোনো OCR threshold বা publication gate শিথিল করা হয়নি।
+- PR #56: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/pull/56 — PR CI-তে Tesseract, Bengali/English language pack এবং Docker-এর মতো Noto Bengali fonts ইনস্টল করা হয়েছে। প্রথম CI রান 44136471406-এ ০/৪৩ শনাক্ত হয়; পরে দেখা যায় runner-এ Noto Bengali fonts অনুপস্থিত ছিল। Fonts যোগ করার পর diagnostic-এ নিশ্চিত হয়, “রাখুন,” শব্দের isolated crop-এ Tesseract PSM 10 সম্পূর্ণ সঠিক শব্দটি পড়তে পারে; PSM 6/7/11 ফাঁকা এবং PSM 8/13 ভুল ফল দিয়েছিল।
+- PR #56 branch-এ production OCR fallback-এ PSM 10 যোগ হয়েছে; PSM 7/8/11/13 ও strict exact-text match বহাল। Regression test নিশ্চিত করে, আগের OCR modes ভুল পড়লে PSM 10 সঠিক শব্দ শনাক্ত করলেই সেটি গ্রহণ হয়।
+- PR Backend Check run 44136951060 SUCCESS; syntax check, ১৫২টি unit test এবং real Tesseract integration test test_real_tesseract_verifies_all_43_bengali_caption_frames পাস করেছে। ৪৩টি synthetic caption frame-এর সব ৪৩টি সক্রিয় বাংলা শব্দ শনাক্ত হয়েছে। এটি synthetic integration test; ব্যবহারকারীর আসল MP4 বা Render production runtime-এর OCR ফল নয়।
+- PR #56-এর Android Build Check তখনও চলমান; PR merge ও নতুন main Docker E2E ফল না আসা পর্যন্ত PSM 10 production-এ চালু বলা যাবে না।
 - ASR similarity ৪০% এবং explicit word-level timestamp-এর ঘাটতি এখনো অমীমাংসিত; publication gate অপরিবর্তিত।
+
