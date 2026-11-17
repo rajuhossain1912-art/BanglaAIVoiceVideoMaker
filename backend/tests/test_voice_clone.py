@@ -1103,3 +1103,47 @@ class RealSubtitleOCRIntegrationTests(unittest.TestCase):
         self.assertEqual(len(visible_lines), 4)
         self.assertTrue(any(is_active for line in visible_lines for _, is_active in line))
         self.assertEqual(visible_lines[0], [("বাক্য", False)])
+
+class IsolatedBengaliWordOCRTests(unittest.TestCase):
+    def test_isolated_crop_accepts_bengali_word_split_into_glyph_groups(self):
+        self.assertTrue(
+            video_app._tesseract_crop_matches_expected_tokens("ছে ড়ে", ["ছেড়ে"])
+        )
+
+    def test_isolated_crop_rejects_extra_or_wrong_text(self):
+        self.assertFalse(
+            video_app._tesseract_crop_matches_expected_tokens("কখনো পরে", ["কখনো"])
+        )
+        self.assertFalse(
+            video_app._tesseract_crop_matches_expected_tokens("কখন", ["কখনো"])
+        )
+
+    def test_ambiguous_word_uses_enlarged_isolated_crop_after_context_retry(self):
+        from types import SimpleNamespace
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            frames = root / "caption-frames"
+            frames.mkdir()
+            frame = frames / "frame-000000.png"
+            image = video_app.Image.new("RGB", (360, 640), "black")
+            video_app.ImageDraw.Draw(image).text(
+                (90, 470), "কখনো", fill=(255, 224, 65),
+                font=video_app.load_font(25, True), stroke_width=1, stroke_fill=(0, 0, 0)
+            )
+            image.save(frame)
+            listing = root / "caption-frames.txt"
+            listing.write_text(f"file '{frame.as_posix()}'\nduration 1.0\n", encoding="utf-8")
+            header = "level\\tpage_num\\tblock_num\\tpar_num\\tline_num\\tword_num\\tleft\\ttop\\twidth\\theight\\tconf\\ttext\\n"
+            bad = header + "5\\t1\\t1\\t1\\t1\\t1\\t10\\t40\\t40\\t20\\t90\\tভুল\\n"
+            no_match = SimpleNamespace(returncode=0, stdout=header, stderr="")
+            fake = SimpleNamespace(returncode=0, stdout="List of available languages (2):\\nben\\neng\\n", stderr="")
+            crop_ocr = SimpleNamespace(returncode=0, stdout=bad, stderr="")
+            isolated = SimpleNamespace(returncode=0, stdout="কখনো\\n", stderr="")
+            with patch.object(
+                video_app.subprocess, "run",
+                side_effect=[fake, crop_ocr, no_match, no_match, no_match, isolated],
+            ):
+                result = video_app._verify_subtitle_frames_with_ocr(listing, "কখনো", root)
+            self.assertEqual(result["status"], "passed")
+            self.assertEqual(result["words_detected"], 1)
+
