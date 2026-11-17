@@ -1133,12 +1133,12 @@ class IsolatedBengaliWordOCRTests(unittest.TestCase):
             image.save(frame)
             listing = root / "caption-frames.txt"
             listing.write_text(f"file '{frame.as_posix()}'\nduration 1.0\n", encoding="utf-8")
-            header = "level\\tpage_num\\tblock_num\\tpar_num\\tline_num\\tword_num\\tleft\\ttop\\twidth\\theight\\tconf\\ttext\\n"
-            bad = header + "5\\t1\\t1\\t1\\t1\\t1\\t10\\t40\\t40\\t20\\t90\\tভুল\\n"
+            header = "level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext\n"
+            bad = header + "5\t1\t1\t1\t1\t1\t10\t40\t40\t20\t90\tভুল\n"
             no_match = SimpleNamespace(returncode=0, stdout=header, stderr="")
-            fake = SimpleNamespace(returncode=0, stdout="List of available languages (2):\\nben\\neng\\n", stderr="")
+            fake = SimpleNamespace(returncode=0, stdout="List of available languages (2):\nben\neng\n", stderr="")
             crop_ocr = SimpleNamespace(returncode=0, stdout=bad, stderr="")
-            isolated = SimpleNamespace(returncode=0, stdout="কখনো\\n", stderr="")
+            isolated = SimpleNamespace(returncode=0, stdout="কখনো\n", stderr="")
             with patch.object(
                 video_app.subprocess, "run",
                 side_effect=[fake, crop_ocr, no_match, no_match, no_match, isolated],
