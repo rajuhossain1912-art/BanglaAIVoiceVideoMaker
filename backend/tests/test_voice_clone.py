@@ -891,8 +891,8 @@ class SubtitleOCRVerificationTests(unittest.TestCase):
             )
             tsv = (
                 "level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext\n"
-                "5\t1\t1\t1\t1\t1\t10\t20\t80\t25\t95\tবাংলা\n"
-                "5\t1\t1\t1\t1\t2\t10\t152\t60\t25\t92\ttest\n"
+                "5\t1\t1\t1\t1\t1\t150\t50\t100\t50\t95\tবাংলা\n"
+                "5\t1\t1\t1\t1\t2\t150\t182\t100\t50\t92\ttest\n"
             )
             fake = SimpleNamespace(returncode=0, stdout="List of available languages (2):\nben\neng\n", stderr="")
             ocr = SimpleNamespace(returncode=0, stdout=tsv, stderr="")
@@ -902,6 +902,39 @@ class SubtitleOCRVerificationTests(unittest.TestCase):
             self.assertEqual(result["frames_checked"], 2)
             self.assertEqual(result["words_detected"], 2)
 
+    def test_ambiguous_bengali_word_retries_with_context_and_highlight_overlap(self):
+        from types import SimpleNamespace
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            frames = root / "caption-frames"
+            frames.mkdir()
+            frame = frames / "frame-000000.png"
+            image = video_app.Image.new("RGB", (360, 640), "black")
+            video_app.ImageDraw.Draw(image).text(
+                (90, 470), "স্বপ্ন", fill=(255, 224, 65),
+                font=video_app.load_font(25, True), stroke_width=1, stroke_fill=(0, 0, 0)
+            )
+            image.save(frame)
+            listing = root / "caption-frames.txt"
+            listing.write_text(f"file '{frame.as_posix()}'\nduration 1.0\n", encoding="utf-8")
+            _, bounds = video_app._extract_highlighted_word_crop(image)
+            left, top, right, bottom = (value * 2 for value in bounds)
+            tsv_bad = (
+                "level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext\n"
+                "5\t1\t1\t1\t1\t1\t100\t40\t60\t30\t90\tAA\n"
+            )
+            tsv_context = (
+                "level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext\n"
+                f"5\t1\t1\t1\t1\t1\t{left}\t{top}\t{right-left}\t{bottom-top}\t95\tস্বপ্ন\n"
+            )
+            fake = SimpleNamespace(returncode=0, stdout="List of available languages (2):\nben\neng\n", stderr="")
+            crop_ocr = SimpleNamespace(returncode=0, stdout=tsv_bad, stderr="")
+            context_ocr = SimpleNamespace(returncode=0, stdout=tsv_context, stderr="")
+            with patch.object(video_app.subprocess, "run", side_effect=[fake, crop_ocr, context_ocr]):
+                result = video_app._verify_subtitle_frames_with_ocr(listing, "স্বপ্ন", root)
+            self.assertEqual(result["status"], "passed")
+            self.assertEqual(result["words_detected"], 1)
+
     def test_missing_active_caption_word_fails_ocr_verification(self):
         from types import SimpleNamespace
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -910,8 +943,18 @@ class SubtitleOCRVerificationTests(unittest.TestCase):
             frames.mkdir()
             first = frames / "frame-000000.png"
             second = frames / "frame-000001.png"
-            video_app.Image.new("RGB", (360, 640), "black").save(first)
-            video_app.Image.new("RGB", (360, 640), "black").save(second)
+            first_image = video_app.Image.new("RGB", (360, 640), "black")
+            second_image = video_app.Image.new("RGB", (360, 640), "black")
+            video_app.ImageDraw.Draw(first_image).text(
+                (90, 470), "বাংলা", fill=(255, 224, 65),
+                font=video_app.load_font(25, True), stroke_width=1, stroke_fill=(0, 0, 0)
+            )
+            video_app.ImageDraw.Draw(second_image).text(
+                (90, 470), "test", fill=(255, 224, 65),
+                font=video_app.load_font(25, False), stroke_width=1, stroke_fill=(0, 0, 0)
+            )
+            first_image.save(first)
+            second_image.save(second)
             listing = root / "caption-frames.txt"
             listing.write_text(
                 f"file '{first.as_posix()}'\nduration 1.0\n"
