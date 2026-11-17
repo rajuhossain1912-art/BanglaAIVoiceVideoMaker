@@ -1982,6 +1982,17 @@ GitHub commit history অনুযায়ী প্রকল্পের প্�
   - Step 96. Post Checkout source: success
   - Step 97. Complete job: success
 
+
+### Source update — 2026-11-17T18:46:39.769Z
+- Branch: `main`
+- Push range: `764943c9d4192bea49e865c785b1ea1608fdd7a4` → `15324619926ac71f3bde81529cc4f48369fc4597`
+- Pushed by: rajuhossain1912-art
+- Commit: [15324619926a](https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/commit/15324619926ac71f3bde81529cc4f48369fc4597) — Include Whisper detected language confidence in audio QC (#59)
+- Changed files:
+  - `backend/app.py`
+  - `backend/tests/test_transcription_vad.py`
+- Result: **push recorded**; this is not a test or deployment success claim.
+
 <!-- AUTO_LOG_END -->
 
 
