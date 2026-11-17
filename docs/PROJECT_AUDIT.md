@@ -514,3 +514,14 @@ Section ৭-এর GitHub Actions সীমাবদ্ধতার বিবর
 - PR #59 squash merge commit `15324619926ac71f3bde81529cc4f48369fc4597`। Render deploy `dep-dbua22l9el5s739javog` LIVE; application startup complete এবং `/health` HTTP 200 (18:47:11 UTC)।
 - Main Docker E2E run `44151467212` SUCCESS; ৪৮/৪৮ ধাপ পাস, তিন ভাষার ভিডিও জেনারেশন ও report endpoint, fail-closed download checks এবং live Render health step 48/48 সফল। Docker smoke container-এ Cloudflare credentials নেই এবং external AI image/planner বন্ধ; তাই narration Whisper transcription `unavailable` ছিল, ফলে নতুন language metadata-র real-provider response এই E2E-তে যাচাই হয়নি। Bengali sample OCR ৭/৭, English sample OCR ০/৮ এবং mixed sample OCR ৫/১০; এই smoke test-এ semantic vision review unavailable থাকায় সব ভিডিও fail-closed হয়েছে। Cloudflare daily allocation exhaustion আগের external E2E run-এও দেখা গিয়েছিল; বর্তমান Docker smoke-এর no-credentials অবস্থা আলাদা।
 - কোনো paid fallback, expected-script Whisper prompt, ASR threshold পরিবর্তন বা publication gate শিথিল করা হয়নি।
+
+
+## ৩৩. Whisper অডিও দৈর্ঘ্য ও শব্দ গণনার তথ্য — 2026-11-17
+
+- PR #60: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/pull/60 — Whisper response-এর `transcription_info.duration`, `duration_after_vad` এবং `word_count` metadata সংরক্ষণ করে audio QC report-এ দেখানোর ব্যবস্থা।
+- এতে অডিওর মূল দৈর্ঘ্য, VAD-এর পরে দৈর্ঘ্য এবং মডেলের গণনা করা শব্দসংখ্যা তুলনা করে truncated audio বা speech-detection পরিবর্তন সম্পর্কে ধারণা পাওয়া যাবে। Metadata অনুপস্থিত/অবৈধ হলে দেখানো হবে না।
+- Cloudflare output schema-তে এই fields এবং `segments[].words[]`-এর individual word start/end timestamp নথিভুক্ত: https://developers.cloudflare.com/workers-ai/models/whisper-large-v3-turbo/schema-output.json
+- PR Backend Check run `44152236017` SUCCESS; syntax, unit tests ও real Tesseract Bengali subtitle integration (৪৩/৪৩ synthetic frames) পাস।
+- PR #60 squash merge commit `3460b450ac98178179e189a95b6e0f070273f35c`। Render deploy `dep-dbua4igae00c73b7gsn0` তখন build_in_progress; LIVE ও health check এখনো নিশ্চিত নয়।
+- Main Docker E2E run `44152407718` চলমান। E2E শেষ না হওয়া পর্যন্ত production end-to-end ফল ঘোষণা করা যাবে না।
+- কোনো word timestamp অনুমান করে যোগ করা হয়নি; scoring threshold বা publication gate অপরিবর্তিত।
