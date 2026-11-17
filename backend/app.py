@@ -3850,10 +3850,10 @@ def _verify_subtitle_frames_with_ocr(frame_list: Path, script: str, folder: Path
             for panel_index, found_tokens in enumerate(panels):
                 global_index = offset + panel_index
                 expected_tokens = _normalize_transcript_tokens(raw_words[global_index])
+                bounds = highlight_bounds[panel_index]
                 if bounds is not None and expected_tokens and all(token in found_tokens for token in expected_tokens):
                     words_detected += 1
                     continue
-                bounds = highlight_bounds[panel_index]
                 if bounds is not None:
                     # Ambiguous Bengali words are retried in sentence context, but
                     # the recognized word must spatially overlap the yellow highlight.
