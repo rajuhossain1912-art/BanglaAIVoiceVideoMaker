@@ -439,3 +439,12 @@ Section ৭-এর GitHub Actions সীমাবদ্ধতার বিবর
 - The test skips only when Tesseract or either Bengali/English language pack is absent; the Docker E2E environment has both packs. Backend CI run 44055071535 passed.
 - PR #51 merged as cd76148515edb5e402632db628551185afb7ecb3. Main Docker E2E run 44055157228 was queued at the time of this entry; record actual result only after completion.
 - This test validates OCR against synthetic frames produced by the real caption renderer. It does not validate the user's original video or the production Render runtime's exact OCR timing.
+
+
+## ২৬. বাংলা সাবটাইটেল OCR-এর প্রাসঙ্গিক পুনঃপরীক্ষা — 2026-11-17
+
+- PR #52: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/pull/52 — compact active-word OCR ব্যর্থ হলে পুরো সাবটাইটেল প্যানেল ৪ গুণ বড় করে Tesseract PSM 6, 11 ও 13-এ পুনরায় পরীক্ষা করা হয়। হলুদ হাইলাইটের সঙ্গে শব্দের স্থানিক overlap বাধ্যতামূলক রাখা হয়েছে; OCR timeout/error হলে fail-closed নীতি বহাল।
+- প্রথম PR commit-এর ইউনিট পরীক্ষায় পুরোনো contextual OCR mock fixture ব্যর্থ হয়েছিল। fixture-টি নতুন ৪x ছবির মাপ অনুযায়ী সংশোধন করা হয়েছে; কোনো production gate শিথিল করা হয়নি।
+- সর্বশেষ PR commit: ffa05c572cfd1aa052b55b7875c5d2ee98322b1c। GitHub Actions Pull Request Backend Check run 44131817193 সফল; Python syntax এবং ১৪৮টি voice-clone/OCR ইউনিট পরীক্ষার ধাপ সফল হয়েছে।
+- PR #52 squash merge হয়েছে; main merge commit 8330048ce553a83998b8dc8e74fc8a7cfb96c824।
+- এই পরিবর্তন ৪৩-ফ্রেমের synthetic integration test-এ OCR শনাক্তকরণ উন্নত করার উদ্দেশ্যে। ব্যবহারকারীর আসল MP4, Render production OCR runtime, বা ৪০% ASR similarity/পূর্ণ শব্দ-সময়ের সমস্যা এতে সমাধান হয়েছে—এমন দাবি করা হচ্ছে না। পরবর্তী production পরীক্ষা ও নতুন ভিডিওর প্রতিবেদন আবশ্যক।
