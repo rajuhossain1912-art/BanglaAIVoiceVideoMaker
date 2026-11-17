@@ -493,3 +493,13 @@ Section ৭-এর GitHub Actions সীমাবদ্ধতার বিবর
 - Regression tests: preview text, report output এবং ১,২০০ অক্ষরের সীমা যাচাই। PR Backend Check run `44138001926` SUCCESS; Python syntax ও voice-clone unit tests পাস। PR57-পরবর্তী main Docker E2E run `44138169318` SUCCESS; ১৫২টি backend test পাস, transcript-preview-এর তিনটি regression test পাস, এবং real Tesseract synthetic Bengali OCR integration ৪৩/৪৩ পাস। E2E-র live Render health step 48/48 সফল।
 - PR #57 squash merge commit `485f07de5350c49c3ac6aa3bc4b8220116ebeda0`। Render deploy `dep-dbu8vgdg1s2s73amq9jg` LIVE; application startup complete এবং `/health` HTTP 200 (17:33:36 UTC)। PR57-পরবর্তী main E2E run `44138169318` শুরু হয়েছে; ফল এখনো pending।
 - E2E-তে Whisper request আবার Cloudflare-এর daily free allocation limit-এ আটকে যায়; তাই test-এ transcript preview-সহ সফল Whisper transcription বাস্তবে দেখা যায়নি। পরবর্তী বাস্তব ভিডিও পরীক্ষায় allocation পুনরায় উপলব্ধ না হলে preview আসবে না; তখন report-এ Whisper failure class থাকবে। এই পরিবর্তন নিজে ASR similarity উন্নত করে না।
+
+
+## ৩১. Cloudflare Whisper দৈনিক ফ্রি বরাদ্দের ত্রুটি শনাক্তকরণ — 2026-11-17
+
+- PR #58: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/pull/58 — Whisper HTTPError-এর response body সর্বোচ্চ ৪ KB পর্যন্ত মেমরিতে পড়ে Cloudflare-এর `used up your daily free allocation of 10,000 neurons` বার্তা শনাক্ত করা হয়; HTTP 400 হলেও quota exhaustion সঠিকভাবে শ্রেণিবদ্ধ হয়।
+- Authentication (401/403), rate limit (429), server error (5xx) আগের মতো পৃথক থাকে। Provider response body server log-এ লেখা হয় না। নতুন Bangla report বলে দৈনিক বিনামূল্যের বরাদ্দ শেষ এবং নতুন বরাদ্দ না আসা পর্যন্ত Whisper যাচাই সম্ভব নয়।
+- Regression tests: HTTP 400 quota body, auth/rate/server category এবং Bangla user-facing message। PR Backend Check run `44139413498` SUCCESS; ১৫৮টি test পাস।
+- PR #58 squash merge commit `dbac1a8cb56919a722a5421e1e73ff83c4e70211`। Render deploy `dep-dbu936dbedkc73dgsjm0` LIVE; application startup complete এবং `/health` HTTP 200 (17:41:27 UTC)।
+- Main Docker E2E run `44139607851` তখনো in_progress; এর ফল যাচাই না হওয়া পর্যন্ত নতুন production E2E সফল বলে দাবি করা যাবে না।
+- কোনো paid fallback, retry storm, ASR threshold পরিবর্তন বা publication gate শিথিল করা হয়নি।
