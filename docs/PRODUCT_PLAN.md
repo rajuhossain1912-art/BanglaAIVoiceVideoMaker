@@ -153,3 +153,11 @@ This section supersedes older statements above wherever they describe the curren
 - APK SHA-256: `88e1d0bb193d95e6bbddff1a84135698515c275c49e5fa735052765744c6d7a8`; size 10,736,616 bytes.
 - Direct APK: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/releases/download/v0.3.225/BanglaAIVoiceVideoMaker-v0.3.225.apk
 - Physical install/update and TalkBack validation remain outstanding.
+
+
+### Latest quality fix — PR #43 (2026-11-17)
+- Added specific Bangla motivation-to-image mappings: retrying after failure, learning from a mistake, steady practice toward a goal, and taking a concrete first step toward a dream.
+- Replaced the overly generic motivation prompt that could lead the visual planner to depict unrelated manual-labor activities.
+- PR #43 merged as 76f925bede140a6d5da7c83ad414786b13f05dc8; backend CI run 44047382875 succeeded (138 unit tests); Render deploy dep-dbu11qjrjlhs73b742j0 live.
+- The fix does not address the observed 40% audio/script match, missing/extra transcript words, missing explicit word timestamps, or subtitle OCR timeout. Publication remains fail-closed.
+- Next engineering priorities: diagnose Bengali TTS/Whisper mismatch with provider/audio evidence; reduce OCR batch processing time without skipping any caption word; then re-run a real device test. No paid provider or new secret was added.
