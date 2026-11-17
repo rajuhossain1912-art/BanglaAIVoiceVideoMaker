@@ -890,3 +890,11 @@ GitHub commit history অনুযায়ী প্রকল্পের প্�
 - Product documentation commits: README a91431746ab2cd4e8d53d84e429eb0d90c39f1f4; PRODUCT_PLAN 57ef214d23e7bd106062776301e8e22a64046c5b.
 - Latest documentation-triggered Render deploy for commit 57ef214d23e7bd106062776301e8e22a64046c5b was queued at the time of the check; do not mark it live until verified.
 - Automatic audit-register workflow run 43936975457 successfully completed its append step.
+
+### PR #42 — Android foreground service shutdown safety and background-work disclosure — 2026-11-17
+- PR #42 merged successfully after Android PR build check run 43938301998 completed success. Merge commit: a4e27b32b43590da173ec15ab582af4a629ee85a.
+- Replaced four MainActivity stop-command service starts with direct Context.stopService calls to avoid starting a service merely to stop it under Android background service-start restrictions.
+- Corrected Bangla Settings copy: foreground work is attempted but Android background limits, battery saver or server restart can interrupt it; reopening the app attempts to resume saved job polling.
+- Automatic audit-register workflow run 44043382221 completed its append-audit job successfully.
+- Android release workflow run 44043382156 was started for the merge commit. At last check its Build release APK step was in_progress; version identity, signing verification and release publication remain unverified.
+- PR Android build check run 43938301998: success. No physical Android 16, TalkBack, screen-off, battery-saver or process-kill acceptance test has been performed.
