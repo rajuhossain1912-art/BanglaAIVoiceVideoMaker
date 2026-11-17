@@ -93,6 +93,18 @@ class TranscriptionVadPolicyTests(unittest.TestCase):
         self.assertIn("অডিও দৈর্ঘ্য 12.50 সেকেন্ড", report)
         self.assertIn("Whisper-এর শব্দ গণনা 5", report)
 
+    def test_duration_and_word_count_report_without_language_metadata(self):
+        report = video_app._audio_token_diagnostics_report({
+            "matched_tokens": 4, "missing_tokens": 0, "extra_tokens": 0,
+            "transcription_info": [{
+                "duration": 12.5, "duration_after_vad": 10.0, "word_count": 5,
+            }],
+        })
+        self.assertIn("অডিও দৈর্ঘ্য 12.50 সেকেন্ড", report)
+        self.assertIn("VAD-এর পর 10.00 সেকেন্ড", report)
+        self.assertIn("Whisper-এর শব্দ গণনা 5", report)
+        self.assertNotIn("Whisper শনাক্ত ভাষা", report)
+
     def test_invalid_whisper_language_probability_is_ignored(self):
         parsed = video_app._parse_cloudflare_transcription_response({
             "result": {
