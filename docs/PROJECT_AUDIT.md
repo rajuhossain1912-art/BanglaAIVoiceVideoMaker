@@ -526,3 +526,16 @@ Section ৭-এর GitHub Actions সীমাবদ্ধতার বিবর
 - Main Docker E2E run `44152407718` SUCCESS; ৪৮/৪৮ ধাপ সম্পন্ন, যার মধ্যে Docker build, backend tests, বাংলা/ইংরেজি ভিডিও generation, audio/subtitle/visual regression checks এবং live Render health check রয়েছে। Health response-এ deployed audit commit `48202632d8399711b534fbc7ec7cd1db210e3bf7` দেখা গেছে।
 - সীমাবদ্ধতা: Docker smoke environment-এ Cloudflare credentials ছিল না এবং external AI image/planner বন্ধ ছিল; তাই Whisper-এর আসল provider metadata, বাস্তব transcript accuracy বা AI visual review এই run-এ যাচাই হয়নি। E2E success-কে provider quality বা প্রকাশযোগ্য ভিডিওর প্রমাণ হিসেবে ধরা যাবে না।
 - কোনো word timestamp অনুমান করে যোগ করা হয়নি; scoring threshold বা publication gate অপরিবর্তিত।
+
+
+## ৩৪. PR #61 পরবর্তী পূর্ণ E2E ও বাস্তব সীমাবদ্ধতা — 2026-11-18
+
+- Main Docker E2E workflow run [44154042847](https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/actions/runs/44154042847) SUCCESS; job `video-smoke-test` সম্পূর্ণ। Docker build, ১৬২টি backend unit test, বাংলা/ইংরেজি/mixed video-generation smoke, OCR/visual/provider regression checks এবং live Render health endpoint সফলভাবে execute হয়েছে। Health response: `status=ok`, `ffmpeg=true`, `ffprobe=true`, `espeak-ng=true`; deployed commit `8561e0f9f3838e398ebe3e5ddb3c189a4d0b7eb6`।
+- Run-এর generated sample videos publication-eligible ছিল না এবং সবগুলোতে `share_allowed=false`, `download_url=null` বজায় ছিল। এটি প্রত্যাশিত fail-closed behavior; E2E workflow success-কে ভিডিও quality বা sharing approval হিসেবে ব্যাখ্যা করা যাবে না।
+- বাংলা sample: ৫.৩৫ সেকেন্ড, ৭/৭ active subtitle word OCR-এ শনাক্ত; কিন্তু Whisper audio verification `unavailable` (RuntimeError), individual word timestamps অনুপস্থিত, semantic vision review unavailable। তাই publication blocked।
+- English sample: ৩.৯১ সেকেন্ড, OCR ০/৮ active words; audio verification unavailable, word timestamps অনুপস্থিত এবং semantic vision review unavailable। তাই publication blocked।
+- Mixed sample: ৭.৯২ সেকেন্ড, OCR ৫/১০ active words; audio verification unavailable, word timestamps অনুপস্থিত এবং semantic vision review unavailable। তাই publication blocked।
+- এই Docker smoke run-এ Cloudflare credentials ছিল না; তাই Whisper-এর RuntimeError-কে provider quota exhaustion বলা যাবে না। এটি no-credentials smoke environment; real Cloudflare transcription/metadata/word timestamps যাচাই হয়নি। আগের external run-এ Cloudflare daily free allocation exhaustion আলাদাভাবে নথিভুক্ত আছে।
+- ইংরেজি ও mixed OCR-এর বাস্তব ব্যর্থতা নতুন follow-up কাজ: English sample ০/৮ এবং mixed ৫/১০। Bengali ৭/৭ synthetic smoke result-কে ইংরেজি OCR সফলতার প্রমাণ ধরা যাবে না। OCR-এর crop বর্তমানে নির্দিষ্ট caption panel coordinate ও yellow-highlight color threshold ব্যবহার করে; ইংরেজি rendered caption layout/active-word highlight crop-এর সঙ্গে মেলে কি না তা তদন্ত করতে হবে। কোনো OCR threshold বা publication gate শিথিল করা যাবে না।
+- PR #61 squash merge commit `8561e0f9f3838e398ebe3e5ddb3c189a4d0b7eb6`; Render deploy `dep-dbua8tk9v7es73dm09pg` LIVE। Main E2E live Render `/health` ধাপে HTTP 200 এবং প্রয়োজনীয় media tools-এর availability নিশ্চিত করেছে।
+- Android APK এই backend-only PR-এর কারণে পরিবর্তিত হয়নি; সর্বশেষ Android release v0.3.225। Physical Android installation/update, TalkBack, screen-off, এবং user-generated MP4 acceptance এখনো আলাদাভাবে যাচাই করতে হবে।
