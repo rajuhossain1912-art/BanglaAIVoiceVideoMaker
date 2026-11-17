@@ -51,6 +51,46 @@ class TranscriptionVadPolicyTests(unittest.TestCase):
             self.assertIs(captured["vad_filter"], False)
             self.assertEqual(captured["language"], "bn")
 
+    def test_whisper_response_preserves_detected_language_and_probability(self):
+        parsed = video_app._parse_cloudflare_transcription_response({
+            "result": {
+                "text": "আমি আজ কথা বলছি",
+                "transcription_info": {
+                    "language": "bn",
+                    "language_probability": 0.97,
+                },
+            }
+        }, return_details=True)
+        self.assertEqual(parsed["transcription_info"]["language"], "bn")
+        self.assertAlmostEqual(parsed["transcription_info"]["language_probability"], 0.97)
+
+    def test_whisper_language_metadata_appears_in_accessible_audio_report(self):
+        report = video_app._audio_token_diagnostics_report({
+            "matched_tokens": 4,
+            "missing_tokens": 0,
+            "extra_tokens": 0,
+            "transcript_preview": "আমি আজ কথা বলছি",
+            "transcription_info": [{
+                "language": "bn",
+                "language_probability": 0.97,
+            }],
+        })
+        self.assertIn("Whisper শনাক্ত ভাষা: bn", report)
+        self.assertIn("97.0 শতাংশ", report)
+
+    def test_invalid_whisper_language_probability_is_ignored(self):
+        parsed = video_app._parse_cloudflare_transcription_response({
+            "result": {
+                "text": "hello",
+                "transcription_info": {
+                    "language": "en",
+                    "language_probability": 2.5,
+                },
+            }
+        }, return_details=True)
+        self.assertEqual(parsed["transcription_info"]["language"], "en")
+        self.assertIsNone(parsed["transcription_info"]["language_probability"])
+
     def test_uploaded_audio_keeps_existing_vad_default(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             folder = Path(temp_dir)
