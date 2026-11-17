@@ -949,10 +949,6 @@ class SubtitleOCRVerificationTests(unittest.TestCase):
                 (90, 470), "বাংলা", fill=(255, 224, 65),
                 font=video_app.load_font(25, True), stroke_width=1, stroke_fill=(0, 0, 0)
             )
-            video_app.ImageDraw.Draw(second_image).text(
-                (90, 470), "test", fill=(255, 224, 65),
-                font=video_app.load_font(25, False), stroke_width=1, stroke_fill=(0, 0, 0)
-            )
             first_image.save(first)
             second_image.save(second)
             listing = root / "caption-frames.txt"
