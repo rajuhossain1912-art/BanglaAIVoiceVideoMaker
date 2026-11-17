@@ -3786,6 +3786,17 @@ def _tesseract_tsv_matches_highlighted_word(tsv_text: str, expected_tokens, boun
     return bool(expected_tokens) and all(token in found for token in expected_tokens)
 
 
+def _tesseract_crop_matches_expected_tokens(ocr_text: str, expected_tokens):
+    """Verify a single isolated highlighted-word crop, including split Bengali glyph groups."""
+    expected = [str(token) for token in expected_tokens if str(token)]
+    observed = _normalize_transcript_tokens(ocr_text)
+    if not expected or not observed:
+        return False
+    # The crop contains only the yellow active word, so joining Tesseract's
+    # split Bengali fragments is safe only when the complete result matches.
+    return "".join(observed) == "".join(expected)
+
+
 def _verify_subtitle_frames_with_ocr(frame_list: Path, script: str, folder: Path, batch_size: int = 4):
     """OCR the active highlighted word in every rendered caption frame."""
     try:
@@ -3837,10 +3848,12 @@ def _verify_subtitle_frames_with_ocr(frame_list: Path, script: str, folder: Path
             batch = frame_paths[offset:offset + safe_batch_size]
             sheet = Image.new("L", (panel_width, panel_step * len(batch)), 255)
             highlight_bounds = []
+            highlighted_word_crops = []
             for panel_index, image_path in enumerate(batch):
                 with Image.open(image_path) as image:
                     word_crop, bounds = _extract_highlighted_word_crop(image)
                 highlight_bounds.append(bounds)
+                highlighted_word_crops.append(word_crop)
                 if word_crop is not None:
                     sheet.paste(word_crop, (0, panel_index * panel_step))
             sheet_path = ocr_folder / f"batch-{offset:06d}.png"
@@ -3909,6 +3922,39 @@ def _verify_subtitle_frames_with_ocr(frame_list: Path, script: str, folder: Path
                             context_verified = True
                             break
                     if context_verified:
+                        words_detected += 1
+                        continue
+                # Final strict retry: OCR only the isolated yellow active-word
+                # crop at high resolution. Since the crop contains no sentence
+                # context, require its complete normalized text to match exactly.
+                word_crop = highlighted_word_crops[panel_index]
+                if word_crop is not None and expected_tokens:
+                    isolated_path = ocr_folder / f"isolated-{global_index:06d}.png"
+                    isolated_crop = word_crop.resize((1200, 480), Image.Resampling.LANCZOS)
+                    isolated_crop.save(isolated_path, optimize=True)
+                    isolated_verified = False
+                    for page_segmentation in ("8", "13"):
+                        try:
+                            isolated_result = subprocess.run(
+                                ["tesseract", str(isolated_path), "stdout", "-l", "ben+eng", "--psm", page_segmentation],
+                                capture_output=True, text=True, timeout=15,
+                            )
+                        except subprocess.TimeoutExpired:
+                            return {
+                                "status": "unavailable", "frames_checked": offset + panel_index,
+                                "words_detected": words_detected, "words_missing": None,
+                                "reason": "সক্রিয় বাংলা শব্দের বড় OCR পরীক্ষা ১৫ সেকেন্ডে সম্পূর্ণ হয়নি; পরীক্ষা নিরাপদে বন্ধ রাখা হয়েছে।",
+                            }
+                        if isolated_result.returncode != 0:
+                            return {
+                                "status": "unavailable", "frames_checked": offset + panel_index,
+                                "words_detected": words_detected, "words_missing": None,
+                                "reason": "সক্রিয় বাংলা শব্দের বড় OCR পরীক্ষা সম্পূর্ণ হয়নি।",
+                            }
+                        if _tesseract_crop_matches_expected_tokens(isolated_result.stdout, expected_tokens):
+                            isolated_verified = True
+                            break
+                    if isolated_verified:
                         words_detected += 1
                         continue
                 missing_indices.append(global_index + 1)
