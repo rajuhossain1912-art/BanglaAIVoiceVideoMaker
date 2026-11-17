@@ -3645,7 +3645,15 @@ def make_caption_frames(script: str, duration: float, background: Path, folder: 
                 current_width += needed
             if current_line:
                 lines.append(current_line)
-            visible_lines = lines[-4:]
+            active_line_index = next(
+                (line_index for line_index, line in enumerate(lines)
+                 if any(is_active for _, is_active in line)),
+                len(lines) - 1,
+            )
+            # Never discard the active word when a long Bengali sentence wraps
+            # to more than four lines. Keep a four-line window containing it.
+            visible_start = max(0, min(active_line_index, len(lines) - 4))
+            visible_lines = lines[visible_start:visible_start + 4]
             y = 464 + max(0, (4 - len(visible_lines)) * 34)
             for line in visible_lines:
                 x = 14
