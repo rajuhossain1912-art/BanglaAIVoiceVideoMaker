@@ -1445,6 +1445,23 @@ def _whisper_language_hint(script: str):
     return None
 
 
+def _cloudflare_whisper_http_error_detail(status, response_body=""):
+    """Classify Cloudflare Whisper errors using safe, bounded provider response text."""
+    body = str(response_body or "").lower()
+    if (
+        "used up your daily free allocation" in body
+        or ("daily free allocation" in body and "neurons" in body)
+    ):
+        return "Cloudflare Workers AI-এর দৈনিক বিনামূল্যের বরাদ্দ শেষ হয়েছে।"
+    if status in (401, 403):
+        return "Cloudflare Whisper অনুমতি দেয়নি; AI সংযোগের অনুমতি পরীক্ষা করতে হবে।"
+    if status == 429:
+        return "Cloudflare Whisper-এর বিনামূল্যের সীমা বা অনুরোধের হার অতিক্রম হয়েছে।"
+    if status >= 500:
+        return "Cloudflare Whisper সাময়িকভাবে ব্যস্ত বা সেবা দিতে পারছে না।"
+    return f"Cloudflare Whisper HTTP {status} উত্তর দিয়েছে।"
+
+
 def transcribe_uploaded_audio(audio_path: Path, folder: Path, progress_callback=None, return_details=False, language_hint=None, vad_filter=True):
     """Transcribe audio-only uploads with Cloudflare Whisper in manageable two-minute chunks."""
     account_id = os.getenv("CLOUDFLARE_ACCOUNT_ID", "").strip()
@@ -1502,14 +1519,11 @@ def transcribe_uploaded_audio(audio_path: Path, folder: Path, progress_callback=
             all_word_timestamps.extend(parsed["word_timestamps"])
         except urllib.error.HTTPError as exc:
             status = int(getattr(exc, "code", 0) or 0)
-            if status in (401, 403):
-                detail = "Cloudflare Whisper অনুমতি দেয়নি; AI সংযোগের অনুমতি পরীক্ষা করতে হবে।"
-            elif status == 429:
-                detail = "Cloudflare Whisper-এর বিনামূল্যের সীমা বা অনুরোধের হার অতিক্রম হয়েছে।"
-            elif status >= 500:
-                detail = "Cloudflare Whisper সাময়িকভাবে ব্যস্ত বা সেবা দিতে পারছে না।"
-            else:
-                detail = f"Cloudflare Whisper HTTP {status} উত্তর দিয়েছে।"
+            try:
+                response_body = exc.read(4096).decode("utf-8", errors="replace")
+            except Exception:
+                response_body = ""
+            detail = _cloudflare_whisper_http_error_detail(status, response_body)
             raise RuntimeError(
                 f"অডিওর {index + 1} নম্বর অংশ যাচাই হয়নি: {detail}"
             ) from exc
@@ -4120,6 +4134,8 @@ def _publication_gate_decision(
 def _transcription_failure_reason(error):
     """Return a short, accessible Bangla explanation without hiding the failure class."""
     message = str(error)
+    if "দৈনিক বিনামূল্যের বরাদ্দ" in message:
+        return "Cloudflare Workers AI-এর দৈনিক বিনামূল্যের বরাদ্দ শেষ হয়েছে; নতুন দৈনিক বরাদ্দ না আসা পর্যন্ত Whisper যাচাই করা যাবে না।"
     if "বিনামূল্যের সীমা" in message:
         return "Whisper-এর বিনামূল্যের সীমা শেষ বা অনুরোধের হার অতিক্রম হয়েছে।"
     if "অনুমতি দেয়নি" in message:
