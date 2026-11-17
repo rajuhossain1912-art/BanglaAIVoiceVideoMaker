@@ -651,6 +651,18 @@ GitHub commit history অনুযায়ী প্রকল্পের প্�
   - `docs/PRODUCT_PLAN.md`
 - Result: **push recorded**; this is not a test or deployment success claim.
 
+
+### Source update — 2026-11-17T08:31:45.253Z
+- Branch: `main`
+- Push range: `017f5146b075c45b99d9bf88904756e3e88832dc` → `76f925bede140a6d5da7c83ad414786b13f05dc8`
+- Pushed by: rajuhossain1912-art
+- Commit: [76f925bede14](https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/commit/76f925bede140a6d5da7c83ad414786b13f05dc8) — Improve motivational scene image relevance
+- Changed files:
+  - `backend/app.py`
+  - `backend/tests/test_scene_graphic_variation.py`
+  - `backend/tests/test_scene_interval_diagnostics.py`
+- Result: **push recorded**; this is not a test or deployment success claim.
+
 <!-- AUTO_LOG_END -->
 
 
