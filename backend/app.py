@@ -1432,12 +1432,27 @@ def _parse_cloudflare_transcription_response(data, return_details=False, offset_
                 language_probability = None
         except (TypeError, ValueError):
             language_probability = None
+        def _safe_nonnegative_float(value):
+            try:
+                parsed = float(value)
+                return parsed if math.isfinite(parsed) and parsed >= 0 else None
+            except (TypeError, ValueError):
+                return None
+        try:
+            word_count = int(result.get("word_count"))
+            if word_count < 0:
+                word_count = None
+        except (TypeError, ValueError):
+            word_count = None
         return {
             "text": transcript,
             "word_timestamps": _extract_whisper_word_timestamps(result, offset_seconds),
             "transcription_info": {
                 "language": language or None,
                 "language_probability": language_probability,
+                "duration": _safe_nonnegative_float(info.get("duration")),
+                "duration_after_vad": _safe_nonnegative_float(info.get("duration_after_vad")),
+                "word_count": word_count,
             },
         }
     return transcript
@@ -4074,6 +4089,15 @@ def _audio_token_diagnostics_report(audio_verification):
             report += "Whisper শনাক্ত ভাষা: " + language
             if isinstance(probability, (int, float)) and math.isfinite(float(probability)):
                 report += " (মডেলের ভাষা-আস্থার মান " + f"{float(probability) * 100:.1f}" + " শতাংশ)"
+            duration = info.get("duration")
+            duration_after_vad = info.get("duration_after_vad")
+            word_count = info.get("word_count")
+            if isinstance(duration, (int, float)) and math.isfinite(float(duration)):
+                report += "। অডিও দৈর্ঘ্য " + f"{float(duration):.2f}" + " সেকেন্ড"
+                if isinstance(duration_after_vad, (int, float)) and math.isfinite(float(duration_after_vad)):
+                    report += ", VAD-এর পর " + f"{float(duration_after_vad):.2f}" + " সেকেন্ড"
+                if isinstance(word_count, int) and word_count >= 0:
+                    report += ", Whisper-এর শব্দ গণনা " + str(word_count)
             report += "। "
     return report
 
