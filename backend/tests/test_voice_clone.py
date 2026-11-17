@@ -1152,10 +1152,11 @@ class IsolatedBengaliWordOCRTests(unittest.TestCase):
             no_match = SimpleNamespace(returncode=0, stdout=header, stderr="")
             fake = SimpleNamespace(returncode=0, stdout="List of available languages (2):\nben\neng\n", stderr="")
             crop_ocr = SimpleNamespace(returncode=0, stdout=bad, stderr="")
+            isolated_wrong = SimpleNamespace(returncode=0, stdout="ভুল\\n", stderr="")
             isolated = SimpleNamespace(returncode=0, stdout="কখনো\n", stderr="")
             with patch.object(
                 video_app.subprocess, "run",
-                side_effect=[fake, crop_ocr, no_match, no_match, no_match, isolated],
+                side_effect=[fake, crop_ocr, no_match, no_match, no_match, isolated_wrong, isolated_wrong, isolated],
             ):
                 result = video_app._verify_subtitle_frames_with_ocr(listing, "কখনো", root)
             self.assertEqual(result["status"], "passed")
