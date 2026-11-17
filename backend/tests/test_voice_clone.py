@@ -1086,7 +1086,20 @@ class RealSubtitleOCRIntegrationTests(unittest.TestCase):
             )
             self.assertEqual(frame_count, 43)
             result = video_app._verify_subtitle_frames_with_ocr(listing, script, folder)
-            self.assertEqual(result["status"], "passed", result)
+            if result["status"] != "passed":
+                missing = result.get("missing_word_indices") or [1]
+                frame_path = folder / "caption-frames" / f"frame-{int(missing[0]) - 1:06d}.png"
+                with video_app.Image.open(frame_path) as frame:
+                    crop, bounds = video_app._extract_highlighted_word_crop(frame)
+                font_path = getattr(video_app.load_font(25, True), "path", None)
+                diagnostics = {"missing_index": missing[0], "expected_word": re.findall(r"\\S+", script)[int(missing[0]) - 1], "font_path": font_path, "crop_bounds": bounds, "crop_size": crop.size if crop else None, "ocr": {}}
+                if crop is not None:
+                    diagnostic_path = folder / "diagnostic-active-word.png"
+                    crop.resize((1200, 480), video_app.Image.Resampling.LANCZOS).save(diagnostic_path)
+                    for mode in ("6", "7", "8", "10", "11", "13"):
+                        attempt = video_app.subprocess.run(["tesseract", str(diagnostic_path), "stdout", "-l", "ben+eng", "--psm", mode], capture_output=True, text=True, timeout=15)
+                        diagnostics["ocr"][mode] = {"returncode": attempt.returncode, "text": (attempt.stdout or "").strip(), "error": (attempt.stderr or "")[-300:]}
+                self.assertEqual(result["status"], "passed", {"result": result, "diagnostics": diagnostics})
             self.assertEqual(result["frames_checked"], 43)
             self.assertEqual(result["words_detected"], 43)
 
