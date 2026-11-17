@@ -1279,7 +1279,7 @@ def _parse_scene_visual_prompts(raw: str, expected_count: int, scene_offset: int
 
 def _scene_occurrence_metadata(scenes):
     """Describe repeated narration slots so planners can vary shots without inventing new actions."""
-    normalized = [re.sub(r"\\s+", " ", str(scene or "")).strip().lower() for scene in scenes or []]
+    normalized = [re.sub(r"\s+", " ", str(scene or "")).strip().lower() for scene in scenes or []]
     totals = {}
     for value in normalized:
         totals[value] = totals.get(value, 0) + 1
