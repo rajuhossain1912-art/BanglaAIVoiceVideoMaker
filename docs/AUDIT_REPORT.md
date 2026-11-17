@@ -576,6 +576,17 @@ GitHub commit history অনুযায়ী প্রকল্পের প্�
   - `docs/PROJECT_AUDIT.md`
 - Result: **push recorded**; this is not a test or deployment success claim.
 
+
+### Source update — 2026-11-17T08:02:42.200Z
+- Branch: `main`
+- Push range: `9e5f26f3ecf3281bb13d4c5a9d0b641edb9b6eeb` → `a4e27b32b43590da173ec15ab582af4a629ee85a`
+- Pushed by: rajuhossain1912-art
+- Commit: [a4e27b32b435](https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/commit/a4e27b32b43590da173ec15ab582af4a629ee85a) — Android: clarify background video work limitations
+- Changed files:
+  - `app/src/main/java/com/rajuhossain/banglaaivoicevideomaker/MainActivity.kt`
+  - `docs/PROJECT_AUDIT.md`
+- Result: **push recorded**; this is not a test or deployment success claim.
+
 <!-- AUTO_LOG_END -->
 
 
