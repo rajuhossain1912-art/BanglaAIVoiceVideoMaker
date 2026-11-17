@@ -57,7 +57,7 @@ class SceneImageSimilarityTests(unittest.TestCase):
 
     def test_motivation_text_selects_motivation_visual_not_bus(self):
         concepts = video_app._matched_visual_concepts("নিজের ওপর বিশ্বাস রাখুন এবং চেষ্টা চালিয়ে যান")
-        self.assertTrue(any("steadily practicing a clearly visible skill" in item for item in concepts))
+        self.assertTrue(any("steadily practicing a specific everyday skill" in item for item in concepts))
         self.assertFalse(any("passenger bus" in item for item in concepts))
 
     def test_success_and_forward_progress_select_motivation_visual(self):
@@ -66,7 +66,7 @@ class SceneImageSimilarityTests(unittest.TestCase):
             "বাধা এলেও নিজের লক্ষ্যের পথে থেমে যাবেন না",
         ):
             concepts = video_app._matched_visual_concepts(text)
-            self.assertTrue(any("steadily practicing a clearly visible skill" in item for item in concepts))
+            self.assertTrue(any("steadily practicing a specific everyday skill" in item for item in concepts))
 
     def test_motivation_fallback_has_three_distinct_scene_variants(self):
         with tempfile.TemporaryDirectory() as temp_dir:
