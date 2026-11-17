@@ -1483,6 +1483,16 @@ GitHub commit history অনুযায়ী প্রকল্পের প্�
   - `backend/tests/test_voice_clone.py`
 - Result: **push recorded**; this is not a test or deployment success claim.
 
+
+### Source update — 2026-11-17T17:04:35.736Z
+- Branch: `main`
+- Push range: `8f7182fe22f49233cdd3389e2276367fb512ee3d` → `a38147fb4a671c4cbdc54f64e9b17b630c00852b`
+- Pushed by: rajuhossain1912-art
+- Commit: [a38147fb4a67](https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/commit/a38147fb4a671c4cbdc54f64e9b17b630c00852b) — Record active subtitle visibility fix and OCR integration failure
+- Changed files:
+  - `docs/PROJECT_AUDIT.md`
+- Result: **push recorded**; this is not a test or deployment success claim.
+
 <!-- AUTO_LOG_END -->
 
 
