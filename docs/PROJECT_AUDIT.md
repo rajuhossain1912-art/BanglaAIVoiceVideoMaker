@@ -481,6 +481,15 @@ Section ৭-এর GitHub Actions সীমাবদ্ধতার বিবর
 - PR #56: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/pull/56 — PR CI-তে Tesseract, Bengali/English language pack এবং Docker-এর মতো Noto Bengali fonts ইনস্টল করা হয়েছে। প্রথম CI রান 44136471406-এ ০/৪৩ শনাক্ত হয়; পরে দেখা যায় runner-এ Noto Bengali fonts অনুপস্থিত ছিল। Fonts যোগ করার পর diagnostic-এ নিশ্চিত হয়, “রাখুন,” শব্দের isolated crop-এ Tesseract PSM 10 সম্পূর্ণ সঠিক শব্দটি পড়তে পারে; PSM 6/7/11 ফাঁকা এবং PSM 8/13 ভুল ফল দিয়েছিল।
 - PR #56 branch-এ production OCR fallback-এ PSM 10 যোগ হয়েছে; PSM 7/8/11/13 ও strict exact-text match বহাল। Regression test নিশ্চিত করে, আগের OCR modes ভুল পড়লে PSM 10 সঠিক শব্দ শনাক্ত করলেই সেটি গ্রহণ হয়।
 - PR Backend Check run 44136951060 SUCCESS; syntax check, ১৫২টি unit test এবং real Tesseract integration test test_real_tesseract_verifies_all_43_bengali_caption_frames পাস করেছে। ৪৩টি synthetic caption frame-এর সব ৪৩টি সক্রিয় বাংলা শব্দ শনাক্ত হয়েছে। এটি synthetic integration test; ব্যবহারকারীর আসল MP4 বা Render production runtime-এর OCR ফল নয়।
-- PR #56-এর Android Build Check তখনও চলমান; PR merge ও নতুন main Docker E2E ফল না আসা পর্যন্ত PSM 10 production-এ চালু বলা যাবে না।
-- ASR similarity ৪০% এবং explicit word-level timestamp-এর ঘাটতি এখনো অমীমাংসিত; publication gate অপরিবর্তিত।
+- PR #56 মূল শাখায় squash merge commit `2f08cbad9f46c6316bb72a58ac6ef93fa167fd94`-এ যুক্ত হয়েছে। Android Build Check run `44136951072` এবং Backend Check run `44136951060` SUCCESS। Render deploy `dep-dbu8u1s9v7es73djg8dg` LIVE; নতুন instance `/health` HTTP 200।
+- Main Docker E2E run `44137588748` SUCCESS; ১৫২টি backend test পাস করেছে এবং `test_real_tesseract_verifies_all_43_bengali_caption_frames` সফল হয়েছে (৪৩/৪৩ synthetic caption frame)। E2E-এর বাংলা, ইংরেজি ও mixed sample video তৈরি হয়েছিল, কিন্তু প্রকাশযোগ্য হয়নি: Cloudflare-এর দৈনিক বিনামূল্যের ১০,০০০ neurons allocation শেষ হওয়ায় Whisper transcript ও word timestamps পাওয়া যায়নি; English sample OCR ০/৮ এবং mixed sample OCR ৫/১০ ছিল। বাংলা smoke sample-এর OCR ৭/৭ হলেও visual review/word timestamps unavailable থাকায় সবগুলো fail-closed ছিল।
 
+
+
+## ৩০. অডিও QC-তে Whisper কী শুনেছে তা প্রতিবেদনে দেখানো — 2026-11-17
+
+- PR #57: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/pull/57 — audio quality report-এ Cloudflare Whisper-এর স্বীকৃত প্রতিলিপির সর্বোচ্চ ১,২০০ অক্ষরের preview যুক্ত হয়েছে। ফলে কম similarity হলে ব্যবহারকারী শুধু missing/extra word count নয়, Whisper আসলে কী শুনেছে সেটিও দেখতে পারবেন।
+- Preview job-এর বিদ্যমান audio verification result ও accessible Bangla report-এ যোগ হয়; server log-এ transcript লেখা হয় না। ASR scoring threshold, word-timestamp requirement বা publication gate কোনোটি বদলানো হয়নি।
+- Regression tests: preview text, report output এবং ১,২০০ অক্ষরের সীমা যাচাই। PR Backend Check run `44138001926` SUCCESS; Python syntax ও voice-clone unit tests পাস।
+- PR #57 squash merge commit `485f07de5350c49c3ac6aa3bc4b8220116ebeda0`। Render deploy `dep-dbu8vgdg1s2s73amq9jg` তখন build_in_progress; LIVE ও health check এখনো নিশ্চিত নয়।
+- পরবর্তী বাস্তব ভিডিও পরীক্ষায় Cloudflare free allocation পুনরায় উপলব্ধ না হলে transcript preview আসবে না; তখন report-এ Whisper failure class থাকবে। এই পরিবর্তন নিজে ASR similarity উন্নত করে না।
