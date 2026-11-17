@@ -727,15 +727,21 @@ def load_caption_font(text: str, size: int, bold=False):
         return load_font(size, bold)
     # Liberation Sans uses a clearly barred uppercase I, unlike the
     # single-stroke glyph that OCR repeatedly confused with lowercase l.
-    latin_names = (
-        ("LiberationSans-Bold.ttf", "DejaVuSans-Bold.ttf")
-        if bold else ("LiberationSans-Regular.ttf", "DejaVuSans.ttf")
-    )
-    latin_paths = [
-        Path("/usr/share/fonts/truetype/liberation2") / latin_names[0],
-        Path("/usr/share/fonts/truetype/liberation") / latin_names[0],
-        Path("/usr/share/fonts/truetype/dejavu") / latin_names[1],
-    ]
+    # Acronyms containing uppercase I need a visibly barred glyph so
+    # OCR does not confuse it with lowercase l (for example, "AI" -> "Al").
+    if "I" in value:
+        latin_paths = [
+            Path("/usr/share/fonts/truetype/dejavu") / ("DejaVuSansMono-Bold.ttf" if bold else "DejaVuSansMono.ttf"),
+            Path("/usr/share/fonts/truetype/liberation2") / ("LiberationSans-Bold.ttf" if bold else "LiberationSans-Regular.ttf"),
+            Path("/usr/share/fonts/truetype/liberation") / ("LiberationSans-Bold.ttf" if bold else "LiberationSans-Regular.ttf"),
+        ]
+    else:
+        latin_name = "LiberationSans-Bold.ttf" if bold else "LiberationSans-Regular.ttf"
+        latin_paths = [
+            Path("/usr/share/fonts/truetype/liberation2") / latin_name,
+            Path("/usr/share/fonts/truetype/liberation") / latin_name,
+            Path("/usr/share/fonts/truetype/dejavu") / ("DejaVuSans-Bold.ttf" if bold else "DejaVuSans.ttf"),
+        ]
     for latin_path in latin_paths:
         if latin_path.exists():
             try:
