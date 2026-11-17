@@ -1993,6 +1993,16 @@ GitHub commit history অনুযায়ী প্রকল্পের প্�
   - `backend/tests/test_transcription_vad.py`
 - Result: **push recorded**; this is not a test or deployment success claim.
 
+
+### Source update — 2026-11-17T18:47:50.010Z
+- Branch: `main`
+- Push range: `15324619926ac71f3bde81529cc4f48369fc4597` → `b8b6b917bed29ff90f94602a72f1010c292a341b`
+- Pushed by: rajuhossain1912-art
+- Commit: [b8b6b917bed2](https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/commit/b8b6b917bed29ff90f94602a72f1010c292a341b) — Record Whisper language metadata diagnostics and reconcile prior E2E results
+- Changed files:
+  - `docs/PROJECT_AUDIT.md`
+- Result: **push recorded**; this is not a test or deployment success claim.
+
 <!-- AUTO_LOG_END -->
 
 
