@@ -1143,6 +1143,17 @@ GitHub commit history অনুযায়ী প্রকল্পের প্�
   - Step 96. Post Checkout source: success
   - Step 97. Complete job: success
 
+
+### Source update — 2026-11-17T09:17:14.989Z
+- Branch: `main`
+- Push range: `4c106e22bc11454d0efab602fb9a289573153fa9` → `7d3ecfef296b910cd40c30ec13c4b8a2fc48788e`
+- Pushed by: rajuhossain1912-art
+- Commit: [7d3ecfef296b](https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/commit/7d3ecfef296b910cd40c30ec13c4b8a2fc48788e) — Disable VAD for generated narration audio QC
+- Changed files:
+  - `backend/app.py`
+  - `backend/tests/test_transcription_vad.py`
+- Result: **push recorded**; this is not a test or deployment success claim.
+
 <!-- AUTO_LOG_END -->
 
 
