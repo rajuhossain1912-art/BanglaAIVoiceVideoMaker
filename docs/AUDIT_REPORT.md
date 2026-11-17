@@ -1303,6 +1303,16 @@ GitHub commit history অনুযায়ী প্রকল্পের প্�
   - Step 96. Post Checkout source: success
   - Step 97. Complete job: success
 
+
+### Source update — 2026-11-17T09:23:43.293Z
+- Branch: `main`
+- Push range: `a769e445d9b07b8d4e090b94df261a7ba302ba0d` → `cd76148515edb5e402632db628551185afb7ecb3`
+- Pushed by: rajuhossain1912-art
+- Commit: [cd76148515ed](https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/commit/cd76148515edb5e402632db628551185afb7ecb3) — Test real Tesseract on all Bengali subtitle frames
+- Changed files:
+  - `backend/tests/test_voice_clone.py`
+- Result: **push recorded**; this is not a test or deployment success claim.
+
 <!-- AUTO_LOG_END -->
 
 
