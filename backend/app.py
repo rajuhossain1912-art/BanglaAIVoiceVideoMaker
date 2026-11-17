@@ -20,7 +20,7 @@ from typing import Optional
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
-from PIL import Image, ImageDraw, ImageFont, ImageOps
+from PIL import Image, ImageChops, ImageDraw, ImageFont, ImageOps
 
 APP_DIR = Path(__file__).resolve().parent
 VOICE_CLONE_SPACE = os.getenv("VOICE_CLONE_SPACE", "kawshikbuet17/bengali-cosyvoice3-tts-demo")
@@ -3711,8 +3711,40 @@ def _parse_tesseract_tsv_panels(tsv_text: str, panel_height: int, panel_step: in
     return panels
 
 
+def _extract_highlighted_word_crop(image: Image.Image):
+    """Extract the yellow active subtitle word so OCR processes a tiny, high-contrast crop."""
+    panel = image.convert("RGB").crop((14, 440, 346, 622))
+    red, green, blue = panel.split()
+    mask = ImageChops.multiply(
+        ImageChops.multiply(
+            red.point(lambda value: 255 if value >= 190 else 0),
+            green.point(lambda value: 255 if value >= 150 else 0),
+        ),
+        blue.point(lambda value: 255 if value <= 140 else 0),
+    )
+    bounds = mask.getbbox()
+    if not bounds:
+        return None
+    left, top, right, bottom = bounds
+    padding = 8
+    bounds = (
+        max(0, left - padding), max(0, top - padding),
+        min(panel.width, right + padding), min(panel.height, bottom + padding),
+    )
+    highlighted = panel.crop(bounds)
+    # Tesseract is faster and more reliable with dark text on a light background.
+    highlighted = ImageOps.autocontrast(ImageOps.invert(ImageOps.grayscale(highlighted)))
+    highlighted = ImageOps.contain(highlighted, (280, 80), method=Image.Resampling.LANCZOS)
+    canvas = Image.new("L", (300, 120), 255)
+    canvas.paste(
+        highlighted,
+        ((300 - highlighted.width) // 2, (120 - highlighted.height) // 2),
+    )
+    return canvas
+
+
 def _verify_subtitle_frames_with_ocr(frame_list: Path, script: str, folder: Path, batch_size: int = 4):
-    """OCR every rendered caption panel and verify its currently highlighted word."""
+    """OCR the active highlighted word in every rendered caption frame."""
     try:
         languages = subprocess.run(
             ["tesseract", "--list-langs"], capture_output=True, text=True, timeout=10
@@ -3753,18 +3785,19 @@ def _verify_subtitle_frames_with_ocr(frame_list: Path, script: str, folder: Path
 
         ocr_folder = Path(folder) / "subtitle-ocr"
         ocr_folder.mkdir(parents=True, exist_ok=True)
-        panel_width, panel_height, panel_gap = 664, 364, 24
+        panel_width, panel_height, panel_gap = 300, 120, 12
         panel_step = panel_height + panel_gap
         words_detected = 0
         missing_indices = []
-        for offset in range(0, len(frame_paths), max(1, int(batch_size))):
-            batch = frame_paths[offset:offset + max(1, int(batch_size))]
-            sheet = Image.new("RGB", (panel_width, panel_step * len(batch)), (255, 255, 255))
+        safe_batch_size = max(1, int(batch_size))
+        for offset in range(0, len(frame_paths), safe_batch_size):
+            batch = frame_paths[offset:offset + safe_batch_size]
+            sheet = Image.new("L", (panel_width, panel_step * len(batch)), 255)
             for panel_index, image_path in enumerate(batch):
                 with Image.open(image_path) as image:
-                    crop = image.convert("RGB").crop((14, 440, 346, 622))
-                    crop = crop.resize((panel_width, panel_height), Image.Resampling.LANCZOS)
-                    sheet.paste(crop, (0, panel_index * panel_step))
+                    word_crop = _extract_highlighted_word_crop(image)
+                if word_crop is not None:
+                    sheet.paste(word_crop, (0, panel_index * panel_step))
             sheet_path = ocr_folder / f"batch-{offset:06d}.png"
             sheet.save(sheet_path, optimize=True)
             try:
@@ -3776,7 +3809,7 @@ def _verify_subtitle_frames_with_ocr(frame_list: Path, script: str, folder: Path
                 return {
                     "status": "unavailable", "frames_checked": offset, "words_detected": words_detected,
                     "words_missing": None,
-                    "reason": f"সাবটাইটেল OCR-এর {len(batch)}টি ফ্রেমের ব্যাচ ৪৫ সেকেন্ডে সম্পূর্ণ হয়নি; পরীক্ষা নিরাপদে বন্ধ রাখা হয়েছে।",
+                    "reason": f"সাবটাইটেল OCR-এর {len(batch)}টি ছোট শব্দ-ছবির ব্যাচ ৪৫ সেকেন্ডে সম্পূর্ণ হয়নি; পরীক্ষা নিরাপদে বন্ধ রাখা হয়েছে।",
                 }
             if result.returncode != 0:
                 return {
@@ -3807,7 +3840,7 @@ def _verify_subtitle_frames_with_ocr(frame_list: Path, script: str, folder: Path
                 if passed else
                 "এক বা একাধিক সাবটাইটেল ফ্রেমের সক্রিয় শব্দ OCR-এ নিশ্চিতভাবে শনাক্ত হয়নি।"
             ),
-            "method": "tesseract_ben_eng_active_word_per_frame",
+            "method": "tesseract_ben_eng_highlighted_word_crop_per_frame",
         }
     except Exception as exc:
         return {
