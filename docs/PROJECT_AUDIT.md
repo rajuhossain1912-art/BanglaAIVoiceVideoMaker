@@ -522,6 +522,7 @@ Section ৭-এর GitHub Actions সীমাবদ্ধতার বিবর
 - এতে অডিওর মূল দৈর্ঘ্য, VAD-এর পরে দৈর্ঘ্য এবং মডেলের গণনা করা শব্দসংখ্যা তুলনা করে truncated audio বা speech-detection পরিবর্তন সম্পর্কে ধারণা পাওয়া যাবে। Metadata অনুপস্থিত/অবৈধ হলে দেখানো হবে না।
 - Cloudflare output schema-তে এই fields এবং `segments[].words[]`-এর individual word start/end timestamp নথিভুক্ত: https://developers.cloudflare.com/workers-ai/models/whisper-large-v3-turbo/schema-output.json
 - PR Backend Check run `44152236017` SUCCESS; syntax, unit tests ও real Tesseract Bengali subtitle integration (৪৩/৪৩ synthetic frames) পাস।
-- PR #60 squash merge commit `3460b450ac98178179e189a95b6e0f070273f35c`। Render deploy `dep-dbua4igae00c73b7gsn0` তখন build_in_progress; LIVE ও health check এখনো নিশ্চিত নয়।
-- Main Docker E2E run `44152407718` চলমান। E2E শেষ না হওয়া পর্যন্ত production end-to-end ফল ঘোষণা করা যাবে না।
+- PR #60 squash merge commit `3460b450ac98178179e189a95b6e0f070273f35c`। Render code deploy `dep-dbua4igae00c73b7gsn0` LIVE; পরবর্তী production health response-এ `status=ok`, `ffmpeg=true`, `ffprobe=true`, `espeak-ng=true` নিশ্চিত।
+- Main Docker E2E run `44152407718` SUCCESS; ৪৮/৪৮ ধাপ সম্পন্ন, যার মধ্যে Docker build, backend tests, বাংলা/ইংরেজি ভিডিও generation, audio/subtitle/visual regression checks এবং live Render health check রয়েছে। Health response-এ deployed audit commit `48202632d8399711b534fbc7ec7cd1db210e3bf7` দেখা গেছে।
+- সীমাবদ্ধতা: Docker smoke environment-এ Cloudflare credentials ছিল না এবং external AI image/planner বন্ধ ছিল; তাই Whisper-এর আসল provider metadata, বাস্তব transcript accuracy বা AI visual review এই run-এ যাচাই হয়নি। E2E success-কে provider quality বা প্রকাশযোগ্য ভিডিওর প্রমাণ হিসেবে ধরা যাবে না।
 - কোনো word timestamp অনুমান করে যোগ করা হয়নি; scoring threshold বা publication gate অপরিবর্তিত।
