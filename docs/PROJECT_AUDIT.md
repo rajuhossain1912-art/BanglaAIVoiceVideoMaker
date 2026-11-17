@@ -491,7 +491,7 @@ Section ৭-এর GitHub Actions সীমাবদ্ধতার বিবর
 - PR #57: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/pull/57 — audio quality report-এ Cloudflare Whisper-এর স্বীকৃত প্রতিলিপির সর্বোচ্চ ১,২০০ অক্ষরের preview যুক্ত হয়েছে। ফলে কম similarity হলে ব্যবহারকারী শুধু missing/extra word count নয়, Whisper আসলে কী শুনেছে সেটিও দেখতে পারবেন।
 - Preview job-এর বিদ্যমান audio verification result ও accessible Bangla report-এ যোগ হয়; server log-এ transcript লেখা হয় না। ASR scoring threshold, word-timestamp requirement বা publication gate কোনোটি বদলানো হয়নি।
 - Regression tests: preview text, report output এবং ১,২০০ অক্ষরের সীমা যাচাই। PR Backend Check run `44138001926` SUCCESS; Python syntax ও voice-clone unit tests পাস। PR57-পরবর্তী main Docker E2E run `44138169318` SUCCESS; ১৫২টি backend test পাস, transcript-preview-এর তিনটি regression test পাস, এবং real Tesseract synthetic Bengali OCR integration ৪৩/৪৩ পাস। E2E-র live Render health step 48/48 সফল।
-- PR #57 squash merge commit `485f07de5350c49c3ac6aa3bc4b8220116ebeda0`। Render deploy `dep-dbu8vgdg1s2s73amq9jg` LIVE; application startup complete এবং `/health` HTTP 200 (17:33:36 UTC)। PR57-পরবর্তী main E2E run `44138169318` শুরু হয়েছে; ফল এখনো pending।
+- PR #57 squash merge commit `485f07de5350c49c3ac6aa3bc4b8220116ebeda0`। Render deploy `dep-dbu8vgdg1s2s73amq9jg` LIVE; application startup complete এবং `/health` HTTP 200 (17:33:36 UTC)। Main E2E run `44138169318` SUCCESS; ১৫২টি backend test এবং live Render health check পাস।
 - E2E-তে Whisper request আবার Cloudflare-এর daily free allocation limit-এ আটকে যায়; তাই test-এ transcript preview-সহ সফল Whisper transcription বাস্তবে দেখা যায়নি। পরবর্তী বাস্তব ভিডিও পরীক্ষায় allocation পুনরায় উপলব্ধ না হলে preview আসবে না; তখন report-এ Whisper failure class থাকবে। এই পরিবর্তন নিজে ASR similarity উন্নত করে না।
 
 
@@ -501,5 +501,16 @@ Section ৭-এর GitHub Actions সীমাবদ্ধতার বিবর
 - Authentication (401/403), rate limit (429), server error (5xx) আগের মতো পৃথক থাকে। Provider response body server log-এ লেখা হয় না। নতুন Bangla report বলে দৈনিক বিনামূল্যের বরাদ্দ শেষ এবং নতুন বরাদ্দ না আসা পর্যন্ত Whisper যাচাই সম্ভব নয়।
 - Regression tests: HTTP 400 quota body, auth/rate/server category এবং Bangla user-facing message। PR Backend Check run `44139413498` SUCCESS; ১৫৮টি test পাস।
 - PR #58 squash merge commit `dbac1a8cb56919a722a5421e1e73ff83c4e70211`। Render deploy `dep-dbu936dbedkc73dgsjm0` LIVE; application startup complete এবং `/health` HTTP 200 (17:41:27 UTC)।
-- Main Docker E2E run `44139607851` তখনো in_progress; এর ফল যাচাই না হওয়া পর্যন্ত নতুন production E2E সফল বলে দাবি করা যাবে না।
+- Main Docker E2E run `44139607851` SUCCESS; quota classification-সহ backend regression suite এবং live Render health check পাস। E2E-তে Cloudflare daily allocation exhausted থাকায় successful Whisper transcription যাচাই হয়নি।
 - কোনো paid fallback, retry storm, ASR threshold পরিবর্তন বা publication gate শিথিল করা হয়নি।
+
+
+## ৩২. Whisper-এর শনাক্ত ভাষা ও ভাষা-আস্থার মান সংরক্ষণ — 2026-11-17
+
+- PR #59: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/pull/59 — Cloudflare Whisper response-এর `transcription_info.language` ও `language_probability` এখন parse করে, multi-chunk transcription metadata হিসেবে রাখে এবং audio QC result-এ বহন করে।
+- Accessible Bangla audio report-এ transcript preview-এর পাশাপাশি Whisper-এর শনাক্ত ভাষা ও model language-confidence value দেখায়, যখন provider metadata দেয়। Confidence-কে transcript accuracy guarantee হিসেবে উপস্থাপন করা হয় না।
+- Cloudflare model docs-এ `transcription_info` output এবং `language` input parameter নথিভুক্ত আছে: https://developers.cloudflare.com/workers-ai/models/whisper-large-v3-turbo/
+- PR Backend Check run `44151326515` SUCCESS; ১৬১টি backend test পাস, যার মধ্যে real Tesseract Bengali subtitle integration ৪৩/৪৩ পাস।
+- PR #59 squash merge commit `15324619926ac71f3bde81529cc4f48369fc4597`। Render deploy `dep-dbua22l9el5s739javog` LIVE; application startup complete এবং `/health` HTTP 200 (18:47:11 UTC)।
+- Main Docker E2E run `44151467212` তখনো চলমান; সফলতা যাচাই না হওয়া পর্যন্ত main E2E ফল ঘোষণা করা যাবে না। Cloudflare daily free allocation আগের run-গুলোতে শেষ ছিল, তাই নতুন language metadata real provider response-এ দেখা যাবে—এমন নিশ্চয়তা নেই।
+- কোনো paid fallback, expected-script Whisper prompt, ASR threshold পরিবর্তন বা publication gate শিথিল করা হয়নি।
