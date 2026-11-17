@@ -1563,6 +1563,16 @@ GitHub commit history অনুযায়ী প্রকল্পের প্�
   - `backend/tests/test_voice_clone.py`
 - Result: **push recorded**; this is not a test or deployment success claim.
 
+
+### Source update — 2026-11-17T17:15:03.562Z
+- Branch: `main`
+- Push range: `89deef147bac87d104d5f9381e9b70a687c304c8` → `676834209c9e19415b0c30b059fc0c165519d5c7`
+- Pushed by: rajuhossain1912-art
+- Commit: [676834209c9e](https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/commit/676834209c9e19415b0c30b059fc0c165519d5c7) — Record strict isolated Bengali OCR fallback and deployment
+- Changed files:
+  - `docs/PROJECT_AUDIT.md`
+- Result: **push recorded**; this is not a test or deployment success claim.
+
 <!-- AUTO_LOG_END -->
 
 
