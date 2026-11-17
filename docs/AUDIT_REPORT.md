@@ -1707,3 +1707,11 @@ GitHub commit history অনুযায়ী প্রকল্পের প্�
 - Local synthetic benchmark on 43 words based on the user's script: all 43 recognized in about 5.1 seconds with 5 contextual retries. This is not a Render production performance guarantee.
 - PR #50 merged as caa4a63fd96f780b7294ff32e12dc0273e40316f. Render deploy dep-dbu1op0ae00c73a57i9g reached LIVE; GET / and GET /health returned 200.
 - Main E2E run 44054702523 was still running at the time of this entry. Actual user video re-test remains pending.
+
+### PR #51 — real Tesseract integration test for the user's 43-word script — 2026-11-17
+
+- Added a real OCR integration test that calls the production caption-frame renderer to generate all 43 frames for the exact motivational narration from the user's report.
+- The test requires Tesseract to detect every active highlighted word. It skips only when Tesseract or Bengali/English language packs are unavailable; the Docker E2E environment includes them.
+- PR backend CI run 44055071535 passed. PR #51 merged as cd76148515edb5e402632db628551185afb7ecb3.
+- Main Docker E2E run 44055157228 was queued at the time of this entry. Do not claim real-Tesseract E2E passed until that run finishes.
+- The test validates synthetic rendered frames, not the user's already-generated MP4 or production Render OCR timing.
