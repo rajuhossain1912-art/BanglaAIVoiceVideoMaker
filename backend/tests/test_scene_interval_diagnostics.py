@@ -81,6 +81,11 @@ class SceneIntervalDiagnosticsTests(unittest.TestCase):
         result = video_app._visual_scenes_for_interval(scenes, 150.1, 3, 0)
         self.assertEqual(len(result), 51)
 
+    def test_whisper_language_hint_detects_bengali_and_english_scripts(self):
+        self.assertEqual(video_app._whisper_language_hint("বাংলা ভাষার একটি বাক্য"), "bn")
+        self.assertEqual(video_app._whisper_language_hint("This is an English sentence"), "en")
+        self.assertIsNone(video_app._whisper_language_hint("বাংলা এবং English mixed text"))
+
     def test_whisper_transcript_parser_normalizes_bangla_and_english_speech(self):
         result = video_app._parse_cloudflare_transcription_response({
             "success": True,
@@ -150,18 +155,23 @@ class SceneIntervalDiagnosticsTests(unittest.TestCase):
                     chunk_path.write_bytes(b"fake chunk")
                 return b""
 
-            response = contextlib.nullcontext(
-                io.BytesIO(json.dumps(response_data, ensure_ascii=False).encode("utf-8"))
-            )
+            def fake_urlopen(request, timeout=55):
+                captured["payload"] = json.loads(request.data.decode("utf-8"))
+                return contextlib.nullcontext(
+                    io.BytesIO(json.dumps(response_data, ensure_ascii=False).encode("utf-8"))
+                )
+            captured = {}
             with patch.dict("os.environ", {
                 "CLOUDFLARE_ACCOUNT_ID": "test-account",
                 "CLOUDFLARE_AI_API_TOKEN": "test-token",
             }), patch.object(video_app, "run", side_effect=fake_run), \
-                 patch.object(video_app.urllib.request, "urlopen", return_value=response):
+                 patch.object(video_app.urllib.request, "urlopen", side_effect=fake_urlopen):
                 result = video_app.transcribe_uploaded_audio(
-                    audio_path, folder, return_details=True
+                    audio_path, folder, return_details=True, language_hint="bn"
                 )
 
+            self.assertEqual(captured["payload"]["language"], "bn")
+            self.assertFalse(captured["payload"]["condition_on_previous_text"])
             self.assertEqual(result["text"], "আমি ভালো আছি")
             self.assertEqual(len(result["word_timestamps"]), 3)
             self.assertEqual(result["word_timestamps"][0]["start"], 0.1)
