@@ -20,7 +20,7 @@ from typing import Optional
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
-from PIL import Image, ImageDraw, ImageFont, ImageOps
+from PIL import Image, ImageChops, ImageDraw, ImageFont, ImageOps
 
 APP_DIR = Path(__file__).resolve().parent
 VOICE_CLONE_SPACE = os.getenv("VOICE_CLONE_SPACE", "kawshikbuet17/bengali-cosyvoice3-tts-demo")
@@ -3711,8 +3711,65 @@ def _parse_tesseract_tsv_panels(tsv_text: str, panel_height: int, panel_step: in
     return panels
 
 
+def _extract_highlighted_word_crop(image: Image.Image):
+    """Extract the yellow active subtitle word and its bounds for fast OCR."""
+    panel = image.convert("RGB").crop((14, 440, 346, 622))
+    red, green, blue = panel.split()
+    mask = ImageChops.multiply(
+        ImageChops.multiply(
+            red.point(lambda value: 255 if value >= 190 else 0),
+            green.point(lambda value: 255 if value >= 150 else 0),
+        ),
+        blue.point(lambda value: 255 if value <= 140 else 0),
+    )
+    bounds = mask.getbbox()
+    if not bounds:
+        return None, None
+    left, top, right, bottom = bounds
+    padding = 8
+    bounds = (
+        max(0, left - padding), max(0, top - padding),
+        min(panel.width, right + padding), min(panel.height, bottom + padding),
+    )
+    highlighted = panel.crop(bounds)
+    highlighted = ImageOps.autocontrast(ImageOps.invert(ImageOps.grayscale(highlighted)))
+    highlighted = ImageOps.contain(highlighted, (280, 80), method=Image.Resampling.LANCZOS)
+    canvas = Image.new("L", (300, 120), 255)
+    canvas.paste(
+        highlighted,
+        ((300 - highlighted.width) // 2, (120 - highlighted.height) // 2),
+    )
+    return canvas, bounds
+
+
+def _tesseract_tsv_matches_highlighted_word(tsv_text: str, expected_tokens, bounds, scale: int = 2):
+    """Accept contextual OCR only when the expected word overlaps the yellow highlight."""
+    if not bounds:
+        return False
+    left, top, right, bottom = (int(value * scale) for value in bounds)
+    target_area = max(1, (right - left) * (bottom - top))
+    found = set()
+    for line in str(tsv_text or "").splitlines()[1:]:
+        fields = line.split("\t")
+        if len(fields) < 12 or fields[0] != "5":
+            continue
+        try:
+            x, y, width, height = (int(fields[index]) for index in (6, 7, 8, 9))
+            confidence = float(fields[10])
+        except (TypeError, ValueError):
+            continue
+        if confidence < 0:
+            continue
+        overlap_width = max(0, min(right, x + width) - max(left, x))
+        overlap_height = max(0, min(bottom, y + height) - max(top, y))
+        if (overlap_width * overlap_height) / target_area < 0.12:
+            continue
+        found.update(_normalize_transcript_tokens(fields[11]))
+    return bool(expected_tokens) and all(token in found for token in expected_tokens)
+
+
 def _verify_subtitle_frames_with_ocr(frame_list: Path, script: str, folder: Path, batch_size: int = 4):
-    """OCR every rendered caption panel and verify its currently highlighted word."""
+    """OCR the active highlighted word in every rendered caption frame."""
     try:
         languages = subprocess.run(
             ["tesseract", "--list-langs"], capture_output=True, text=True, timeout=10
@@ -3753,18 +3810,21 @@ def _verify_subtitle_frames_with_ocr(frame_list: Path, script: str, folder: Path
 
         ocr_folder = Path(folder) / "subtitle-ocr"
         ocr_folder.mkdir(parents=True, exist_ok=True)
-        panel_width, panel_height, panel_gap = 664, 364, 24
+        panel_width, panel_height, panel_gap = 300, 120, 12
         panel_step = panel_height + panel_gap
         words_detected = 0
         missing_indices = []
-        for offset in range(0, len(frame_paths), max(1, int(batch_size))):
-            batch = frame_paths[offset:offset + max(1, int(batch_size))]
-            sheet = Image.new("RGB", (panel_width, panel_step * len(batch)), (255, 255, 255))
+        safe_batch_size = max(1, int(batch_size))
+        for offset in range(0, len(frame_paths), safe_batch_size):
+            batch = frame_paths[offset:offset + safe_batch_size]
+            sheet = Image.new("L", (panel_width, panel_step * len(batch)), 255)
+            highlight_bounds = []
             for panel_index, image_path in enumerate(batch):
                 with Image.open(image_path) as image:
-                    crop = image.convert("RGB").crop((14, 440, 346, 622))
-                    crop = crop.resize((panel_width, panel_height), Image.Resampling.LANCZOS)
-                    sheet.paste(crop, (0, panel_index * panel_step))
+                    word_crop, bounds = _extract_highlighted_word_crop(image)
+                highlight_bounds.append(bounds)
+                if word_crop is not None:
+                    sheet.paste(word_crop, (0, panel_index * panel_step))
             sheet_path = ocr_folder / f"batch-{offset:06d}.png"
             sheet.save(sheet_path, optimize=True)
             try:
@@ -3776,7 +3836,7 @@ def _verify_subtitle_frames_with_ocr(frame_list: Path, script: str, folder: Path
                 return {
                     "status": "unavailable", "frames_checked": offset, "words_detected": words_detected,
                     "words_missing": None,
-                    "reason": f"সাবটাইটেল OCR-এর {len(batch)}টি ফ্রেমের ব্যাচ ৪৫ সেকেন্ডে সম্পূর্ণ হয়নি; পরীক্ষা নিরাপদে বন্ধ রাখা হয়েছে।",
+                    "reason": f"সাবটাইটেল OCR-এর {len(batch)}টি ছোট শব্দ-ছবির ব্যাচ ৪৫ সেকেন্ডে সম্পূর্ণ হয়নি; পরীক্ষা নিরাপদে বন্ধ রাখা হয়েছে।",
                 }
             if result.returncode != 0:
                 return {
@@ -3790,10 +3850,41 @@ def _verify_subtitle_frames_with_ocr(frame_list: Path, script: str, folder: Path
             for panel_index, found_tokens in enumerate(panels):
                 global_index = offset + panel_index
                 expected_tokens = _normalize_transcript_tokens(raw_words[global_index])
-                if expected_tokens and all(token in found_tokens for token in expected_tokens):
+                bounds = highlight_bounds[panel_index]
+                if bounds is not None and expected_tokens and all(token in found_tokens for token in expected_tokens):
                     words_detected += 1
-                else:
-                    missing_indices.append(global_index + 1)
+                    continue
+                if bounds is not None:
+                    # Ambiguous Bengali words are retried in sentence context, but
+                    # the recognized word must spatially overlap the yellow highlight.
+                    with Image.open(batch[panel_index]) as image:
+                        context_panel = image.convert("RGB").crop((14, 440, 346, 622))
+                        context_panel = context_panel.resize((664, 364), Image.Resampling.LANCZOS)
+                    context_path = ocr_folder / f"context-{global_index:06d}.png"
+                    context_panel.save(context_path, optimize=True)
+                    try:
+                        context_result = subprocess.run(
+                            ["tesseract", str(context_path), "stdout", "-l", "ben+eng", "--psm", "11", "tsv"],
+                            capture_output=True, text=True, timeout=20,
+                        )
+                    except subprocess.TimeoutExpired:
+                        return {
+                            "status": "unavailable", "frames_checked": offset + panel_index,
+                            "words_detected": words_detected, "words_missing": None,
+                            "reason": "সাবটাইটেলের একটি অস্পষ্ট শব্দের প্রাসঙ্গিক OCR ২০ সেকেন্ডে সম্পূর্ণ হয়নি; পরীক্ষা নিরাপদে বন্ধ রাখা হয়েছে।",
+                        }
+                    if context_result.returncode != 0:
+                        return {
+                            "status": "unavailable", "frames_checked": offset + panel_index,
+                            "words_detected": words_detected, "words_missing": None,
+                            "reason": "সাবটাইটেলের একটি অস্পষ্ট শব্দের প্রাসঙ্গিক OCR সম্পূর্ণ হয়নি।",
+                        }
+                    if _tesseract_tsv_matches_highlighted_word(
+                        context_result.stdout, expected_tokens, bounds
+                    ):
+                        words_detected += 1
+                        continue
+                missing_indices.append(global_index + 1)
 
         passed = words_detected == len(raw_words) and not missing_indices
         return {
@@ -3807,7 +3898,7 @@ def _verify_subtitle_frames_with_ocr(frame_list: Path, script: str, folder: Path
                 if passed else
                 "এক বা একাধিক সাবটাইটেল ফ্রেমের সক্রিয় শব্দ OCR-এ নিশ্চিতভাবে শনাক্ত হয়নি।"
             ),
-            "method": "tesseract_ben_eng_active_word_per_frame",
+            "method": "tesseract_ben_eng_highlighted_word_crop_with_context_fallback_per_frame",
         }
     except Exception as exc:
         return {
