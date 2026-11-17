@@ -491,5 +491,5 @@ Section ৭-এর GitHub Actions সীমাবদ্ধতার বিবর
 - PR #57: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/pull/57 — audio quality report-এ Cloudflare Whisper-এর স্বীকৃত প্রতিলিপির সর্বোচ্চ ১,২০০ অক্ষরের preview যুক্ত হয়েছে। ফলে কম similarity হলে ব্যবহারকারী শুধু missing/extra word count নয়, Whisper আসলে কী শুনেছে সেটিও দেখতে পারবেন।
 - Preview job-এর বিদ্যমান audio verification result ও accessible Bangla report-এ যোগ হয়; server log-এ transcript লেখা হয় না। ASR scoring threshold, word-timestamp requirement বা publication gate কোনোটি বদলানো হয়নি।
 - Regression tests: preview text, report output এবং ১,২০০ অক্ষরের সীমা যাচাই। PR Backend Check run `44138001926` SUCCESS; Python syntax ও voice-clone unit tests পাস।
-- PR #57 squash merge commit `485f07de5350c49c3ac6aa3bc4b8220116ebeda0`। Render deploy `dep-dbu8vgdg1s2s73amq9jg` তখন build_in_progress; LIVE ও health check এখনো নিশ্চিত নয়।
+- PR #57 squash merge commit `485f07de5350c49c3ac6aa3bc4b8220116ebeda0`। Render deploy `dep-dbu8vgdg1s2s73amq9jg` LIVE; application startup complete এবং `/health` HTTP 200 (17:33:36 UTC)। PR57-পরবর্তী main E2E run `44138169318` শুরু হয়েছে; ফল এখনো pending।
 - পরবর্তী বাস্তব ভিডিও পরীক্ষায় Cloudflare free allocation পুনরায় উপলব্ধ না হলে transcript preview আসবে না; তখন report-এ Whisper failure class থাকবে। এই পরিবর্তন নিজে ASR similarity উন্নত করে না।
