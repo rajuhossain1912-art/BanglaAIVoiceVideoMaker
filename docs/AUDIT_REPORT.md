@@ -1472,6 +1472,17 @@ GitHub commit history অনুযায়ী প্রকল্পের প্�
   - Step 96. Post Checkout source: success
   - Step 97. Complete job: success
 
+
+### Source update — 2026-11-17T17:03:35.072Z
+- Branch: `main`
+- Push range: `f7a283f1eb7073777df0d922a38b1886a6409f04` → `8f7182fe22f49233cdd3389e2276367fb512ee3d`
+- Pushed by: rajuhossain1912-art
+- Commit: [8f7182fe22f4](https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/commit/8f7182fe22f49233cdd3389e2276367fb512ee3d) — Keep the active Bengali subtitle word visible (#53)
+- Changed files:
+  - `backend/app.py`
+  - `backend/tests/test_voice_clone.py`
+- Result: **push recorded**; this is not a test or deployment success claim.
+
 <!-- AUTO_LOG_END -->
 
 
