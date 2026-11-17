@@ -1412,7 +1412,23 @@ def _parse_cloudflare_transcription_response(data, return_details=False, offset_
     return transcript
 
 
-def transcribe_uploaded_audio(audio_path: Path, folder: Path, progress_callback=None, return_details=False):
+def _whisper_language_hint(script: str):
+    """Choose a language hint only when the supplied script is clearly monolingual."""
+    text = str(script or "")
+    bengali_chars = len(re.findall(r"[\u0980-\u09FF]", text))
+    english_chars = len(re.findall(r"[A-Za-z]", text))
+    if bengali_chars and not english_chars:
+        return "bn"
+    if english_chars and not bengali_chars:
+        return "en"
+    if bengali_chars >= max(1, english_chars * 2):
+        return "bn"
+    if english_chars >= max(1, bengali_chars * 3):
+        return "en"
+    return None
+
+
+def transcribe_uploaded_audio(audio_path: Path, folder: Path, progress_callback=None, return_details=False, language_hint=None):
     """Transcribe audio-only uploads with Cloudflare Whisper in manageable two-minute chunks."""
     account_id = os.getenv("CLOUDFLARE_ACCOUNT_ID", "").strip()
     api_token = os.getenv("CLOUDFLARE_AI_API_TOKEN", os.getenv("CLOUDFLARE_API_TOKEN", "")).strip()
@@ -1446,8 +1462,11 @@ def transcribe_uploaded_audio(audio_path: Path, folder: Path, progress_callback=
             "audio": base64.b64encode(chunk_path.read_bytes()).decode("ascii"),
             "task": "transcribe",
             "vad_filter": True,
+            "condition_on_previous_text": False,
             "initial_prompt": "বাংলা ও ইংরেজি কথার সঠিক প্রতিলিপি লিখুন। নাম, স্থান ও প্রযুক্তিগত শব্দ যতটা সম্ভব ঠিক রাখুন।"
         }
+        if language_hint in ("bn", "en"):
+            payload["language"] = language_hint
         request = urllib.request.Request(
             endpoint,
             data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
@@ -3950,8 +3969,10 @@ def render(job_id: str, script: str, mode: str, audio_path: Optional[Path], capt
                 with LOCK:
                     JOBS[job_id]["progress"] = 27
                     JOBS[job_id]["message"] = "কণ্ঠের শব্দ ও সময় শনাক্ত করা হচ্ছে"
+                language_hint = _whisper_language_hint(script)
                 narration_transcription = transcribe_uploaded_audio(
-                    audio_path, folder / "narration-audio-qc", return_details=True
+                    audio_path, folder / "narration-audio-qc", return_details=True,
+                    language_hint=language_hint
                 )
                 if not isinstance(narration_transcription, dict):
                     narration_transcription = None
