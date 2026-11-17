@@ -1,4 +1,5 @@
 import io
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -1056,3 +1057,33 @@ class WordTimestampIntegrityTests(unittest.TestCase):
             1.0,
         )
         self.assertFalse(result["passed"])
+
+
+class RealSubtitleOCRIntegrationTests(unittest.TestCase):
+    @unittest.skipUnless(shutil.which("tesseract"), "Tesseract not installed")
+    def test_real_tesseract_verifies_all_43_bengali_caption_frames(self):
+        languages = video_app.subprocess.run(
+            ["tesseract", "--list-langs"], capture_output=True, text=True, timeout=10
+        )
+        available = set((languages.stdout or "").splitlines())
+        if not {"ben", "eng"}.issubset(available):
+            self.skipTest("Bengali and English Tesseract language packs are not both installed")
+
+        script = (
+            "জীবনে সফল হতে হলে কখনো হাল ছেড়ে দেওয়া যাবে না। "
+            "প্রতিটি ব্যর্থতা আমাদের নতুন কিছু শেখায়। "
+            "আজ হয়তো পথ কঠিন, কিন্তু ধৈর্য, পরিশ্রম এবং আত্মবিশ্বাস থাকলে একদিন সফলতা আসবেই। "
+            "নিজের ওপর বিশ্বাস রাখুন, স্বপ্ন দেখুন এবং স্বপ্ন পূরণের জন্য প্রতিদিন চেষ্টা চালিয়ে যান।"
+        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            folder = Path(temp_dir)
+            background = folder / "background.png"
+            video_app.Image.new("RGB", (360, 640), (70, 90, 110)).save(background)
+            listing, frame_count = video_app.make_caption_frames(
+                script, 26.5, background, folder, scene_interval=3
+            )
+            self.assertEqual(frame_count, 43)
+            result = video_app._verify_subtitle_frames_with_ocr(listing, script, folder)
+            self.assertEqual(result["status"], "passed", result)
+            self.assertEqual(result["frames_checked"], 43)
+            self.assertEqual(result["words_detected"], 43)
