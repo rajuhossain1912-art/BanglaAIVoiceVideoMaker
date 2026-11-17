@@ -720,6 +720,23 @@ def load_font(size: int, bold=False):
     return ImageFont.load_default()
 
 
+def load_caption_font(text: str, size: int, bold=False):
+    """Choose a font with glyph coverage for the script being rendered."""
+    value = str(text or "")
+    if re.search(r"[\\u0980-\\u09FF]", value):
+        return load_font(size, bold)
+    latin_path = (
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+        if bold else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+    )
+    if Path(latin_path).exists():
+        try:
+            return ImageFont.truetype(latin_path, size)
+        except Exception:
+            pass
+    return load_font(size, bold)
+
+
 def wrap_text(draw, text, font, max_width):
     words = text.split()
     lines, current = [], ""
@@ -3640,7 +3657,6 @@ def make_caption_frames(script: str, duration: float, background: Path, folder: 
         slot_backgrounds.append(base_index)
     print(f"VISUAL_TIMELINE interval_seconds={interval} slots={slot_count} unique_images={len(bases)} narration_scenes={len(scene_texts)}", flush=True)
     safe_offset = max(-max(0.0, duration - 0.1), min(max(0.0, duration - 0.1), caption_offset))
-    font = load_font(25, True)
     entries = []
     image_index = 0
     blank_path = frame_dir / "timing-gap.png"
@@ -3700,8 +3716,10 @@ def make_caption_frames(script: str, duration: float, background: Path, folder: 
             current_width = 0
             max_width = 300
             for wi, token in enumerate(shown):
-                token_width = draw.textbbox((0, 0), token, font=font)[2]
-                needed = token_width + (draw.textbbox((0, 0), " ", font=font)[2] if current_line else 0)
+                token_font = load_caption_font(token, 25, True)
+                token_width = draw.textbbox((0, 0), token, font=token_font)[2]
+                space_width = draw.textbbox((0, 0), " ", font=token_font)[2]
+                needed = token_width + (space_width if current_line else 0)
                 if current_line and current_width + needed > max_width:
                     lines.append(current_line)
                     current_line = []
@@ -3717,8 +3735,9 @@ def make_caption_frames(script: str, duration: float, background: Path, folder: 
                 x = 14
                 for token, active in line:
                     color = (255, 224, 65) if active else (255, 255, 255)
-                    draw.text((x, y), token, font=font, fill=color, stroke_width=1, stroke_fill=(0, 0, 0))
-                    x += draw.textbbox((0, 0), token, font=font)[2] + draw.textbbox((0, 0), " ", font=font)[2]
+                    token_font = load_caption_font(token, 25, True)
+                    draw.text((x, y), token, font=token_font, fill=color, stroke_width=1, stroke_fill=(0, 0, 0))
+                    x += draw.textbbox((0, 0), token, font=token_font)[2] + draw.textbbox((0, 0), " ", font=token_font)[2]
                 y += 34
             path = frame_dir / f"frame-{image_index:06d}.png"
             frame.convert("RGB").save(path, compress_level=1)
