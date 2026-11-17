@@ -3755,6 +3755,18 @@ def make_caption_frames(script: str, duration: float, background: Path, folder: 
                     token_size = 32 if token.isascii() and token.isupper() and 1 < len(token) <= 4 else 25
                     token_font = load_caption_font(token, token_size, True)
                     draw.text((x, y), token, font=token_font, fill=color, stroke_width=1, stroke_fill=(0, 0, 0))
+                    # Make uppercase I unambiguous at small video-caption sizes.
+                    # Some OCR engines otherwise read the serif glyph in "AI" as L/l.
+                    if token.isascii() and token.isupper() and "I" in token and len(token) <= 4:
+                        prefix = token.split("I", 1)[0]
+                        i_x = x + draw.textbbox((0, 0), prefix, font=token_font)[2]
+                        i_box = draw.textbbox((i_x, y), "I", font=token_font)
+                        bar_pad = max(2, token_size // 8)
+                        bar_y_top = y + max(1, token_size // 12)
+                        bar_y_bottom = y + token_size - max(3, token_size // 8)
+                        bar_width = max(2, token_size // 12)
+                        draw.line((i_x - bar_pad, bar_y_top, i_box[2] + bar_pad, bar_y_top), fill=color, width=bar_width)
+                        draw.line((i_x - bar_pad, bar_y_bottom, i_box[2] + bar_pad, bar_y_bottom), fill=color, width=bar_width)
                     x += draw.textbbox((0, 0), token, font=token_font)[2] + draw.textbbox((0, 0), " ", font=token_font)[2]
                 y += 34
             path = frame_dir / f"frame-{image_index:06d}.png"
