@@ -751,9 +751,9 @@ VISUAL_CONCEPTS = [
     (("বন্যা", "ঘূর্ণিঝড়", "ঘূর্ণিঝড়", "দুর্যোগ", "জলোচ্ছ্বাস"), "a Bangladeshi village responding to monsoon flooding"),
     (("রাস্তা", "গাড়ি", "গাড়ি", "বাস", "পরিবহন", "চালক", "যাত্রী", "পথচারী"), "a realistic Bangladeshi street with safe public transport"),
     (("শিশু", "বাচ্চা", "ছেলে", "মেয়ে", "মেয়ে", "খেলাধুলা"), "children learning or playing safely outdoors"),
-    (("হাল ছেড়ে", "হাল ছেড়ে", "হাল ছাড়বেন", "হাল ছাড়বেন", "হাল ছাড়েন", "হাল ছাড়েন", "কখনো হাল", "never give up", "keep going", "perseverance"), "a Bangladeshi adult returning to a challenging practical task after an unsuccessful attempt, visibly correcting the mistake and trying again, realistic documentary photography"),
-    (("ব্যর্থতা", "ব্যর্থ", "ভুল থেকে", "শেখায়", "শেখায়", "failure", "mistake"), "a Bangladeshi adult reviewing a failed practice attempt, identifying the mistake in a notebook and carefully correcting the work, realistic documentary photography"),
-    (("ধৈর্য", "পরিশ্রম", "পরিশ্রমের", "আত্মবিশ্বাস", "সফলতা", "সাফল্য", "সফল", "দক্ষতা", "লক্ষ্য", "লক্ষ্যে", "লক্ষ্যের", "বাধা", "চেষ্টা", "চেষ্টা চালিয়ে", "চেষ্টা চালিয়ে"), "a Bangladeshi adult steadily practicing a clearly visible skill toward a personal goal, focused expression, realistic everyday setting, documentary photography"),
+    (("হাল ছেড়ে", "হাল ছেড়ে", "হাল ছাড়বেন", "হাল ছাড়বেন", "হাল ছাড়েন", "হাল ছাড়েন", "কখনো হাল", "never give up", "keep going", "perseverance"), "a Bangladeshi adult at a simple indoor desk or learning workspace, returning to the same unfinished task after an unsuccessful attempt and trying again, realistic documentary photography"),
+    (("ব্যর্থতা", "ব্যর্থ", "ভুল থেকে", "শেখায়", "শেখায়", "failure", "mistake"), "a Bangladeshi adult reviewing a clearly visible incorrect practice page at a desk, identifying the mistake in a notebook and correcting the answer, realistic documentary photography"),
+    (("ধৈর্য", "পরিশ্রম", "পরিশ্রমের", "আত্মবিশ্বাস", "সফলতা", "সাফল্য", "সফল", "দক্ষতা", "লক্ষ্য", "লক্ষ্যে", "লক্ষ্যের", "বাধা", "চেষ্টা", "চেষ্টা চালিয়ে", "চেষ্টা চালিয়ে"), "a Bangladeshi adult steadily practicing a specific everyday skill at a desk or learning workspace toward a personal goal, focused expression, realistic documentary photography"),
     (("স্বপ্ন",), "a Bangladeshi adult writing a practical personal goal in a notebook and taking a concrete first step toward it, realistic documentary photography"),
     (("সকাল", "ভোর", "সূর্যোদয়", "সূর্যোদয়"), "sunrise over a peaceful green landscape"),
     (("গাছপালা", "গাছ", "সবুজ", "বন", "প্রকৃতি"), "lush green trees and natural scenery"),
@@ -1277,12 +1277,29 @@ def _parse_scene_visual_prompts(raw: str, expected_count: int, scene_offset: int
         cleaned.append(value)
     return cleaned
 
+def _scene_occurrence_metadata(scenes):
+    """Describe repeated narration slots so planners can vary shots without inventing new actions."""
+    normalized = [re.sub(r"\\s+", " ", str(scene or "")).strip().lower() for scene in scenes or []]
+    totals = {}
+    for value in normalized:
+        totals[value] = totals.get(value, 0) + 1
+    seen = {}
+    metadata = []
+    for value in normalized:
+        seen[value] = seen.get(value, 0) + 1
+        metadata.append({"occurrence": seen[value], "total": totals[value]})
+    return metadata
+
+
 def _storyboard_review_payload(scenes, prompts, context_scenes=None, context_offset=0):
     """Build reviewer items with full-story neighboring context for each scene."""
     full_context = context_scenes if context_scenes is not None else scenes
+    occurrences = _scene_occurrence_metadata(full_context)
     return [
         {
             "scene": context_offset + index + 1,
+            "repeated_narration_occurrence": occurrences[context_offset + index]["occurrence"],
+            "repeated_narration_total": occurrences[context_offset + index]["total"],
             "context_before": re.sub(r"\s+", " ", str(full_context[context_offset + index - 1])).strip()[:180]
                 if context_offset + index > 0 else "",
             "narration": re.sub(r"\s+", " ", str(scene)).strip()[:300],
@@ -1306,7 +1323,7 @@ def _review_scene_visual_prompts(scenes, prompts, model_names, planner_model, co
     review_items = _storyboard_review_payload(scenes, prompts, context_scenes, context_offset)
     review_prompt = (
         "You are an independent quality reviewer for a Bangladeshi educational video storyboard. "
-        "Check each proposed visual prompt against its exact narration. Use context_before and context_after only "
+        "Check each proposed visual prompt against its exact narration. If repeated_narration_occurrence/total indicate repeated slots, require distinct but faithful visual moments without inventing new occupations or actions. For abstract motivational narration with no named occupation, reject farming, harvesting, root sorting, or agricultural labor. Use context_before and context_after only "
         "to resolve pronouns and continuity; never replace the current scene subject with a neighboring scene. "
         "Reject generic scenery, symbols, cartoons, vague silhouettes, unrelated objects, and details not supported "
         "by the narration. Keep the actual subject and action explicit. "
@@ -1516,11 +1533,14 @@ def transcribe_uploaded_audio(audio_path: Path, folder: Path, progress_callback=
 
 
 def _storyboard_scene_payload(scenes, context_scenes=None, context_offset=0):
-    """Build scene prompts with adjacent narration from the complete storyboard."""
+    """Build scene prompts with adjacent narration and repeated-slot identity."""
     full_context = context_scenes if context_scenes is not None else scenes
+    occurrences = _scene_occurrence_metadata(full_context)
     return [
         {
             "scene": context_offset + i + 1,
+            "repeated_narration_occurrence": occurrences[context_offset + i]["occurrence"],
+            "repeated_narration_total": occurrences[context_offset + i]["total"],
             "context_before": re.sub(r"\s+", " ", full_context[context_offset + i - 1]).strip()[:180]
                 if context_offset + i > 0 else "",
             "text": re.sub(r"\s+", " ", text).strip()[:300],
@@ -1747,6 +1767,8 @@ def _plan_scene_visual_prompts(scenes, context_scenes=None, context_offset=0, br
         "For EACH input scene, create exactly one concrete, photorealistic image prompt depicting the main subject or action explicitly stated in THAT scene. "
         "Understand the narration as a connected story. Use context_before and context_after to resolve pronouns, implied subjects, people, places, and cause-and-effect, so the image fits what is being said. Use video_level_context only to understand overall topic, tone and audience; never let research snippets or global context replace the exact current scene subject. "
         "Depict the main action in the current scene text; neighboring context may clarify it but must not replace or blend the current scene subject. "
+        "If repeated_narration_occurrence and repeated_narration_total show that the same sentence fills multiple image slots, make each slot a different faithful moment or camera composition of that exact narrated idea; do not invent a different occupation, crop, harvest, or unrelated task. "
+        "For motivational or abstract narration without a named occupation, use ordinary indoor learning, desk work, or a clearly stated everyday skill-practice setting; never invent farming, harvesting, sorting roots, or agricultural labor unless the narration mentions it. "
         "Do not use generic symbols, flags, globes, maps, abstract gradients, or unrelated stock imagery unless that exact subject is discussed. "
         "Prefer real, recognizable objects and actions: if the scene says farmer or rice field, show a farmer working in a rice field; if it says city traffic, show actual buses and street traffic; if it says students, show students learning; if it says technology or smartphones, show a person using real digital devices. "
         "Use Bangladesh-local people and places when relevant. Never replace a specific subject with a vague landscape or symbolic icon. "
