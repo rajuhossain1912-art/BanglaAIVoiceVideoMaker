@@ -186,3 +186,7 @@ This section supersedes older statements above wherever they describe the curren
 - PR #50 merged (caa4a63fd96f780b7294ff32e12dc0273e40316f): OCR processes the active yellow word crop from every caption frame, with a contextual OCR retry for ambiguous Bengali words and a spatial-overlap check against the highlight. No frames are skipped and no gate is weakened. CI 44054590949 passed; Render dep-dbu1op0ae00c73a57i9g live; / and /health returned HTTP 200.
 - A local synthetic test using the user's 43-word script recognized all 43 active words in about 5.1 seconds, including contextual retries. This is not a production benchmark.
 - Still unresolved until the user re-runs the same script: exact ASR word match, complete provider-supplied word timestamps, and full subtitle OCR on the actual generated video. Main E2E run 44054702523 was pending when this note was written.
+
+### Real OCR integration test — 2026-11-17
+- PR #51 merged (cd76148515edb5e402632db628551185afb7ecb3): added a real Tesseract test that renders all 43 subtitle frames for the user's exact Bengali script through the production caption renderer and requires every active word to be recognized. It runs when Tesseract and both language packs are available; the Docker E2E image provides them. Backend CI 44055071535 passed.
+- Main Docker E2E run 44055157228 was queued at the time of this note. This test is synthetic and does not replace a real user video retest or guarantee Render production OCR timing.
