@@ -220,7 +220,7 @@ class SceneIntervalDiagnosticsTests(unittest.TestCase):
         prompt = video_app._english_visual_prompt(
             "আজ হয়তো পথ কঠিন, কিন্তু ধৈর্য, পরিশ্রম এবং আত্মবিশ্বাস থাকলে একদিন সফলতা আসবেই।"
         )
-        self.assertIn("steadily practicing a clearly visible skill", prompt)
+        self.assertIn("steadily practicing a specific everyday skill", prompt)
         self.assertIn("personal goal", prompt)
 
     def test_dream_visual_prompt_shows_concrete_first_step(self):
