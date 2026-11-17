@@ -1902,6 +1902,17 @@ GitHub commit history অনুযায়ী প্রকল্পের প্�
   - `docs/PROJECT_AUDIT.md`
 - Result: **push recorded**; this is not a test or deployment success claim.
 
+
+### Source update — 2026-11-17T17:40:46.120Z
+- Branch: `main`
+- Push range: `b694338bcf1a1916d79421424119f0089096d16f` → `dbac1a8cb56919a722a5421e1e73ff83c4e70211`
+- Pushed by: rajuhossain1912-art
+- Commit: [dbac1a8cb569](https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/commit/dbac1a8cb56919a722a5421e1e73ff83c4e70211) — Report Cloudflare daily Whisper quota exhaustion clearly (#58)
+- Changed files:
+  - `backend/app.py`
+  - `backend/tests/test_transcription_vad.py`
+- Result: **push recorded**; this is not a test or deployment success claim.
+
 <!-- AUTO_LOG_END -->
 
 
