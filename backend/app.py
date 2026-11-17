@@ -1423,7 +1423,7 @@ def _whisper_language_hint(script: str):
         return "en"
     if bengali_chars >= max(1, english_chars * 2):
         return "bn"
-    if english_chars >= max(1, bengali_chars * 2):
+    if english_chars >= max(1, bengali_chars * 3):
         return "en"
     return None
 
