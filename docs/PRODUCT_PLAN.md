@@ -161,3 +161,10 @@ This section supersedes older statements above wherever they describe the curren
 - PR #43 merged as 76f925bede140a6d5da7c83ad414786b13f05dc8; backend CI run 44047382875 succeeded (138 unit tests); Render deploy dep-dbu11qjrjlhs73b742j0 live.
 - The fix does not address the observed 40% audio/script match, missing/extra transcript words, missing explicit word timestamps, or subtitle OCR timeout. Publication remains fail-closed.
 - Next engineering priorities: diagnose Bengali TTS/Whisper mismatch with provider/audio evidence; reduce OCR batch processing time without skipping any caption word; then re-run a real device test. No paid provider or new secret was added.
+
+
+### Latest audio and subtitle QA updates — 2026-11-17
+- PR #44 merged (`f9a6c9af36b363546944229b3ef754e5cf7de168`): provide Cloudflare Whisper a `bn`/`en` hint only for clearly monolingual supplied scripts; mixed scripts retain auto-detection. Previous-text conditioning is disabled for narration QC. CI run 44048026905 passed.
+- PR #45 merged (`2def815ae723dc859ffc81a5bf794df50593b07a`, parent includes PR #44): Tesseract subtitle OCR uses 4-frame batches and a 45-second per-batch timeout; explicit timeout diagnostics retain completed-frame counts. CI run 44048287657 passed (140 tests).
+- Render deployment dep-dbu13t7pq7jc739ktl30 was queued at last check; do not treat the changes as live until confirmed.
+- These are targeted reliability improvements, not proof that the user's 40.45% transcript match or OCR timeout is resolved. Retest the same narration and confirm exact transcript, complete word timestamps and every OCR frame. Publication remains fail-closed.
