@@ -919,7 +919,7 @@ class SubtitleOCRVerificationTests(unittest.TestCase):
             listing = root / "caption-frames.txt"
             listing.write_text(f"file '{frame.as_posix()}'\nduration 1.0\n", encoding="utf-8")
             _, bounds = video_app._extract_highlighted_word_crop(image)
-            left, top, right, bottom = (value * 2 for value in bounds)
+            left, top, right, bottom = (value * 4 for value in bounds)
             tsv_bad = (
                 "level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext\n"
                 "5\t1\t1\t1\t1\t1\t100\t40\t60\t30\t90\tAA\n"
@@ -931,6 +931,8 @@ class SubtitleOCRVerificationTests(unittest.TestCase):
             fake = SimpleNamespace(returncode=0, stdout="List of available languages (2):\nben\neng\n", stderr="")
             crop_ocr = SimpleNamespace(returncode=0, stdout=tsv_bad, stderr="")
             context_ocr = SimpleNamespace(returncode=0, stdout=tsv_context, stderr="")
+            # The enlarged contextual image is retried with PSM 6, 11 and 13;
+            # this fixture confirms the first contextual pass can verify the word.
             with patch.object(video_app.subprocess, "run", side_effect=[fake, crop_ocr, context_ocr]):
                 result = video_app._verify_subtitle_frames_with_ocr(listing, "স্বপ্ন", root)
             self.assertEqual(result["status"], "passed")
