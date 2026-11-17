@@ -1601,3 +1601,20 @@ GitHub commit history অনুযায়ী প্রকল্পের প্�
 - PR backend CI run 44053440137 succeeded. PR #48 merged as 4182a152d56f752e09d416182a52f24a5f437bac. Render deploy dep-dbu1lfijnfac73dti560 reached LIVE. Post-deploy logs showed /health 200 and / 200.
 - This fixes the identified fallback keyword-selection gap only; final visual review remains mandatory.
 - Remaining blockers from the same report: ASR 40% similarity with 25 missing and 28 extra words; word-level timestamp evidence incomplete; subtitle OCR timed out after 8 frames. No publication gate was relaxed.
+
+### PR #49 — disable VAD for generated narration audio QC — 2026-11-17
+
+- Added a configurable VAD filter parameter to Whisper transcription.
+- Only the app-generated narration QC pass disables VAD; uploaded audio and reference-clip transcription preserve the previous VAD-enabled behavior.
+- Added regression tests that inspect the actual Cloudflare request payload for both cases.
+- PR CI run 44053935012 passed. PR #49 merged as 7d3ecfef296b910cd40c30ec13c4b8a2fc48788e. Main E2E run 44054177454 passed. Render deploy dep-dbu1n5tbedkc73etlceg reached LIVE and health requests returned 200.
+- This is an ASR input adjustment, not a claim that the user's transcript similarity is now acceptable.
+
+### PR #50 — active-word crop OCR optimization — 2026-11-17
+
+- Replaced full subtitle-panel OCR batches with compact crops of the yellow active word, retaining one OCR check for every rendered caption frame.
+- Added a contextual PSM-11 retry for ambiguous Bengali word crops. The expected token must overlap the yellow highlight's actual location in the contextual OCR result; a missing highlight cannot pass.
+- Added regression tests for Bengali/English active words, missing highlight failure, and ambiguous-word retry. PR CI run 44054590949 passed.
+- Local synthetic benchmark on 43 words based on the user's script: all 43 recognized in about 5.1 seconds with 5 contextual retries. This is not a Render production performance guarantee.
+- PR #50 merged as caa4a63fd96f780b7294ff32e12dc0273e40316f. Render deploy dep-dbu1op0ae00c73a57i9g reached LIVE; GET / and GET /health returned 200.
+- Main E2E run 44054702523 was still running at the time of this entry. Actual user video re-test remains pending.
