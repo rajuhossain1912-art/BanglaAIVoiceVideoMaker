@@ -1102,4 +1102,4 @@ class RealSubtitleOCRIntegrationTests(unittest.TestCase):
         visible_lines = video_app._caption_lines_containing_active_word(lines, max_lines=4)
         self.assertEqual(len(visible_lines), 4)
         self.assertTrue(any(is_active for line in visible_lines for _, is_active in line))
-        self.assertEqual(visible_lines[0], [("দীর্ঘ", False)])
+        self.assertEqual(visible_lines[0], [("বাক্য", False)])
