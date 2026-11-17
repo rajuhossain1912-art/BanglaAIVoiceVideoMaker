@@ -13,6 +13,10 @@ class SubtitleOcrLanguageFallbackTests(unittest.TestCase):
         font = video_app.load_caption_font("Hello", 25, True)
         self.assertEqual(font.getname()[0], "Liberation Sans")
 
+    def test_caption_font_uses_barred_mono_glyph_for_uppercase_i(self):
+        font = video_app.load_caption_font("AI", 25, True)
+        self.assertEqual(font.getname(), ("DejaVu Sans Mono", "Bold"))
+
     def test_caption_font_uses_bengali_glyphs_for_bengali(self):
         font = video_app.load_caption_font("বাংলা", 25, True)
         self.assertEqual(font.getname(), video_app.load_font(25, True).getname())
