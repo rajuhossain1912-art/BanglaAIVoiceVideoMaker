@@ -985,3 +985,14 @@ GitHub commit history অনুযায়ী প্রকল্পের প্�
 - Render deployment for Android merge commit `a4e27b32b43590da173ec15ab582af4a629ee85a` reached **live** (`dep-dbu0k73rjlhs73b6klv0`) before the audit-doc-only deployment; latest documentation commit `7b88d45e434a11c29538243eb5be2b12133f3cf8` also reached **live** (`dep-dbu0kn5bedkc73esa6a0`).
 - Automatic audit-register workflow run `44043382221`: append-audit job **success**.
 - Release/CI success does not verify installation over an older APK on a physical phone. Android 16, TalkBack, screen-off, battery-saver and process-kill acceptance tests remain outstanding.
+
+### PR #43 — motivational visual prompt grounding — 2026-11-17
+
+- Reviewed the user's test report: 9 AI-generated images were individually marked as scene matches, but several descriptions depicted unrelated agricultural/manual tasks for abstract motivational narration. The existing motivation concept was too generic to ground the action.
+- Replaced generic motivation mapping with concrete visual concepts for retrying after failure, reviewing and correcting a mistake, sustained skill practice toward a goal, and taking a practical first step toward a dream.
+- Added three regression tests using the exact three Bangla sentences from the test script; updated two existing expectations for the replaced generic prompt.
+- Initial CI run 44047225024 exposed two stale expectations; after updating them, run 44047382875 completed successfully (138 tests, syntax check included).
+- PR #43 merged; commit 76f925bede140a6d5da7c83ad414786b13f05dc8.
+- Render deploy dep-dbu11qjrjlhs73b742j0 reached **live** for the exact merge commit.
+- No change was made to audio verification, word-level timestamp requirements, subtitle OCR, semantic-review confidence, duplicate detection, or publication gating. The observed audio mismatch and OCR timeout remain unresolved; download stays blocked until every required check passes.
+- Physical-device and TalkBack validation remain outstanding.
