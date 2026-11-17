@@ -450,6 +450,23 @@ class SceneImageSimilarityTests(unittest.TestCase):
         self.assertIn("city bus", varied_prompt.lower())
 
 
+    def test_motivation_vision_review_rejects_unmentioned_agricultural_activity(self):
+        question = video_app._scene_image_review_question(
+            "A Bangladeshi adult at an indoor desk reviewing a failed practice attempt.",
+            "জীবনে সফল হতে হলে কখনো হাল ছেড়ে দেওয়া যাবে না। প্রতিটি ব্যর্থতা আমাদের নতুন কিছু শেখায়।",
+        )
+        self.assertIn("MUST return match false", question)
+        self.assertIn("dried roots or stalks", question)
+        self.assertIn("generic person doing an unrelated task is NOT a match", question)
+
+    def test_agriculture_narration_is_not_rejected_by_motivation_guard(self):
+        question = video_app._scene_image_review_question(
+            "A farmer harvesting rice in a field.",
+            "একজন কৃষক ধানক্ষেতে ধান কাটছেন।",
+        )
+        self.assertNotIn("MUST return match false", question)
+        self.assertIn("exact scene", question)
+
     def test_vision_review_stops_repeating_requests_after_http_429(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             image = self._image(Path(temp_dir), "review.png", (80, 110, 140))

@@ -2786,6 +2786,42 @@ def _record_duplicate_retry_review(review, semantic_review):
     return "mismatched"
 
 
+def _scene_image_review_question(comparison_text: str, narration_text: str, image_kind: str = "photo"):
+    """Build a strict image-review question grounded in the exact narration."""
+    if image_kind == "topic_graphic":
+        return (
+            "This is a simple locally drawn topic illustration, not a photograph. Inspect its visible symbols, objects, shapes and actions. "
+            "Decide whether the actual illustration clearly represents this exact narration scene: "
+            + comparison_text + ". Bengali narration context: " + narration_text[:120]
+            + ". Do not assume that a background color or decorative shape proves a match. Do not rely on written words or captions. "
+            "If the depicted subject or action is unclear or does not fit, return match false. "
+            "Return ONLY JSON with keys match (true or false), confidence (0 to 1), description (describe the visible illustration), and reason (explain the visual match)."
+        )
+    question = (
+        "Inspect the image and compare its visible main subject and action with this exact scene: "
+        + comparison_text + ". Bengali narration context: " + narration_text[:120]
+        + ". A generic person doing an unrelated task is NOT a match; the visible action must clearly fit the exact narrated idea. "
+    )
+    motivation_terms = (
+        "হাল ছেড়ে", "হাল ছেড়ে", "ব্যর্থতা", "ব্যর্থ", "ধৈর্য", "পরিশ্রম",
+        "আত্মবিশ্বাস", "সফলতা", "সাফল্য", "স্বপ্ন", "চেষ্টা", "never give up",
+        "perseverance", "motivation", "personal goal",
+    )
+    if any(_contains_visual_term(narration_text, term) for term in motivation_terms):
+        agriculture_terms = ("কৃষক", "কৃষি", "ধান", "ফসল", "ক্ষেত", "শস্য", "roots", "harvest", "farm", "crop")
+        if not any(_contains_visual_term(narration_text, term) for term in agriculture_terms):
+            question += (
+                "This is abstract motivational narration and it does not mention agriculture. "
+                "If the image shows farming, harvesting, crop work, dried roots or stalks, or sorting agricultural materials, "
+                "you MUST return match false. Prefer the stated everyday learning/work or desk-practice scene; do not infer a farm occupation. "
+            )
+    return (
+        question + "Return ONLY JSON with keys match (true or false), confidence (0 to 1), "
+        + "description (briefly describe what is visibly in this image), and reason "
+        + "(briefly explain whether the visible subject/action fits the scene). Do not judge text in the image."
+    )
+
+
 def _review_generated_image_against_scene(image_path: Path, narration: str, visual_prompt: Optional[str] = None, image_kind: str = "photo"):
     """Ask Moondream to inspect a generated image and judge whether it depicts this narration."""
     global _IMAGE_REVIEW_QUOTA_EXHAUSTED
@@ -2821,21 +2857,7 @@ def _review_generated_image_against_scene(image_path: Path, narration: str, visu
         # Ask for the visible content description as well as the decision. The
         # rejected description is fed into the next image-generation attempt;
         # a bare MATCH/MISMATCH answer leaves that recovery prompt uninformed.
-        if image_kind == "topic_graphic":
-            questions = [
-                "This is a simple locally drawn topic illustration, not a photograph. Inspect its visible symbols, objects, shapes and actions. Decide whether the actual illustration clearly represents this exact narration scene: "
-                + comparison_text + ". Bengali narration context: " + narration_text[:120]
-                + ". Do not assume that a background color or decorative shape proves a match. Do not rely on written words or captions. If the depicted subject or action is unclear or does not fit, return match false. Return ONLY JSON with keys match (true or false), confidence (0 to 1), description (describe the visible illustration), and reason (explain the visual match)."
-            ]
-        else:
-            questions = [
-                "Inspect the image and compare its visible main subject and action with this exact scene: "
-                + comparison_text + ". Bengali narration context: " + narration_text[:120]
-                + ". Return ONLY JSON with keys match (true or false), confidence (0 to 1), "
-                + "description (briefly describe what is visibly in this image), and reason "
-                + "(briefly explain whether the visible subject/action fits the scene). "
-                + "Do not judge text in the image."
-            ]
+        questions = [_scene_image_review_question(comparison_text, narration_text, image_kind)]
         model_path = urllib.parse.quote(model, safe="@/-")
         raw = ""
         review = None
