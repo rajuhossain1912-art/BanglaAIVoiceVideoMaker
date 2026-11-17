@@ -4089,16 +4089,17 @@ def _audio_token_diagnostics_report(audio_verification):
             report += "Whisper শনাক্ত ভাষা: " + language
             if isinstance(probability, (int, float)) and math.isfinite(float(probability)):
                 report += " (মডেলের ভাষা-আস্থার মান " + f"{float(probability) * 100:.1f}" + " শতাংশ)"
-            duration = info.get("duration")
-            duration_after_vad = info.get("duration_after_vad")
-            word_count = info.get("word_count")
-            if isinstance(duration, (int, float)) and math.isfinite(float(duration)):
-                report += "। অডিও দৈর্ঘ্য " + f"{float(duration):.2f}" + " সেকেন্ড"
-                if isinstance(duration_after_vad, (int, float)) and math.isfinite(float(duration_after_vad)):
-                    report += ", VAD-এর পর " + f"{float(duration_after_vad):.2f}" + " সেকেন্ড"
-                if isinstance(word_count, int) and word_count >= 0:
-                    report += ", Whisper-এর শব্দ গণনা " + str(word_count)
             report += "। "
+        duration = info.get("duration")
+        duration_after_vad = info.get("duration_after_vad")
+        word_count = info.get("word_count")
+        if isinstance(duration, (int, float)) and math.isfinite(float(duration)):
+            report += "অডিও দৈর্ঘ্য " + f"{float(duration):.2f}" + " সেকেন্ড"
+            if isinstance(duration_after_vad, (int, float)) and math.isfinite(float(duration_after_vad)):
+                report += ", VAD-এর পর " + f"{float(duration_after_vad):.2f}" + " সেকেন্ড"
+            report += "। "
+        if isinstance(word_count, int) and not isinstance(word_count, bool) and word_count >= 0:
+            report += "Whisper-এর শব্দ গণনা " + str(word_count) + "। "
     return report
 
 def _audio_verification_from_transcription(script: str, transcription):
