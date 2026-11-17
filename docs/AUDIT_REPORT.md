@@ -1442,3 +1442,12 @@ GitHub commit history অনুযায়ী প্রকল্পের প্�
 - Added regression tests for both off-topic motivational rejection and legitimate farmer scenes. PR backend CI run 44050411831 succeeded.
 - PR #47 merged as `35417cd71f30ec5a00a065914e664bc452bc7d9e`. Render deploy `dep-dbu1bnbbc2fs73fmdpe0` reached **live**. Main E2E run 44050498051 was still in progress at the last check; do not mark that E2E as passed until its final conclusion is confirmed.
 - These changes tighten prompts and review instructions; they do not guarantee perfect image semantics. Every image must still pass the independent review, and unavailable/mismatched images remain blocked from publication.
+
+### PR #48 — motivational fallback topic keyword coverage — 2026-11-17
+
+- The user's latest report showed a green-hills/yellow-sun generic topic graphic for narration about never giving up and learning from failure. The final graphic review rejected it, correctly keeping publication blocked.
+- Root cause found: local fallback theme matching included success/effort/dream terms but omitted “হাল ছেড়ে”, “ব্যর্থতা”, “ধৈর্য”, and “আত্মবিশ্বাস”; the first scene therefore selected the generic landscape theme.
+- Added Bengali and English failure/perseverance terms to the motivation theme selector and a regression test comparing the exact failure/perseverance script against a generic unrelated scene.
+- PR backend CI run 44053440137 succeeded. PR #48 merged as 4182a152d56f752e09d416182a52f24a5f437bac. Render deploy dep-dbu1lfijnfac73dti560 reached LIVE. Post-deploy logs showed /health 200 and / 200.
+- This fixes the identified fallback keyword-selection gap only; final visual review remains mandatory.
+- Remaining blockers from the same report: ASR 40% similarity with 25 missing and 28 extra words; word-level timestamp evidence incomplete; subtitle OCR timed out after 8 frames. No publication gate was relaxed.
