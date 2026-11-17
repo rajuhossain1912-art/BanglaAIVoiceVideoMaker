@@ -58,11 +58,17 @@ class TranscriptionVadPolicyTests(unittest.TestCase):
                 "transcription_info": {
                     "language": "bn",
                     "language_probability": 0.97,
+                    "duration": 12.5,
+                    "duration_after_vad": 12.5,
                 },
+                "word_count": 5,
             }
         }, return_details=True)
         self.assertEqual(parsed["transcription_info"]["language"], "bn")
         self.assertAlmostEqual(parsed["transcription_info"]["language_probability"], 0.97)
+        self.assertEqual(parsed["transcription_info"]["duration"], 12.5)
+        self.assertEqual(parsed["transcription_info"]["duration_after_vad"], 12.5)
+        self.assertEqual(parsed["transcription_info"]["word_count"], 5)
 
     def test_whisper_language_metadata_appears_in_accessible_audio_report(self):
         report = video_app._audio_token_diagnostics_report({
@@ -77,6 +83,15 @@ class TranscriptionVadPolicyTests(unittest.TestCase):
         })
         self.assertIn("Whisper শনাক্ত ভাষা: bn", report)
         self.assertIn("97.0 শতাংশ", report)
+        report = video_app._audio_token_diagnostics_report({
+            "matched_tokens": 4, "missing_tokens": 0, "extra_tokens": 0,
+            "transcription_info": [{
+                "language": "bn", "language_probability": 0.97,
+                "duration": 12.5, "duration_after_vad": 12.5, "word_count": 5,
+            }],
+        })
+        self.assertIn("অডিও দৈর্ঘ্য 12.50 সেকেন্ড", report)
+        self.assertIn("Whisper-এর শব্দ গণনা 5", report)
 
     def test_invalid_whisper_language_probability_is_ignored(self):
         parsed = video_app._parse_cloudflare_transcription_response({
