@@ -11,7 +11,11 @@ from backend import app as video_app
 class SubtitleOcrLanguageFallbackTests(unittest.TestCase):
     def test_caption_font_uses_latin_glyphs_for_english(self):
         font = video_app.load_caption_font("Hello", 25, True)
-        self.assertEqual(font.getname()[0], "DejaVu Sans")
+        self.assertEqual(font.getname()[0], "Liberation Sans")
+
+    def test_caption_font_uses_serif_glyph_for_uppercase_i(self):
+        font = video_app.load_caption_font("AI", 25, True)
+        self.assertEqual(font.getname(), ("DejaVu Serif", "Bold"))
 
     def test_caption_font_uses_bengali_glyphs_for_bengali(self):
         font = video_app.load_caption_font("বাংলা", 25, True)
@@ -140,6 +144,101 @@ class SubtitleOcrLanguageFallbackTests(unittest.TestCase):
             crop_detected or panel_detected,
             "Tesseract did not recognize English words from either the production crop or its source panel",
         )
+
+
+    def test_production_caption_frames_render_and_ocr_active_words(self):
+        """Exercise make_caption_frames itself, then OCR its actual highlighted frames."""
+        try:
+            available = subprocess.run(
+                ["tesseract", "--list-langs"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            self.skipTest("Tesseract is not installed in this test environment")
+        self.assertEqual(available.returncode, 0, available.stderr)
+        languages = set((available.stdout or "").splitlines())
+        self.assertIn("eng", languages)
+        self.assertIn("ben", languages)
+
+        script = "Hello বাংলা AI video"
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            background = root / "background.png"
+            Image.new("RGB", (360, 640), (70, 85, 100)).save(background)
+            listing, frame_count = video_app.make_caption_frames(
+                script=script,
+                duration=4.0,
+                background=background,
+                folder=root,
+                scene_interval=3,
+            )
+            self.assertTrue(listing.is_file())
+            self.assertEqual(frame_count, 4)
+            frame_paths = sorted((root / "caption-frames").glob("frame-*.png"))
+            self.assertEqual(len(frame_paths), 4)
+
+            expected = ["Hello", "বাংলা", "AI", "video"]
+            for index, word in enumerate(expected):
+                with Image.open(frame_paths[index]) as source:
+                    frame = source.convert("RGB")
+                crop, bounds = video_app._extract_highlighted_word_crop(frame)
+                self.assertIsNotNone(bounds, f"Active highlight missing for {word}")
+                self.assertIsNotNone(crop, f"Active-word crop missing for {word}")
+                crop_path = root / f"production-active-{index}.png"
+                crop.resize((1200, 480), Image.Resampling.LANCZOS).save(crop_path)
+                is_bengali = any(0x0980 <= ord(char) <= 0x09FF for char in word)
+                language = "ben+eng" if is_bengali else "eng"
+                recognized = False
+                diagnostics = []
+                for psm in ("7", "8", "10", "13"):
+                    result = subprocess.run(
+                        ["tesseract", str(crop_path), "stdout", "-l", language, "--psm", psm],
+                        capture_output=True,
+                        text=True,
+                        timeout=15,
+                    )
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    diagnostics.append(f"crop/psm{psm}={result.stdout.strip()!r}")
+                    if video_app._tesseract_crop_matches_expected_tokens(
+                        result.stdout, video_app._normalize_transcript_tokens(word)
+                    ):
+                        recognized = True
+                        break
+
+                # Short all-capital acronyms such as AI are inherently ambiguous
+                # when OCR sees an isolated two-character crop (I and l share
+                # near-identical glyph shapes). Use the same contextual, spatially
+                # constrained fallback as production: OCR the caption panel and
+                # accept the exact token only when its box overlaps the yellow
+                # active-word highlight.
+                if not recognized:
+                    panel_path = root / f"production-panel-{index}.png"
+                    panel = frame.crop((14, 440, 346, 622)).resize(
+                        (664, 364), Image.Resampling.LANCZOS
+                    )
+                    panel.save(panel_path)
+                    result = subprocess.run(
+                        ["tesseract", str(panel_path), "stdout", "-l", language, "--psm", "6", "tsv"],
+                        capture_output=True,
+                        text=True,
+                        timeout=15,
+                    )
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    diagnostics.append(
+                        f"panel/psm6={video_app._normalize_transcript_tokens(result.stdout)!r}"
+                    )
+                    recognized = video_app._tesseract_tsv_matches_highlighted_word(
+                        result.stdout,
+                        video_app._normalize_transcript_tokens(word),
+                        bounds,
+                        scale=2,
+                    )
+                self.assertTrue(
+                    recognized,
+                    f"Production-rendered active word {word!r} was not OCR-matched: {'; '.join(diagnostics)}",
+                )
 
 
 if __name__ == "__main__":

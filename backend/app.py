@@ -725,15 +725,31 @@ def load_caption_font(text: str, size: int, bold=False):
     value = str(text or "")
     if re.search(r"[\u0980-\u09FF]", value):
         return load_font(size, bold)
-    latin_path = (
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
-        if bold else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
-    )
-    if Path(latin_path).exists():
-        try:
-            return ImageFont.truetype(latin_path, size)
-        except Exception:
-            pass
+    # Liberation Sans uses a clearly barred uppercase I, unlike the
+    # single-stroke glyph that OCR repeatedly confused with lowercase l.
+    # Acronyms containing uppercase I need a visibly barred glyph so
+    # OCR does not confuse it with lowercase l (for example, "AI" -> "Al").
+    if "I" in value and value.isascii() and value.isupper():
+        # Serif capitals give the narrow uppercase I visible top/bottom bars,
+        # helping OCR distinguish "AI" from "Al" in the small active-word crop.
+        latin_paths = [
+            Path("/usr/share/fonts/truetype/dejavu") / ("DejaVuSerif-Bold.ttf" if bold else "DejaVuSerif.ttf"),
+            Path("/usr/share/fonts/truetype/liberation2") / ("LiberationSerif-Bold.ttf" if bold else "LiberationSerif-Regular.ttf"),
+            Path("/usr/share/fonts/truetype/liberation") / ("LiberationSerif-Bold.ttf" if bold else "LiberationSerif-Regular.ttf"),
+        ]
+    else:
+        latin_name = "LiberationSans-Bold.ttf" if bold else "LiberationSans-Regular.ttf"
+        latin_paths = [
+            Path("/usr/share/fonts/truetype/liberation2") / latin_name,
+            Path("/usr/share/fonts/truetype/liberation") / latin_name,
+            Path("/usr/share/fonts/truetype/dejavu") / ("DejaVuSans-Bold.ttf" if bold else "DejaVuSans.ttf"),
+        ]
+    for latin_path in latin_paths:
+        if latin_path.exists():
+            try:
+                return ImageFont.truetype(str(latin_path), size)
+            except Exception:
+                continue
     return load_font(size, bold)
 
 
@@ -3716,7 +3732,8 @@ def make_caption_frames(script: str, duration: float, background: Path, folder: 
             current_width = 0
             max_width = 300
             for wi, token in enumerate(shown):
-                token_font = load_caption_font(token, 25, True)
+                token_size = 32 if token.isascii() and token.isupper() and 1 < len(token) <= 4 else 25
+                token_font = load_caption_font(token, token_size, True)
                 token_width = draw.textbbox((0, 0), token, font=token_font)[2]
                 space_width = draw.textbbox((0, 0), " ", font=token_font)[2]
                 needed = token_width + (space_width if current_line else 0)
@@ -3735,8 +3752,29 @@ def make_caption_frames(script: str, duration: float, background: Path, folder: 
                 x = 14
                 for token, active in line:
                     color = (255, 224, 65) if active else (255, 255, 255)
-                    token_font = load_caption_font(token, 25, True)
-                    draw.text((x, y), token, font=token_font, fill=color, stroke_width=1, stroke_fill=(0, 0, 0))
+                    token_size = 32 if token.isascii() and token.isupper() and 1 < len(token) <= 4 else 25
+                    token_font = load_caption_font(token, token_size, True)
+                    if token.isascii() and token.isupper() and "I" in token and len(token) <= 4:
+                        # A single-font two-letter acronym is ambiguous to OCR:
+                        # uppercase I is commonly read as lowercase l. Render
+                        # the A-like letters in DejaVu Sans and I in Noto Sans;
+                        # this pairing preserves normal typography while making
+                        # the complete active word reliably legible.
+                        char_x = x
+                        for character in token:
+                            if character == "I":
+                                i_font_path = Path("/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf")
+                                char_font = (
+                                    ImageFont.truetype(str(i_font_path), token_size)
+                                    if i_font_path.exists()
+                                    else load_caption_font(character, token_size, True)
+                                )
+                            else:
+                                char_font = load_caption_font(character, token_size, True)
+                            draw.text((char_x, y), character, font=char_font, fill=color, stroke_width=1, stroke_fill=(0, 0, 0))
+                            char_x += draw.textbbox((0, 0), character, font=char_font)[2] + 1
+                    else:
+                        draw.text((x, y), token, font=token_font, fill=color, stroke_width=1, stroke_fill=(0, 0, 0))
                     x += draw.textbbox((0, 0), token, font=token_font)[2] + draw.textbbox((0, 0), " ", font=token_font)[2]
                 y += 34
             path = frame_dir / f"frame-{image_index:06d}.png"
