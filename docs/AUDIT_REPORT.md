@@ -631,6 +631,16 @@ GitHub commit history অনুযায়ী প্রকল্পের প্�
   - `docs/PROJECT_AUDIT.md`
 - Result: **push recorded**; this is not a test or deployment success claim.
 
+
+### Source update — 2026-11-17T08:04:48.814Z
+- Branch: `main`
+- Push range: `c237ded0e8088a627649d4fc88bdf88b381dc52c` → `71618984d3793690884fe83ac274690639eda3fa`
+- Pushed by: rajuhossain1912-art
+- Commit: [71618984d379](https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/commit/71618984d3793690884fe83ac274690639eda3fa) — docs: update latest Android release to v0.3.225
+- Changed files:
+  - `README.md`
+- Result: **push recorded**; this is not a test or deployment success claim.
+
 <!-- AUTO_LOG_END -->
 
 
