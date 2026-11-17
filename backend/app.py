@@ -3667,7 +3667,7 @@ def _parse_tesseract_tsv_panels(tsv_text: str, panel_height: int, panel_step: in
     return panels
 
 
-def _verify_subtitle_frames_with_ocr(frame_list: Path, script: str, folder: Path, batch_size: int = 8):
+def _verify_subtitle_frames_with_ocr(frame_list: Path, script: str, folder: Path, batch_size: int = 4):
     """OCR every rendered caption panel and verify its currently highlighted word."""
     try:
         languages = subprocess.run(
@@ -3723,10 +3723,17 @@ def _verify_subtitle_frames_with_ocr(frame_list: Path, script: str, folder: Path
                     sheet.paste(crop, (0, panel_index * panel_step))
             sheet_path = ocr_folder / f"batch-{offset:06d}.png"
             sheet.save(sheet_path, optimize=True)
-            result = subprocess.run(
-                ["tesseract", str(sheet_path), "stdout", "-l", "ben+eng", "--psm", "6", "tsv"],
-                capture_output=True, text=True, timeout=30,
-            )
+            try:
+                result = subprocess.run(
+                    ["tesseract", str(sheet_path), "stdout", "-l", "ben+eng", "--psm", "6", "tsv"],
+                    capture_output=True, text=True, timeout=45,
+                )
+            except subprocess.TimeoutExpired:
+                return {
+                    "status": "unavailable", "frames_checked": offset, "words_detected": words_detected,
+                    "words_missing": None,
+                    "reason": f"সাবটাইটেল OCR-এর {len(batch)}টি ফ্রেমের ব্যাচ ৪৫ সেকেন্ডে সম্পূর্ণ হয়নি; পরীক্ষা নিরাপদে বন্ধ রাখা হয়েছে।",
+                }
             if result.returncode != 0:
                 return {
                     "status": "unavailable", "frames_checked": offset, "words_detected": words_detected,

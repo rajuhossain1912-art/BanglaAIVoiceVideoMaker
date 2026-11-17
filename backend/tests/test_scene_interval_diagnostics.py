@@ -3,8 +3,12 @@ import io
 import json
 import tempfile
 import unittest
+import subprocess
+from types import SimpleNamespace
 from pathlib import Path
 from unittest.mock import patch
+
+from PIL import Image
 
 from backend import app as video_app
 
@@ -211,6 +215,42 @@ class SceneIntervalDiagnosticsTests(unittest.TestCase):
         )
         self.assertIn("writing a practical personal goal in a notebook", prompt)
         self.assertIn("concrete first step", prompt)
+
+    def test_subtitle_ocr_timeout_reports_completed_batch_progress(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            folder = Path(temp_dir)
+            frame_paths = []
+            for index in range(3):
+                path = folder / f"frame-{index:06d}.png"
+                Image.new("RGB", (360, 640), (255, 255, 255)).save(path)
+                frame_paths.append(path)
+            frame_list = folder / "frames.txt"
+            frame_list.write_text(
+                "".join(f"file '{path.as_posix()}'\n" for path in frame_paths),
+                encoding="utf-8",
+            )
+            tesseract_batches = {"count": 0}
+
+            def fake_run(command, **kwargs):
+                if command == ["tesseract", "--list-langs"]:
+                    return SimpleNamespace(returncode=0, stdout="List of available languages (2):\nben\neng\n")
+                if command[-1] == "tsv":
+                    tesseract_batches["count"] += 1
+                    if tesseract_batches["count"] == 1:
+                        header = "level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext\n"
+                        return SimpleNamespace(returncode=0, stdout=header)
+                    raise subprocess.TimeoutExpired(command, timeout=45)
+                raise AssertionError("Unexpected Tesseract command")
+
+            with patch.object(video_app.subprocess, "run", side_effect=fake_run):
+                result = video_app._verify_subtitle_frames_with_ocr(
+                    frame_list, "আমি ভালো আছি", folder, batch_size=2
+                )
+
+            self.assertEqual(result["status"], "unavailable")
+            self.assertEqual(result["frames_checked"], 2)
+            self.assertEqual(result["words_detected"], 0)
+            self.assertIn("৪৫ সেকেন্ডে", result["reason"])
 
     def test_handles_missing_image_count(self):
         result = video_app._scene_interval_diagnostics(30.0, 0, 3)
