@@ -142,5 +142,64 @@ class SubtitleOcrLanguageFallbackTests(unittest.TestCase):
         )
 
 
+    def test_production_caption_frames_render_and_ocr_active_words(self):
+        """Exercise make_caption_frames itself, then OCR its actual highlighted frames."""
+        try:
+            available = subprocess.run(
+                ["tesseract", "--list-langs"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            self.skipTest("Tesseract is not installed in this test environment")
+        self.assertEqual(available.returncode, 0, available.stderr)
+        languages = set((available.stdout or "").splitlines())
+        self.assertIn("eng", languages)
+        self.assertIn("ben", languages)
+
+        script = "Hello বাংলা AI video"
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            background = root / "background.png"
+            Image.new("RGB", (360, 640), (70, 85, 100)).save(background)
+            listing, frame_count = video_app.make_caption_frames(
+                script=script,
+                duration=4.0,
+                background=background,
+                folder=root,
+                scene_interval=3,
+            )
+            self.assertTrue(listing.is_file())
+            self.assertEqual(frame_count, 4)
+            frame_paths = sorted((root / "caption-frames").glob("frame-*.png"))
+            self.assertEqual(len(frame_paths), 4)
+
+            expected = ["Hello", "বাংলা", "AI", "video"]
+            for index, word in enumerate(expected):
+                with Image.open(frame_paths[index]) as source:
+                    frame = source.convert("RGB")
+                crop, bounds = video_app._extract_highlighted_word_crop(frame)
+                self.assertIsNotNone(bounds, f"Active highlight missing for {word}")
+                self.assertIsNotNone(crop, f"Active-word crop missing for {word}")
+                crop_path = root / f"production-active-{index}.png"
+                crop.resize((1200, 480), Image.Resampling.LANCZOS).save(crop_path)
+                is_bengali = any("\\u0980" <= char <= "\\u09ff" for char in word)
+                language = "ben+eng" if is_bengali else "eng"
+                result = subprocess.run(
+                    ["tesseract", str(crop_path), "stdout", "-l", language, "--psm", "8"],
+                    capture_output=True,
+                    text=True,
+                    timeout=15,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertTrue(
+                    video_app._tesseract_crop_matches_expected_tokens(
+                        result.stdout, video_app._normalize_transcript_tokens(word)
+                    ),
+                    f"Production-rendered active word {word!r} was not OCR-matched: {result.stdout!r}",
+                )
+
+
 if __name__ == "__main__":
     unittest.main()
