@@ -194,12 +194,26 @@ class SceneIntervalDiagnosticsTests(unittest.TestCase):
         self.assertEqual(matcher.ratio(), 1.0)
         self.assertEqual(len(timestamps), len(script_tokens))
 
+    def test_storyboard_payload_marks_repeated_narration_slots(self):
+        scenes = ["একই বাক্য", "অন্য বাক্য", "একই বাক্য", "একই বাক্য"]
+        payload = video_app._storyboard_scene_payload(scenes)
+        self.assertEqual(
+            [(item["repeated_narration_occurrence"], item["repeated_narration_total"]) for item in payload],
+            [(1, 3), (1, 1), (2, 3), (3, 3)],
+        )
+        review = video_app._storyboard_review_payload(
+            scenes, ["prompt"] * 4, context_scenes=scenes
+        )
+        self.assertEqual(review[2]["repeated_narration_occurrence"], 2)
+        self.assertEqual(review[2]["repeated_narration_total"], 3)
+
     def test_motivation_visual_prompts_show_retry_after_failure(self):
         prompt = video_app._english_visual_prompt(
             "জীবনে সফল হতে হলে কখনো হাল ছেড়ে দেওয়া যাবে না। প্রতিটি ব্যর্থতা আমাদের নতুন কিছু শেখায়।"
         )
-        self.assertIn("returning to a challenging practical task", prompt)
-        self.assertIn("reviewing a failed practice attempt", prompt)
+        self.assertIn("returning to the same unfinished task", prompt)
+        self.assertIn("reviewing a clearly visible incorrect practice page", prompt)
+        self.assertIn("learning workspace", prompt)
         self.assertNotIn("farmer working in a green rice field", prompt)
 
     def test_effort_and_confidence_visual_prompt_shows_practice_toward_goal(self):
