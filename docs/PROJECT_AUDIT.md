@@ -343,4 +343,12 @@ Section ৭-এর GitHub Actions সীমাবদ্ধতার বিবর
 - Wake lock সর্বোচ্চ ৪ ঘণ্টার জন্য acquire করা হয়। Android-এর foreground-service policy, battery saver এবং নির্মাতার background restrictions অতিরিক্ত সীমা আরোপ করতে পারে।
 - Backend-এর in-memory job ও ephemeral output Render restart/spin-down-এ হারাতে পারে। তাই স্ক্রিন বন্ধ থাকলে বা process kill হলেও ভিডিও নিশ্চিতভাবে শেষ হবে—এমন দাবি করা যাবে না।
 - Settings-এর বাংলা ব্যাখ্যা সংশোধন করা হয়েছে: background service কাজ চালু রাখার চেষ্টা করে; Android/ব্যাটারি/সার্ভার সীমাবদ্ধতা থাকলে কাজ থামতে পারে; অ্যাপ আবার খুললে saved job পুনরায় খোঁজা হয়।
-- Verification scope: source-code inspection; PR Android build check pending. Physical device, Android 16, TalkBack, screen-off, battery-saver and process-kill acceptance tests have not been run.
+- Verification scope: source-code inspection; PR #42 Android Build Check run 43938301998 completed **success**. Physical device, Android 16, TalkBack, screen-off, battery-saver and process-kill acceptance tests have not been run.
+## ১৫. PR #42 — Android foreground service shutdown ও ব্যাকগ্রাউন্ড নির্দেশনা — ২০২৬-১১-১৭
+
+- PR #42 `Android: clarify background video work limitations` সফল Android Build Check run `43938301998`-এর পর squash-merge হয়েছে। Merge commit: `a4e27b32b43590da173ec15ab582af4a629ee85a`।
+- MainActivity-এর চারটি STOP command path-এ `startService(ACTION_STOP)` বদলে সরাসরি `stopService(...)` ব্যবহার করা হয়েছে; এতে Android background service-start restriction-এর কারণে stop command আটকে যাওয়ার ঝুঁকি কমে।
+- Settings-এর বাংলা ব্যাখ্যা এখন বলে কাজ চালু রাখার চেষ্টা করা হয়, কিন্তু Android background limit, battery saver বা server restart-এ কাজ থামতে পারে; app reopen করলে saved job status আবার খোঁজা হয়।
+- GitHub Actions Android release workflow run `44043382156` merge commit-এর জন্য শুরু হয়েছে। সর্বশেষ যাচাইয়ে release build step **in_progress**; app identity/version, signing verification এবং GitHub Release publication এখনো নিশ্চিত নয়।
+- Automatic audit-register workflow run `44043382221`-এর append-audit job **success**।
+- বাস্তব Android 16 ফোনে install/update, TalkBack, screen-off, battery saver ও process-kill acceptance test এখনো করা হয়নি।
