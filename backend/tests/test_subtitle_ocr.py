@@ -9,6 +9,14 @@ from backend import app as video_app
 
 
 class SubtitleOcrLanguageFallbackTests(unittest.TestCase):
+    def test_caption_font_uses_latin_glyphs_for_english(self):
+        font = video_app.load_caption_font("Hello", 25, True)
+        self.assertEqual(font.getname()[0], "DejaVu Sans")
+
+    def test_caption_font_uses_bengali_glyphs_for_bengali(self):
+        font = video_app.load_caption_font("বাংলা", 25, True)
+        self.assertNotEqual(font.getname()[0], "DejaVu Sans")
+
     def test_ascii_only_active_word_tries_english_before_bilingual(self):
         self.assertEqual(
             video_app._tesseract_language_candidates(["Hello"]),
