@@ -3732,7 +3732,8 @@ def make_caption_frames(script: str, duration: float, background: Path, folder: 
             current_width = 0
             max_width = 300
             for wi, token in enumerate(shown):
-                token_font = load_caption_font(token, 25, True)
+                token_size = 32 if token.isascii() and token.isupper() and 1 < len(token) <= 4 else 25
+                token_font = load_caption_font(token, token_size, True)
                 token_width = draw.textbbox((0, 0), token, font=token_font)[2]
                 space_width = draw.textbbox((0, 0), " ", font=token_font)[2]
                 needed = token_width + (space_width if current_line else 0)
@@ -3751,7 +3752,8 @@ def make_caption_frames(script: str, duration: float, background: Path, folder: 
                 x = 14
                 for token, active in line:
                     color = (255, 224, 65) if active else (255, 255, 255)
-                    token_font = load_caption_font(token, 25, True)
+                    token_size = 32 if token.isascii() and token.isupper() and 1 < len(token) <= 4 else 25
+                    token_font = load_caption_font(token, token_size, True)
                     draw.text((x, y), token, font=token_font, fill=color, stroke_width=1, stroke_fill=(0, 0, 0))
                     x += draw.textbbox((0, 0), token, font=token_font)[2] + draw.textbbox((0, 0), " ", font=token_font)[2]
                 y += 34
