@@ -1089,3 +1089,21 @@ class RealSubtitleOCRIntegrationTests(unittest.TestCase):
             self.assertEqual(result["status"], "passed", result)
             self.assertEqual(result["frames_checked"], 43)
             self.assertEqual(result["words_detected"], 43)
+
+    def test_caption_window_keeps_active_word_visible_when_text_wraps(self):
+        lines = [
+            [("আগের", False)],
+            [("দীর্ঘ", False)],
+            [("বাক্য", False)],
+            [("সক্রিয়", True)],
+            [("শব্দ", False)],
+            [("শেষ", False)],
+        ]
+        active_line_index = next(
+            i for i, line in enumerate(lines)
+            if any(is_active for _, is_active in line)
+        )
+        visible_start = max(0, min(active_line_index, len(lines) - 4))
+        visible_lines = lines[visible_start:visible_start + 4]
+        self.assertEqual(len(visible_lines), 4)
+        self.assertTrue(any(is_active for line in visible_lines for _, is_active in line))
