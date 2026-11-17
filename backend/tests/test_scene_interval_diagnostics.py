@@ -216,18 +216,18 @@ class SceneIntervalDiagnosticsTests(unittest.TestCase):
                 frame_paths.append(path)
             frame_list = folder / "frames.txt"
             frame_list.write_text(
-                "".join(f"file '{path.as_posix()}'\\n" for path in frame_paths),
+                "".join(f"file '{path.as_posix()}'\n" for path in frame_paths),
                 encoding="utf-8",
             )
             tesseract_batches = {"count": 0}
 
             def fake_run(command, **kwargs):
                 if command == ["tesseract", "--list-langs"]:
-                    return SimpleNamespace(returncode=0, stdout="List of available languages (2):\\nben\\neng\\n")
+                    return SimpleNamespace(returncode=0, stdout="List of available languages (2):\nben\neng\n")
                 if command[-1] == "tsv":
                     tesseract_batches["count"] += 1
                     if tesseract_batches["count"] == 1:
-                        header = "level\\tpage_num\\tblock_num\\tpar_num\\tline_num\\tword_num\\tleft\\ttop\\twidth\\theight\\tconf\\ttext\\n"
+                        header = "level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext\n"
                         return SimpleNamespace(returncode=0, stdout=header)
                     raise subprocess.TimeoutExpired(command, timeout=45)
                 raise AssertionError("Unexpected Tesseract command")
