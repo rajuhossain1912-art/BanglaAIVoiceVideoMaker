@@ -727,15 +727,21 @@ def load_caption_font(text: str, size: int, bold=False):
         return load_font(size, bold)
     # Liberation Sans uses a clearly barred uppercase I, unlike the
     # single-stroke glyph that OCR repeatedly confused with lowercase l.
-    latin_path = (
-        "/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf"
-        if bold else "/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf"
+    latin_names = (
+        ("LiberationSans-Bold.ttf", "DejaVuSans-Bold.ttf")
+        if bold else ("LiberationSans-Regular.ttf", "DejaVuSans.ttf")
     )
-    if Path(latin_path).exists():
-        try:
-            return ImageFont.truetype(latin_path, size)
-        except Exception:
-            pass
+    latin_paths = [
+        Path("/usr/share/fonts/truetype/liberation2") / latin_names[0],
+        Path("/usr/share/fonts/truetype/liberation") / latin_names[0],
+        Path("/usr/share/fonts/truetype/dejavu") / latin_names[1],
+    ]
+    for latin_path in latin_paths:
+        if latin_path.exists():
+            try:
+                return ImageFont.truetype(str(latin_path), size)
+            except Exception:
+                continue
     return load_font(size, bold)
 
 
