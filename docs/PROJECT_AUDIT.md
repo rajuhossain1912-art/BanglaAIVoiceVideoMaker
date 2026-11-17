@@ -437,7 +437,7 @@ Section ৭-এর GitHub Actions সীমাবদ্ধতার বিবর
 
 - PR #51: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/pull/51 — added a real OCR integration test that uses the production caption-frame renderer to create all 43 frames for the exact motivational script in the user's report, then requires Tesseract to verify every active word.
 - The test skips only when Tesseract or either Bengali/English language pack is absent; the Docker E2E environment has both packs. Backend CI run 44055071535 passed.
-- PR #51 merged as cd76148515edb5e402632db628551185afb7ecb3. Main Docker E2E run 44055157228 was queued at the time of this entry; record actual result only after completion.
+- PR #51 merged as cd76148515edb5e402632db628551185afb7ecb3. Main Docker E2E run 44055157228 completed but failed the real Tesseract integration test: 43 frames checked, 40 words detected, 3 missing at indices 5, 7, and 21. The other 148 tests passed. These missing positions correspond to words whose active highlight could be clipped when wrapped caption text exceeded the four visible lines.
 - This test validates OCR against synthetic frames produced by the real caption renderer. It does not validate the user's original video or the production Render runtime's exact OCR timing.
 
 
@@ -448,3 +448,13 @@ Section ৭-এর GitHub Actions সীমাবদ্ধতার বিবর
 - সর্বশেষ PR commit: ffa05c572cfd1aa052b55b7875c5d2ee98322b1c। GitHub Actions Pull Request Backend Check run 44131817193 সফল; Python syntax এবং ১৪৮টি voice-clone/OCR ইউনিট পরীক্ষার ধাপ সফল হয়েছে।
 - PR #52 squash merge হয়েছে; main merge commit 8330048ce553a83998b8dc8e74fc8a7cfb96c824।
 - এই পরিবর্তন ৪৩-ফ্রেমের synthetic integration test-এ OCR শনাক্তকরণ উন্নত করার উদ্দেশ্যে। ব্যবহারকারীর আসল MP4, Render production OCR runtime, বা ৪০% ASR similarity/পূর্ণ শব্দ-সময়ের সমস্যা এতে সমাধান হয়েছে—এমন দাবি করা হচ্ছে না। পরবর্তী production পরীক্ষা ও নতুন ভিডিওর প্রতিবেদন আবশ্যক।
+
+
+## ২৭. সক্রিয় হাইলাইট শব্দ দৃশ্যমান রাখা — 2026-11-17
+
+- PR #53: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/pull/53 — দীর্ঘ বাংলা সাবটাইটেল চার লাইনের বেশি হলে আগের renderer সব সময় শেষ চারটি লাইন দেখাত; ফলে সক্রিয় হলুদ হাইলাইট শব্দটি প্রথম দিকের বাদ পড়া লাইনে থাকলে সেটি পর্দায় দেখা যেত না। এখন সক্রিয় শব্দটি ধারণ করে এমন চার লাইনের window বেছে নেওয়া হয়।
+- Production helper `_caption_lines_containing_active_word` আলাদা করা হয়েছে এবং সক্রিয় শব্দ দৃশ্যমান থাকে—এমন regression test যোগ করা হয়েছে।
+- PR Backend Check run 44132635219 সফল; ১৪৯টি ইউনিট পরীক্ষা পাস করেছে, একটি পরীক্ষা skip হয়েছে। এই PR check পরিবেশে Tesseract integration test skip হওয়ায় ৪৩-শব্দের Docker integration পুনরায় নিশ্চিত হয়নি।
+- PR #53 squash merge হয়েছে; main commit 8f7182fe22f49233cdd3389e2276367fb512ee3d।
+- Render deploy dep-dbu8ho95efls73c67kkg সফলভাবে LIVE হয়েছে। নতুন instance startup সম্পূর্ণ এবং /health একাধিকবার HTTP 200 দিয়েছে।
+- পরবর্তী কাজ: main Docker E2E-তে ৪৩-ফ্রেমের Tesseract integration পুনরায় চালিয়ে নিশ্চিত করা যে আগের missing indices 5, 7, 21 এখন শনাক্ত হয়। এই পরিবর্তন ASR similarity ৪০% বা explicit word timestamps-এর ঘাটতি সমাধান করে না; publication gate অপরিবর্তিত।
