@@ -416,3 +416,19 @@ Section ৭-এর GitHub Actions সীমাবদ্ধতার বিবর
 - PR backend CI run 44053440137 succeeded. PR #48 merged as 4182a152d56f752e09d416182a52f24a5f437bac. Render deploy dep-dbu1lfijnfac73dti560 reached LIVE; post-deploy Render logs show successful GET /health 200 and GET / 200.
 - This corrects the keyword-selection cause for this class of generic fallback graphic. It does not guarantee every fallback graphic or AI-generated image is semantically correct; final independent vision review remains mandatory.
 - Still unresolved in the user's report: ASR similarity 40% with 25 missing/28 extra words; no complete exact word timestamps; subtitle OCR stopped after 8 frames due timeout. No audio, timestamp, or OCR gate was weakened.
+
+## ২৩. Generated narration ASR VAD policy — 2026-11-17
+
+- PR #49: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/pull/49 — made Cloudflare Whisper VAD filtering configurable and disabled it only for independent transcription of app-generated narration audio. Uploaded audio and voice-reference transcription retain the prior VAD-enabled default.
+- Added request-payload regression tests for both policies. PR CI run 44053935012 passed; main E2E run 44054177454 passed.
+- PR #49 merged as 7d3ecfef296b910cd40c30ec13c4b8a2fc48788e. Render deploy dep-dbu1n5tbedkc73etlceg reached LIVE; post-deploy health requests returned HTTP 200.
+- This is a targeted ASR input change intended to avoid VAD trimming quiet words. It is not evidence that the user's 40% transcript similarity is fixed; exact audio comparison remains required.
+
+## ২৪. Faster subtitle OCR with active-word crops — 2026-11-17
+
+- PR #50: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/pull/50 — Tesseract now OCRs a compact crop of the yellow active subtitle word from every caption frame, rather than processing the full subtitle panel in every batch. Ambiguous Bengali words receive a contextual PSM-11 retry; the recognized token must spatially overlap the yellow highlight. A frame without a visible active highlight cannot pass.
+- All frames remain in scope; OCR timeouts, missing words, command errors, and missing highlights continue to fail closed. No OCR sampling reduction or publication-gate relaxation was introduced.
+- Added tests for highlighted Bengali/English words, missing highlights, and ambiguous-word contextual retry. PR CI run 44054590949 passed.
+- Local Tesseract benchmark on synthetic frames based on the user's 43-word script recognized all 43 words in about 5.1 seconds, including 5 contextual retries. This is a local synthetic benchmark, not a Render production timing guarantee.
+- PR #50 merged as caa4a63fd96f780b7294ff32e12dc0273e40316f. Render deploy dep-dbu1op0ae00c73a57i9g reached LIVE; post-deploy logs show GET / and GET /health returned HTTP 200.
+- Main E2E run 44054702523 was still running at the time of this entry; record its final result only after completion. The user's original video has not yet been re-tested.
