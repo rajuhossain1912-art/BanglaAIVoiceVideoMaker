@@ -1092,7 +1092,7 @@ class RealSubtitleOCRIntegrationTests(unittest.TestCase):
                 with video_app.Image.open(frame_path) as frame:
                     crop, bounds = video_app._extract_highlighted_word_crop(frame)
                 font_path = getattr(video_app.load_font(25, True), "path", None)
-                diagnostics = {"missing_index": missing[0], "expected_word": re.findall(r"\\S+", script)[int(missing[0]) - 1], "font_path": font_path, "crop_bounds": bounds, "crop_size": crop.size if crop else None, "ocr": {}}
+                diagnostics = {"missing_index": missing[0], "expected_word": re.findall(r"\S+", script)[int(missing[0]) - 1], "font_path": font_path, "crop_bounds": bounds, "crop_size": crop.size if crop else None, "ocr": {}}
                 if crop is not None:
                     diagnostic_path = folder / "diagnostic-active-word.png"
                     crop.resize((1200, 480), video_app.Image.Resampling.LANCZOS).save(diagnostic_path)
