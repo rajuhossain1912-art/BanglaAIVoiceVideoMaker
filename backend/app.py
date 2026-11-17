@@ -3761,12 +3761,15 @@ def make_caption_frames(script: str, duration: float, background: Path, folder: 
                         prefix = token.split("I", 1)[0]
                         i_x = x + draw.textbbox((0, 0), prefix, font=token_font)[2]
                         i_box = draw.textbbox((i_x, y), "I", font=token_font)
-                        bar_pad = max(2, token_size // 8)
-                        bar_y_top = y + max(1, token_size // 12)
-                        bar_y_bottom = y + token_size - max(3, token_size // 8)
-                        bar_width = max(2, token_size // 12)
-                        draw.line((i_x - bar_pad, bar_y_top, i_box[2] + bar_pad, bar_y_top), fill=color, width=bar_width)
-                        draw.line((i_x - bar_pad, bar_y_bottom, i_box[2] + bar_pad, bar_y_bottom), fill=color, width=bar_width)
+                        bar_pad = max(1, token_size // 16)
+                        bar_width = max(2, token_size // 10)
+                        # Anchor the bars to the actual font glyph bounds, not
+                        # an estimated baseline; this keeps the capital I
+                        # unmistakably serif-like in the extracted OCR crop.
+                        bar_y_top = i_box[1] + max(0, (i_box[3] - i_box[1]) // 12)
+                        bar_y_bottom = i_box[3] - max(1, (i_box[3] - i_box[1]) // 12)
+                        draw.line((i_box[0] - bar_pad, bar_y_top, i_box[2] + bar_pad, bar_y_top), fill=color, width=bar_width)
+                        draw.line((i_box[0] - bar_pad, bar_y_bottom, i_box[2] + bar_pad, bar_y_bottom), fill=color, width=bar_width)
                     x += draw.textbbox((0, 0), token, font=token_font)[2] + draw.textbbox((0, 0), " ", font=token_font)[2]
                 y += 34
             path = frame_dir / f"frame-{image_index:06d}.png"
