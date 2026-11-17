@@ -90,6 +90,27 @@ class TranscriptionVadPolicyTests(unittest.TestCase):
             self.assertIs(captured["vad_filter"], True)
 
 
+
+    def test_daily_free_allocation_is_detected_from_provider_body_even_on_http_400(self):
+        detail = video_app._cloudflare_whisper_http_error_detail(
+            400,
+            '{"success":false,"errors":[{"message":"you have used up your daily free allocation of 10,000 neurons"}]}',
+        )
+        self.assertIn("দৈনিক বিনামূল্যের বরাদ্দ শেষ", detail)
+
+    def test_whisper_http_error_keeps_auth_rate_and_server_categories(self):
+        self.assertIn("অনুমতি দেয়নি", video_app._cloudflare_whisper_http_error_detail(403, ""))
+        self.assertIn("বিনামূল্যের সীমা", video_app._cloudflare_whisper_http_error_detail(429, ""))
+        self.assertIn("সাময়িকভাবে ব্যস্ত", video_app._cloudflare_whisper_http_error_detail(503, ""))
+
+    def test_daily_quota_failure_is_reported_in_plain_bangla(self):
+        message = video_app._transcription_failure_reason(
+            RuntimeError("Cloudflare Workers AI-এর দৈনিক বিনামূল্যের বরাদ্দ শেষ হয়েছে।")
+        )
+        self.assertIn("দৈনিক বিনামূল্যের বরাদ্দ শেষ", message)
+        self.assertIn("নতুন দৈনিক বরাদ্দ", message)
+
+
 class AudioTranscriptReportTests(unittest.TestCase):
     def test_audio_verification_exposes_short_whisper_transcript_preview(self):
         transcript = "আমি আজ নতুন কিছু শিখছি"
