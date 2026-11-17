@@ -180,6 +180,28 @@ class SceneIntervalDiagnosticsTests(unittest.TestCase):
         self.assertEqual(matcher.ratio(), 1.0)
         self.assertEqual(len(timestamps), len(script_tokens))
 
+    def test_motivation_visual_prompts_show_retry_after_failure(self):
+        prompt = video_app._english_visual_prompt(
+            "জীবনে সফল হতে হলে কখনো হাল ছেড়ে দেওয়া যাবে না। প্রতিটি ব্যর্থতা আমাদের নতুন কিছু শেখায়।"
+        )
+        self.assertIn("returning to a challenging practical task", prompt)
+        self.assertIn("reviewing a failed practice attempt", prompt)
+        self.assertNotIn("farmer working in a green rice field", prompt)
+
+    def test_effort_and_confidence_visual_prompt_shows_practice_toward_goal(self):
+        prompt = video_app._english_visual_prompt(
+            "আজ হয়তো পথ কঠিন, কিন্তু ধৈর্য, পরিশ্রম এবং আত্মবিশ্বাস থাকলে একদিন সফলতা আসবেই।"
+        )
+        self.assertIn("steadily practicing a clearly visible skill", prompt)
+        self.assertIn("personal goal", prompt)
+
+    def test_dream_visual_prompt_shows_concrete_first_step(self):
+        prompt = video_app._english_visual_prompt(
+            "নিজের ওপর বিশ্বাস রাখুন, স্বপ্ন দেখুন এবং স্বপ্ন পূরণের জন্য প্রতিদিন চেষ্টা চালিয়ে যান।"
+        )
+        self.assertIn("writing a practical personal goal in a notebook", prompt)
+        self.assertIn("concrete first step", prompt)
+
     def test_handles_missing_image_count(self):
         result = video_app._scene_interval_diagnostics(30.0, 0, 3)
         self.assertEqual(result["expected_images"], 10)
