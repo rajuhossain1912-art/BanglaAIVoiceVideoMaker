@@ -458,3 +458,15 @@ Section ৭-এর GitHub Actions সীমাবদ্ধতার বিবর
 - PR #53 squash merge হয়েছে; main commit 8f7182fe22f49233cdd3389e2276367fb512ee3d।
 - Render deploy dep-dbu8ho95efls73c67kkg সফলভাবে LIVE হয়েছে। নতুন instance startup সম্পূর্ণ এবং /health একাধিকবার HTTP 200 দিয়েছে।
 - পরবর্তী কাজ: main Docker E2E-তে ৪৩-ফ্রেমের Tesseract integration পুনরায় চালিয়ে নিশ্চিত করা যে আগের missing indices 5, 7, 21 এখন শনাক্ত হয়। এই পরিবর্তন ASR similarity ৪০% বা explicit word timestamps-এর ঘাটতি সমাধান করে না; publication gate অপরিবর্তিত।
+
+
+## ২৮. আলাদা বাংলা সক্রিয় শব্দের OCR পুনঃচেষ্টা — 2026-11-17
+
+- PR #54: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/pull/54 — আগের highlighted crop ও contextual OCR ব্যর্থ হলে শুধু হলুদ সক্রিয় শব্দের crop ৪ গুণ বড় করে Tesseract PSM 8 ও 13-এ পুনরায় পরীক্ষা করা হয়।
+- আলাদা crop-এর সম্পূর্ণ normalized OCR ফল প্রত্যাশিত শব্দের সঙ্গে হুবহু না মিললে গ্রহণ করা হয় না। OCR-এ বাংলা শব্দের অংশ আলাদা token হলে কেবল সেই isolated crop-এর token জোড়া দিয়ে exact match যাচাই করা হয়; অতিরিক্ত বা ভুল লেখা প্রত্যাখ্যাত।
+- Timeout বা Tesseract execution failure হলে fail-closed আচরণ বজায় থাকে; কোনো publication gate বা OCR acceptance threshold শিথিল করা হয়নি।
+- PR Backend Check run 44134595224 সফল; ১৫২টি ইউনিট পরীক্ষা পাস করেছে, একটি real-Tesseract integration test skip হয়েছে কারণ PR runner-এ Tesseract ইনস্টল ছিল না।
+- PR #54 squash merge হয়েছে; main commit 89deef147bac87d104d5f9381e9b70a687c304c8।
+- Render deploy dep-dbu8mnt9el5s739gpupg সফলভাবে LIVE হয়েছে। নতুন instance startup সম্পূর্ণ এবং /health HTTP 200 দিয়েছে।
+- এখনো অজানা: Docker-এর Tesseract-সহ ৪৩-ফ্রেমের integration test-এ এই নতুন fallback সব শব্দ শনাক্ত করতে পারে কি না। আগের ৪০/৪৩ ফল PR #54-এর আগের code-এ ছিল। নতুন main Docker E2E ফল না আসা পর্যন্ত OCR সম্পূর্ণ সফল বলা যাবে না।
+- ASR-এর ৪০% similarity এবং explicit word timestamp-এর ঘাটতি এই PR-এর আওতার বাইরে; publication gate অপরিবর্তিত।
