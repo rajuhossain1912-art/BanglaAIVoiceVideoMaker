@@ -2083,6 +2083,16 @@ GitHub commit history অনুযায়ী প্রকল্পের প্�
   - `backend/tests/test_transcription_vad.py`
 - Result: **push recorded**; this is not a test or deployment success claim.
 
+
+### Source update — 2026-11-17T18:52:27.612Z
+- Branch: `main`
+- Push range: `3460b450ac98178179e189a95b6e0f070273f35c` → `48202632d8399711b534fbc7ec7cd1db210e3bf7`
+- Pushed by: rajuhossain1912-art
+- Commit: [48202632d839](https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/commit/48202632d8399711b534fbc7ec7cd1db210e3bf7) — Document Whisper audio duration and word count diagnostics
+- Changed files:
+  - `docs/PROJECT_AUDIT.md`
+- Result: **push recorded**; this is not a test or deployment success claim.
+
 <!-- AUTO_LOG_END -->
 
 
