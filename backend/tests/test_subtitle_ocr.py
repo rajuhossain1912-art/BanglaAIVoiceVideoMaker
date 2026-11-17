@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFont
 
 from backend import app as video_app
 
@@ -66,7 +66,7 @@ class SubtitleOcrLanguageFallbackTests(unittest.TestCase):
                 )
                 frame = Image.alpha_composite(frame.convert("RGBA"), overlay)
                 draw = ImageDraw.Draw(frame)
-                font = video_app.load_font(25, True)
+                font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 25)
                 draw.text(
                     (14, 464),
                     word,
