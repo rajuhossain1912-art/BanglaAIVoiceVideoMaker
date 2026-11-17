@@ -217,3 +217,11 @@ No paid provider, new secret, expected-script Whisper prompt, weakened quality t
 - The smoke container intentionally had no Cloudflare credentials, so Whisper RuntimeError here means provider verification was unavailable in this test environment; it does not establish current Cloudflare quota exhaustion.
 - Next engineering priorities: (1) diagnose English/mixed active-word OCR crop and caption rendering without weakening exact-match checks; (2) run a real Whisper test when free Cloudflare allocation/credentials are available and verify actual per-word timestamps; (3) enable/verify real semantic image review and scene relevance; (4) re-run the user's exact 43-word Bengali test on a real generated video; (5) complete physical Android v0.3.225 update and TalkBack acceptance.
 - No new APK was produced by PR #61. Keep the fail-closed publication gate unchanged. Render Free still has in-memory jobs and ephemeral output files.
+
+
+### PR #62 E2E result and English OCR diagnosis — 2026-11-18
+- PR #62 is merged and live on Render. Full E2E run [44155270569](https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/actions/runs/44155270569) passed its workflow, including backend unit tests, Bengali/English/mixed video generation smoke, provider regressions, and live Render health.
+- The live-video OCR measurements show the English fix is not complete: English 0/8, mixed 5/10. Do not claim the English OCR issue is fixed.
+- All smoke videos were correctly blocked from sharing and download. Whisper transcription/word timestamps and semantic vision review were unavailable in the no-Cloudflare-credentials smoke environment; this does not establish current Cloudflare quota status.
+- PR #63 adds a test-only Tesseract integration diagnostic using the production caption geometry, font, highlight color, and crop. Await its measured result before changing runtime OCR. Preserve exact-token matching and fail-closed publication.
+- Next priorities: diagnose/fix English and mixed OCR based on PR #63; rerun E2E; rerun the user's exact 43-word Bengali script on a new generated video; verify real Whisper per-word timestamps and semantic visual review when free provider access is available; then complete physical Android/TalkBack acceptance. No APK change from PR #62.
