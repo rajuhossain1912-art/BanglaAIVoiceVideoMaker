@@ -3933,7 +3933,7 @@ def _verify_subtitle_frames_with_ocr(frame_list: Path, script: str, folder: Path
                     isolated_crop = word_crop.resize((1200, 480), Image.Resampling.LANCZOS)
                     isolated_crop.save(isolated_path, optimize=True)
                     isolated_verified = False
-                    for page_segmentation in ("8", "13"):
+                    for page_segmentation in ("7", "8", "11", "13"):
                         try:
                             isolated_result = subprocess.run(
                                 ["tesseract", str(isolated_path), "stdout", "-l", "ben+eng", "--psm", page_segmentation],
