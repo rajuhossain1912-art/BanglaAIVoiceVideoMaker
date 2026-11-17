@@ -2454,6 +2454,16 @@ GitHub commit history অনুযায়ী প্রকল্পের প্�
   - `backend/tests/test_subtitle_ocr.py`
 - Result: **push recorded**; this is not a test or deployment success claim.
 
+
+### Source update — 2026-11-17T20:08:19.173Z
+- Branch: `main`
+- Push range: `1ba5c07855e0474044b3c3b801b4df4c7895decc` → `c3bfeac18bb473f87984c25069557137c98cc446`
+- Pushed by: rajuhossain1912-art
+- Commit: [c3bfeac18bb4](https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/commit/c3bfeac18bb473f87984c25069557137c98cc446) — docs: record production caption OCR integration and live deployment
+- Changed files:
+  - `docs/PROJECT_AUDIT.md`
+- Result: **push recorded**; this is not a test or deployment success claim.
+
 <!-- AUTO_LOG_END -->
 
 
