@@ -90,5 +90,32 @@ class TranscriptionVadPolicyTests(unittest.TestCase):
             self.assertIs(captured["vad_filter"], True)
 
 
+class AudioTranscriptReportTests(unittest.TestCase):
+    def test_audio_verification_exposes_short_whisper_transcript_preview(self):
+        transcript = "আমি আজ নতুন কিছু শিখছি"
+        result = video_app._audio_verification_from_transcription(
+            "আমি আজ নতুন কিছু শিখছি",
+            {"text": transcript, "word_timestamps": []},
+        )
+        self.assertEqual(result["transcript_preview"], transcript)
+        self.assertEqual(result["transcript_characters"], len(transcript))
+
+    def test_audio_report_includes_whisper_heard_text_for_diagnosis(self):
+        report = video_app._audio_token_diagnostics_report({
+            "matched_tokens": 4,
+            "missing_tokens": 2,
+            "extra_tokens": 1,
+            "transcript_preview": "আমি আজ নতুন কিছু শিখছি",
+        })
+        self.assertIn("Whisper অডিওতে যা শুনেছে: আমি আজ নতুন কিছু শিখছি", report)
+
+    def test_audio_transcript_preview_is_limited_to_1200_characters(self):
+        result = video_app._audio_verification_from_transcription(
+            "বাংলা",
+            {"text": "ক" * 1400, "word_timestamps": []},
+        )
+        self.assertEqual(len(result["transcript_preview"]), 1200)
+
+
 if __name__ == "__main__":
     unittest.main()
