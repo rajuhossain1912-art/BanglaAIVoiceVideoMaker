@@ -723,7 +723,7 @@ def load_font(size: int, bold=False):
 def load_caption_font(text: str, size: int, bold=False):
     """Choose a font with glyph coverage for the script being rendered."""
     value = str(text or "")
-    if re.search(r"[\\u0980-\\u09FF]", value):
+    if re.search(r"[\u0980-\u09FF]", value):
         return load_font(size, bold)
     latin_path = (
         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
