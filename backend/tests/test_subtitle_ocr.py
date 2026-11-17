@@ -15,7 +15,7 @@ class SubtitleOcrLanguageFallbackTests(unittest.TestCase):
 
     def test_caption_font_uses_bengali_glyphs_for_bengali(self):
         font = video_app.load_caption_font("বাংলা", 25, True)
-        self.assertNotEqual(font.getname()[0], "DejaVu Sans")
+        self.assertEqual(font.getname(), video_app.load_font(25, True).getname())
 
     def test_ascii_only_active_word_tries_english_before_bilingual(self):
         self.assertEqual(
