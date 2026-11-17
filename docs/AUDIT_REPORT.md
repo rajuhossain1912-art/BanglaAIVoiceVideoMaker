@@ -764,6 +764,16 @@ GitHub commit history অনুযায়ী প্রকল্পের প্�
   - `backend/tests/test_scene_interval_diagnostics.py`
 - Result: **push recorded**; this is not a test or deployment success claim.
 
+
+### Source update — 2026-11-17T08:38:27.915Z
+- Branch: `main`
+- Push range: `2def815ae723dc859ffc81a5bf794df50593b07a` → `c7c580880f96bab0b0b5e68cb2a29bff1b2a258e`
+- Pushed by: rajuhossain1912-art
+- Commit: [c7c580880f96](https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/commit/c7c580880f96bab0b0b5e68cb2a29bff1b2a258e) — docs: record Whisper language hint and OCR resilience fixes
+- Changed files:
+  - `docs/PROJECT_AUDIT.md`
+- Result: **push recorded**; this is not a test or deployment success claim.
+
 <!-- AUTO_LOG_END -->
 
 
