@@ -3464,6 +3464,24 @@ def _validate_word_timestamp_sequence(timed_map, script_word_count, duration):
     return {"passed": True, "reason": "সব শব্দের সময় সম্পূর্ণ, ধারাবাহিক এবং অডিওর সীমার মধ্যে।", "checked_words": script_word_count}
 
 
+def _caption_lines_containing_active_word(lines, max_lines=4):
+    """Choose a bounded caption window that always includes the highlighted word."""
+    if not lines:
+        return []
+    limit = max(1, int(max_lines))
+    if len(lines) <= limit:
+        return lines
+    active_line_index = next(
+        (line_index for line_index, line in enumerate(lines)
+         if any(is_active for _, is_active in line)),
+        len(lines) - 1,
+    )
+    # Never discard the active word when a long Bengali sentence wraps to
+    # more lines than the caption panel can display.
+    visible_start = max(0, min(active_line_index, len(lines) - limit))
+    return lines[visible_start:visible_start + limit]
+
+
 def make_caption_frames(script: str, duration: float, background: Path, folder: Path, caption_offset: float = 0.0, audio_path: Optional[Path] = None, job_id: Optional[str] = None, scene_interval: int = 5, visual_scene_texts=None, word_timestamps=None):
     """Render small Pillow caption cards with per-word highlighting, avoiding FFmpeg's memory-heavy libass filter."""
     frame_dir = folder / "caption-frames"
@@ -3645,7 +3663,7 @@ def make_caption_frames(script: str, duration: float, background: Path, folder: 
                 current_width += needed
             if current_line:
                 lines.append(current_line)
-            visible_lines = lines[-4:]
+            visible_lines = _caption_lines_containing_active_word(lines, max_lines=4)
             y = 464 + max(0, (4 - len(visible_lines)) * 34)
             for line in visible_lines:
                 x = 14
