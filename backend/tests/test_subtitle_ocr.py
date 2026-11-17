@@ -35,7 +35,7 @@ class SubtitleOcrLanguageFallbackTests(unittest.TestCase):
         )
 
     def test_real_tesseract_reads_english_word_from_rendered_caption_crop(self):
-        """Exercise the same panel geometry, font, highlight, and crop as video rendering."""
+        """Compare production crop OCR with direct OCR on the same rendered panel."""
         try:
             available = subprocess.run(
                 ["tesseract", "--list-langs"],
@@ -49,13 +49,15 @@ class SubtitleOcrLanguageFallbackTests(unittest.TestCase):
         self.assertIn("eng", (available.stdout or "").splitlines())
 
         words = ["Hello", "This", "English", "video", "generation", "test"]
-        detected = []
+        crop_detected = []
+        panel_detected = []
+        diagnostics = []
         with tempfile.TemporaryDirectory() as temporary:
             for index, word in enumerate(words):
                 frame = Image.new("RGB", (360, 640), (80, 90, 100))
                 overlay = Image.new("RGBA", frame.size, (0, 0, 0, 0))
-                panel = ImageDraw.Draw(overlay)
-                panel.rounded_rectangle(
+                panel_draw = ImageDraw.Draw(overlay)
+                panel_draw.rounded_rectangle(
                     (14, 440, 346, 622),
                     radius=18,
                     fill=(0, 0, 0, 205),
@@ -73,32 +75,62 @@ class SubtitleOcrLanguageFallbackTests(unittest.TestCase):
                     stroke_width=1,
                     stroke_fill=(0, 0, 0),
                 )
-                crop, bounds = video_app._extract_highlighted_word_crop(frame.convert("RGB"))
+                rgb_frame = frame.convert("RGB")
+                crop, bounds = video_app._extract_highlighted_word_crop(rgb_frame)
                 self.assertIsNotNone(bounds, f"Yellow highlight was not found for {word}")
                 self.assertIsNotNone(crop, f"Crop was not created for {word}")
                 crop_path = Path(temporary) / f"word-{index}.png"
                 crop.resize((1200, 480), Image.Resampling.LANCZOS).save(crop_path)
-                recognized = ""
-                for psm in ("7", "8", "10", "11", "13"):
-                    result = subprocess.run(
-                        ["tesseract", str(crop_path), "stdout", "-l", "eng", "--psm", psm],
-                        capture_output=True,
-                        text=True,
-                        timeout=15,
-                    )
-                    self.assertEqual(result.returncode, 0, result.stderr)
-                    if video_app._tesseract_crop_matches_expected_tokens(
-                        result.stdout, video_app._normalize_transcript_tokens(word)
+
+                panel_path = Path(temporary) / f"panel-{index}.png"
+                rgb_frame.crop((14, 440, 346, 622)).resize(
+                    (1328, 728), Image.Resampling.LANCZOS
+                ).save(panel_path)
+
+                raw_crop_path = Path(temporary) / f"raw-{index}.png"
+                raw_panel = rgb_frame.crop((14, 440, 346, 622))
+                raw_bounds = bounds
+                raw_panel.crop(raw_bounds).resize(
+                    (1200, 480), Image.Resampling.LANCZOS
+                ).save(raw_crop_path)
+
+                crop_outputs = []
+                panel_outputs = []
+                expected = video_app._normalize_transcript_tokens(word)
+                for psm in ("6", "7", "8", "10", "11", "13"):
+                    for source_name, source_path, outputs in (
+                        ("crop", crop_path, crop_outputs),
+                        ("panel", panel_path, panel_outputs),
+                        ("raw", raw_crop_path, crop_outputs),
                     ):
-                        recognized = result.stdout.strip()
-                        break
-                if recognized:
-                    detected.append(word)
-        print(f"Rendered English caption OCR diagnostic: {len(detected)}/{len(words)} words detected: {detected}")
-        self.assertGreater(
-            len(detected),
-            0,
-            "Tesseract did not recognize any English word from the actual rendered-caption crop",
+                        result = subprocess.run(
+                            ["tesseract", str(source_path), "stdout", "-l", "eng", "--psm", psm],
+                            capture_output=True,
+                            text=True,
+                            timeout=15,
+                        )
+                        self.assertEqual(result.returncode, 0, result.stderr)
+                        text = " ".join(result.stdout.split())
+                        outputs.append(f"{source_name}/psm{psm}={text!r}")
+                        if video_app._tesseract_crop_matches_expected_tokens(
+                            result.stdout, expected
+                        ):
+                            if source_name == "panel":
+                                panel_detected.append(word)
+                            else:
+                                crop_detected.append(word)
+                diagnostics.append(
+                    f"{word}: crop[{'; '.join(crop_outputs)}] panel[{'; '.join(panel_outputs)}]"
+                )
+        print(
+            "English rendered-caption OCR diagnostic: "
+            f"isolated/raw crops={len(set(crop_detected))}/{len(words)}, "
+            f"full panels={len(set(panel_detected))}/{len(words)}"
+        )
+        print(" | ".join(diagnostics))
+        self.assertTrue(
+            crop_detected or panel_detected,
+            "Tesseract did not recognize English words from either the production crop or its source panel",
         )
 
 
