@@ -1813,6 +1813,16 @@ GitHub commit history অনুযায়ী প্রকল্পের প্�
   - `backend/tests/test_transcription_vad.py`
 - Result: **push recorded**; this is not a test or deployment success claim.
 
+
+### Source update — 2026-11-17T17:33:30.239Z
+- Branch: `main`
+- Push range: `485f07de5350c49c3ac6aa3bc4b8220116ebeda0` → `c36db5bab0c45b5a5434e055893b502a350e5e38`
+- Pushed by: rajuhossain1912-art
+- Commit: [c36db5bab0c4](https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/commit/c36db5bab0c45b5a5434e055893b502a350e5e38) — Record merged OCR integration and Whisper transcript diagnostics
+- Changed files:
+  - `docs/PROJECT_AUDIT.md`
+- Result: **push recorded**; this is not a test or deployment success claim.
+
 <!-- AUTO_LOG_END -->
 
 
