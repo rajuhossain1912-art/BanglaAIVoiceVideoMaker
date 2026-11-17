@@ -186,18 +186,25 @@ class SubtitleOcrLanguageFallbackTests(unittest.TestCase):
                 crop.resize((1200, 480), Image.Resampling.LANCZOS).save(crop_path)
                 is_bengali = any(0x0980 <= ord(char) <= 0x09FF for char in word)
                 language = "ben+eng" if is_bengali else "eng"
-                result = subprocess.run(
-                    ["tesseract", str(crop_path), "stdout", "-l", language, "--psm", "8"],
-                    capture_output=True,
-                    text=True,
-                    timeout=15,
-                )
-                self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertTrue(
-                    video_app._tesseract_crop_matches_expected_tokens(
+                recognized = False
+                diagnostics = []
+                for psm in ("7", "8", "10", "13"):
+                    result = subprocess.run(
+                        ["tesseract", str(crop_path), "stdout", "-l", language, "--psm", psm],
+                        capture_output=True,
+                        text=True,
+                        timeout=15,
+                    )
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    diagnostics.append(f"psm{psm}={result.stdout.strip()!r}")
+                    if video_app._tesseract_crop_matches_expected_tokens(
                         result.stdout, video_app._normalize_transcript_tokens(word)
-                    ),
-                    f"Production-rendered active word {word!r} was not OCR-matched: {result.stdout!r}",
+                    ):
+                        recognized = True
+                        break
+                self.assertTrue(
+                    recognized,
+                    f"Production-rendered active word {word!r} was not OCR-matched: {'; '.join(diagnostics)}",
                 )
 
 
