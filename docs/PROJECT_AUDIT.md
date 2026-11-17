@@ -352,3 +352,14 @@ Section ৭-এর GitHub Actions সীমাবদ্ধতার বিবর
 - GitHub Actions Android release workflow run `44043382156` merge commit-এর জন্য শুরু হয়েছে। সর্বশেষ যাচাইয়ে release build step **in_progress**; app identity/version, signing verification এবং GitHub Release publication এখনো নিশ্চিত নয়।
 - Automatic audit-register workflow run `44043382221`-এর append-audit job **success**।
 - বাস্তব Android 16 ফোনে install/update, TalkBack, screen-off, battery saver ও process-kill acceptance test এখনো করা হয়নি।
+
+## ১৬. PR #42 Android সংশোধনসহ v0.3.225 release — ২০২৬-১১-১৭
+
+- Android release workflow run `44043382156`: **success**; সব build, app identity/version, persistent signing key, APK signature, artifact upload এবং GitHub Release ধাপ সফল।
+- প্রকাশিত সংস্করণ: **v0.3.225**; tag target commit `a4e27b32b43590da173ec15ab582af4a629ee85a`।
+- APK: `BanglaAIVoiceVideoMaker-v0.3.225.apk`; size `10736616` bytes; SHA-256 `88e1d0bb193d95e6bbddff1a84135698515c275c49e5fa735052765744c6d7a8`।
+- Release: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/releases/tag/v0.3.225
+- Direct APK: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/releases/download/v0.3.225/BanglaAIVoiceVideoMaker-v0.3.225.apk
+- Render deployment for Android merge commit `a4e27b32b43590da173ec15ab582af4a629ee85a` reached **live** (`dep-dbu0k73rjlhs73b6klv0`) before the audit-doc-only deployment; latest documentation commit `7b88d45e434a11c29538243eb5be2b12133f3cf8` also reached **live** (`dep-dbu0kn5bedkc73esa6a0`).
+- Automatic audit-register workflow run `44043382221`: append-audit job **success**.
+- Release/CI success does not verify installation over an older APK on a physical phone. Android 16, TalkBack, screen-off, battery-saver and process-kill acceptance tests remain outstanding.
