@@ -1234,6 +1234,16 @@ GitHub commit history অনুযায়ী প্রকল্পের প্�
   - `docs/PROJECT_AUDIT.md`
 - Result: **push recorded**; this is not a test or deployment success claim.
 
+
+### Source update — 2026-11-17T09:22:29.758Z
+- Branch: `main`
+- Push range: `64bbacc617020eb420c7a4a4df7a1bc1030801c1` → `a769e445d9b07b8d4e090b94df261a7ba302ba0d`
+- Pushed by: rajuhossain1912-art
+- Commit: [a769e445d9b0](https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/commit/a769e445d9b07b8d4e090b94df261a7ba302ba0d) — docs: record ASR and subtitle OCR reliability changes
+- Changed files:
+  - `docs/PRODUCT_PLAN.md`
+- Result: **push recorded**; this is not a test or deployment success claim.
+
 <!-- AUTO_LOG_END -->
 
 
