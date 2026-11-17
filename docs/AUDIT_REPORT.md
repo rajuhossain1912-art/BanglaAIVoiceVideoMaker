@@ -2172,6 +2172,17 @@ GitHub commit history অনুযায়ী প্রকল্পের প্�
   - `docs/PRODUCT_PLAN.md`
 - Result: **push recorded**; this is not a test or deployment success claim.
 
+
+### Source update — 2026-11-17T19:01:15.730Z
+- Branch: `main`
+- Push range: `82cb4330148a1aed76dc86d6b6b803e3a01dfa33` → `8561e0f9f3838e398ebe3e5ddb3c189a4d0b7eb6`
+- Pushed by: rajuhossain1912-art
+- Commit: [8561e0f9f383](https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/commit/8561e0f9f3838e398ebe3e5ddb3c189a4d0b7eb6) — Fix Whisper duration diagnostics when language metadata is absent (#61)
+- Changed files:
+  - `backend/app.py`
+  - `backend/tests/test_transcription_vad.py`
+- Result: **push recorded**; this is not a test or deployment success claim.
+
 <!-- AUTO_LOG_END -->
 
 
