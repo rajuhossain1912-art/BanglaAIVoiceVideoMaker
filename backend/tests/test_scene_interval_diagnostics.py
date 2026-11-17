@@ -8,6 +8,8 @@ from types import SimpleNamespace
 from pathlib import Path
 from unittest.mock import patch
 
+from PIL import Image
+
 from backend import app as video_app
 
 
