@@ -408,3 +408,11 @@ Section ৭-এর GitHub Actions সীমাবদ্ধতার বিবর
 - PR #47 merged as 35417cd71f30ec5a00a065914e664bc452bc7d9e; Render deploy dep-dbu1bnbbc2fs73fmdpe0 reached LIVE.
 - Main E2E run 44050498051 completed successfully: Bangla and English video generation, scene planning, duplicate/vision-review regression checks, and live Render health check all passed.
 - These changes make visual acceptance stricter; they do not claim perfect image semantics. Real-user video output must still be re-tested. Any mismatch or unavailable review continues to block download/publication.
+
+## ২২. Motivational topic-graphic keyword coverage — 2026-11-17
+
+- The latest user report showed scene 2 fell back to a generic green-hills/yellow-sun illustration for narration about never giving up and learning from failure. Vision review correctly rejected the final graphic; publication remained blocked.
+- PR #48: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/pull/48 — expanded local motivational-graphic topic detection to include “হাল ছেড়ে”, “ব্যর্থতা”, “ধৈর্য”, “আত্মবিশ্বাস”, “সফল”, and English equivalents. Added a regression test comparing this exact failure/perseverance narration against an unrelated generic scene.
+- PR backend CI run 44053440137 succeeded. PR #48 merged as 4182a152d56f752e09d416182a52f24a5f437bac. Render deploy dep-dbu1lfijnfac73dti560 reached LIVE; post-deploy Render logs show successful GET /health 200 and GET / 200.
+- This corrects the keyword-selection cause for this class of generic fallback graphic. It does not guarantee every fallback graphic or AI-generated image is semantically correct; final independent vision review remains mandatory.
+- Still unresolved in the user's report: ASR similarity 40% with 25 missing/28 extra words; no complete exact word timestamps; subtitle OCR stopped after 8 frames due timeout. No audio, timestamp, or OCR gate was weakened.
