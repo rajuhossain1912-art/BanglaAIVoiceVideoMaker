@@ -753,6 +753,17 @@ GitHub commit history অনুযায়ী প্রকল্পের প্�
   - `backend/tests/test_scene_interval_diagnostics.py`
 - Result: **push recorded**; this is not a test or deployment success claim.
 
+
+### Source update — 2026-11-17T08:37:41.967Z
+- Branch: `main`
+- Push range: `f9a6c9af36b363546944229b3ef754e5cf7de168` → `2def815ae723dc859ffc81a5bf794df50593b07a`
+- Pushed by: rajuhossain1912-art
+- Commit: [2def815ae723](https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/commit/2def815ae723dc859ffc81a5bf794df50593b07a) — Make subtitle OCR batches more resilient
+- Changed files:
+  - `backend/app.py`
+  - `backend/tests/test_scene_interval_diagnostics.py`
+- Result: **push recorded**; this is not a test or deployment success claim.
+
 <!-- AUTO_LOG_END -->
 
 
