@@ -209,3 +209,11 @@ This section supersedes older statements above wherever they describe the curren
 6. Continue to disclose Render Free limitations: in-memory job state and ephemeral output files can be lost on restart/spin-down. Do not add paid storage or services without explicit approval.
 
 No paid provider, new secret, expected-script Whisper prompt, weakened quality threshold, or weakened fail-closed publication gate was introduced by PRs #52–#60.
+
+
+### Latest E2E verification — 2026-11-18
+- PR #61 is merged and live on Render. Main Docker E2E run [44154042847](https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/actions/runs/44154042847) succeeded: Docker build, 162 backend unit tests, multilingual generation smoke checks, regression checks, and live Render /health all passed.
+- Important distinction: the generated Bengali, English, and mixed smoke videos were all correctly blocked from sharing/download because audio transcription/word-level timestamps and semantic vision review were unavailable. Bengali OCR was 7/7; English OCR was 0/8; mixed OCR was 5/10. This E2E success is not evidence of publication quality.
+- The smoke container intentionally had no Cloudflare credentials, so Whisper RuntimeError here means provider verification was unavailable in this test environment; it does not establish current Cloudflare quota exhaustion.
+- Next engineering priorities: (1) diagnose English/mixed active-word OCR crop and caption rendering without weakening exact-match checks; (2) run a real Whisper test when free Cloudflare allocation/credentials are available and verify actual per-word timestamps; (3) enable/verify real semantic image review and scene relevance; (4) re-run the user's exact 43-word Bengali test on a real generated video; (5) complete physical Android v0.3.225 update and TalkBack acceptance.
+- No new APK was produced by PR #61. Keep the fail-closed publication gate unchanged. Render Free still has in-memory jobs and ephemeral output files.
