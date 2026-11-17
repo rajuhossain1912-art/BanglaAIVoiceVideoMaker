@@ -184,7 +184,7 @@ class SubtitleOcrLanguageFallbackTests(unittest.TestCase):
                 self.assertIsNotNone(crop, f"Active-word crop missing for {word}")
                 crop_path = root / f"production-active-{index}.png"
                 crop.resize((1200, 480), Image.Resampling.LANCZOS).save(crop_path)
-                is_bengali = any("\\u0980" <= char <= "\\u09ff" for char in word)
+                is_bengali = any(0x0980 <= ord(char) <= 0x09FF for char in word)
                 language = "ben+eng" if is_bengali else "eng"
                 result = subprocess.run(
                     ["tesseract", str(crop_path), "stdout", "-l", language, "--psm", "8"],
