@@ -432,3 +432,10 @@ Section ৭-এর GitHub Actions সীমাবদ্ধতার বিবর
 - Local Tesseract benchmark on synthetic frames based on the user's 43-word script recognized all 43 words in about 5.1 seconds, including 5 contextual retries. This is a local synthetic benchmark, not a Render production timing guarantee.
 - PR #50 merged as caa4a63fd96f780b7294ff32e12dc0273e40316f. Render deploy dep-dbu1op0ae00c73a57i9g reached LIVE; post-deploy logs show GET / and GET /health returned HTTP 200.
 - Main E2E run 44054702523 was still running at the time of this entry; record its final result only after completion. The user's original video has not yet been re-tested.
+
+## ২৫. Real Tesseract integration coverage for the user's 43-word script — 2026-11-17
+
+- PR #51: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/pull/51 — added a real OCR integration test that uses the production caption-frame renderer to create all 43 frames for the exact motivational script in the user's report, then requires Tesseract to verify every active word.
+- The test skips only when Tesseract or either Bengali/English language pack is absent; the Docker E2E environment has both packs. Backend CI run 44055071535 passed.
+- PR #51 merged as cd76148515edb5e402632db628551185afb7ecb3. Main Docker E2E run 44055157228 was queued at the time of this entry; record actual result only after completion.
+- This test validates OCR against synthetic frames produced by the real caption renderer. It does not validate the user's original video or the production Render runtime's exact OCR timing.
