@@ -725,9 +725,11 @@ def load_caption_font(text: str, size: int, bold=False):
     value = str(text or "")
     if re.search(r"[\u0980-\u09FF]", value):
         return load_font(size, bold)
+    # Monospaced DejaVu keeps glyphs such as uppercase I visibly distinct
+    # from lowercase l, improving both subtitle readability and OCR validation.
     latin_path = (
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
-        if bold else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+        "/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf"
+        if bold else "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf"
     )
     if Path(latin_path).exists():
         try:
