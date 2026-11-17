@@ -973,6 +973,17 @@ GitHub commit history অনুযায়ী প্রকল্পের প্�
   - Step 96. Post Checkout source: success
   - Step 97. Complete job: success
 
+
+### Source update — 2026-11-17T08:52:50.496Z
+- Branch: `main`
+- Push range: `a29b2aa6ba61b1694ff9dd115ff9857cc6e892ef` → `35417cd71f30ec5a00a065914e664bc452bc7d9e`
+- Pushed by: rajuhossain1912-art
+- Commit: [35417cd71f30](https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/commit/35417cd71f30ec5a00a065914e664bc452bc7d9e) — Make visual review reject off-topic motivational images
+- Changed files:
+  - `backend/app.py`
+  - `backend/tests/test_scene_graphic_variation.py`
+- Result: **push recorded**; this is not a test or deployment success claim.
+
 <!-- AUTO_LOG_END -->
 
 
