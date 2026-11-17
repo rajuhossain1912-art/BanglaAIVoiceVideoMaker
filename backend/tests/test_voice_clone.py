@@ -1,4 +1,5 @@
 import io
+import re
 import shutil
 import tempfile
 import unittest
