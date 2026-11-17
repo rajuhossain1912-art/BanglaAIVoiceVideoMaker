@@ -742,6 +742,17 @@ GitHub commit history অনুযায়ী প্রকল্পের প্�
   - Step 96. Post Checkout source: success
   - Step 97. Complete job: success
 
+
+### Source update — 2026-11-17T08:36:08.358Z
+- Branch: `main`
+- Push range: `eb9802908b4ab26a52ea992a2bc6b3b8c7655350` → `f9a6c9af36b363546944229b3ef754e5cf7de168`
+- Pushed by: rajuhossain1912-art
+- Commit: [f9a6c9af36b3](https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/commit/f9a6c9af36b363546944229b3ef754e5cf7de168) — Improve known-language narration transcription
+- Changed files:
+  - `backend/app.py`
+  - `backend/tests/test_scene_interval_diagnostics.py`
+- Result: **push recorded**; this is not a test or deployment success claim.
+
 <!-- AUTO_LOG_END -->
 
 
