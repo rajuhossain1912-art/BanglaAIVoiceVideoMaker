@@ -855,7 +855,7 @@ class SubtitleOCRVerificationTests(unittest.TestCase):
     def test_tesseract_tsv_words_are_assigned_to_the_correct_panel(self):
         tsv = (
             "level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext\n"
-            "5\t1\t1\t1\t1\t1\t10\t40\t80\t25\t95\tবাংলা\n"
+            "5\t1\t1\t1\t1\t1\t10\t20\t80\t25\t95\tবাংলা\n"
             "5\t1\t1\t1\t1\t2\t10\t400\t60\t25\t92\ttest\n"
         )
         panels = video_app._parse_tesseract_tsv_panels(tsv, 364, 388, 2)
@@ -871,8 +871,18 @@ class SubtitleOCRVerificationTests(unittest.TestCase):
             frames.mkdir()
             first = frames / "frame-000000.png"
             second = frames / "frame-000001.png"
-            video_app.Image.new("RGB", (360, 640), "black").save(first)
-            video_app.Image.new("RGB", (360, 640), "black").save(second)
+            first_image = video_app.Image.new("RGB", (360, 640), "black")
+            second_image = video_app.Image.new("RGB", (360, 640), "black")
+            video_app.ImageDraw.Draw(first_image).text(
+                (90, 470), "বাংলা", fill=(255, 224, 65),
+                font=video_app.load_font(25, True), stroke_width=1, stroke_fill=(0, 0, 0)
+            )
+            video_app.ImageDraw.Draw(second_image).text(
+                (90, 470), "test", fill=(255, 224, 65),
+                font=video_app.load_font(25, False), stroke_width=1, stroke_fill=(0, 0, 0)
+            )
+            first_image.save(first)
+            second_image.save(second)
             listing = root / "caption-frames.txt"
             listing.write_text(
                 f"file '{first.as_posix()}'\nduration 1.0\n"
@@ -881,8 +891,8 @@ class SubtitleOCRVerificationTests(unittest.TestCase):
             )
             tsv = (
                 "level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext\n"
-                "5\t1\t1\t1\t1\t1\t10\t40\t80\t25\t95\tবাংলা\n"
-                "5\t1\t1\t1\t1\t2\t10\t400\t60\t25\t92\ttest\n"
+                "5\t1\t1\t1\t1\t1\t10\t20\t80\t25\t95\tবাংলা\n"
+                "5\t1\t1\t1\t1\t2\t10\t152\t60\t25\t92\ttest\n"
             )
             fake = SimpleNamespace(returncode=0, stdout="List of available languages (2):\nben\neng\n", stderr="")
             ocr = SimpleNamespace(returncode=0, stdout=tsv, stderr="")
