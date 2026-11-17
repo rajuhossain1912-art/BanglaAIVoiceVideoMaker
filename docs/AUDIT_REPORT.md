@@ -2866,3 +2866,11 @@ GitHub commit history অনুযায়ী প্রকল্পের প্�
 - PR backend CI run 44055071535 passed. PR #51 merged as cd76148515edb5e402632db628551185afb7ecb3.
 - Main Docker E2E run 44055157228 was queued at the time of this entry. Do not claim real-Tesseract E2E passed until that run finishes.
 - The test validates synthetic rendered frames, not the user's already-generated MP4 or production Render OCR timing.
+
+
+### PR #64 — production caption OCR integration and Render deployment — 2026-11-18
+- PR #64 merged as `1ba5c07855e0474044b3c3b801b4df4c7895decc`.
+- Production `make_caption_frames` integration test now renders mixed Bengali/English captions and checks actual active-word frames. Short uppercase acronym `AI` uses a distinct Noto Sans capital-I glyph; spatial contextual OCR remains constrained to the highlighted word's bounding box. Exact token checks and fail-closed publication rules were not weakened.
+- Backend CI run [44165429028](https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/actions/runs/44165429028): **success, 171 tests passed**. Android Debug build run [44165428962](https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/actions/runs/44165428962): **success**; Debug build only, no new signed Release APK.
+- Render deployment `dep-dbub7gui0phs73aoni3g` reached **LIVE** for the merge commit; startup completed and /health returned HTTP 200.
+- This verifies CI fixture caption rendering/OCR, not the user's previous MP4 or full publication acceptance. Full multilingual E2E with real free Whisper word timestamps, semantic vision review, user's exact 43-word live test, signed APK install/update and TalkBack device testing remain outstanding.
