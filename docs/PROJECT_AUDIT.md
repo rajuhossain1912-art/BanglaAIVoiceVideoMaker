@@ -392,3 +392,19 @@ Section ৭-এর GitHub Actions সীমাবদ্ধতার বিবর
 - PR #45 squash merge commit `2def815ae723dc859ffc81a5bf794df50593b07a`; parent commit `f9a6c9af36b363546944229b3ef754e5cf7de168`, অর্থাৎ PR #44-ও একই merged tree-তে অন্তর্ভুক্ত।
 - Render deployment `dep-dbu13t7pq7jc739ktl30` সর্বশেষ যাচাইয়ে **queued**; live হওয়া এখনো নিশ্চিত নয়।
 - OCR এখনো সব শব্দ/frame পরীক্ষা না করলে `unavailable` থাকবে; কোনো frame বাদ দিয়ে বা gate দুর্বল করে publication অনুমোদন করা হয়নি। বাস্তব ভিডিওতে OCR timeout কমেছে কি না পরীক্ষা করা বাকি।
+
+
+## ২০. Motivational scene grounding and repeated-slot planning — 2026-11-17
+
+- User's video report showed 9 image slots for 3 narration scenes; sentence text was repeated to satisfy the selected 3-second cadence. The generated image descriptions showed unrelated agricultural work although the supplied narration was motivational.
+- PR #46: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/pull/46 — repeated narration occurrence/total metadata is now passed to storyboard planner and reviewer; planner is instructed to create distinct but faithful visual moments for repeated slots. Motivation concepts now use grounded indoor desk/learning-workspace scenes and reject invented agriculture. Regression CI run 44049785590 succeeded (141 tests).
+- PR #46 merged as a29b2aa6ba61b1694ff9dd115ff9857cc6e892ef; Render deploy dep-dbu1abbbc2fs73fmc5kg reached LIVE; main E2E run 44050081207 succeeded.
+- This preserves the spoken narration and changes only image-planning context; it does not guarantee every generated image is correct.
+
+## ২১. Stricter vision review for off-topic motivational images — 2026-11-17
+
+- PR #47: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/pull/47 — vision-review question now rejects generic unrelated tasks. If motivational narration does not mention agriculture, images showing farming, harvesting, crop work, dried roots/stalks or agricultural sorting must be marked mismatch. Legitimate agriculture narration is exempt.
+- Added tests for both motivational off-topic rejection and valid farmer narration. PR CI run 44050411831 succeeded.
+- PR #47 merged as 35417cd71f30ec5a00a065914e664bc452bc7d9e; Render deploy dep-dbu1bnbbc2fs73fmdpe0 reached LIVE.
+- Main E2E run 44050498051 completed successfully: Bangla and English video generation, scene planning, duplicate/vision-review regression checks, and live Render health check all passed.
+- These changes make visual acceptance stricter; they do not claim perfect image semantics. Real-user video output must still be re-tested. Any mismatch or unavailable review continues to block download/publication.
