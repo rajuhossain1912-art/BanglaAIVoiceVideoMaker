@@ -1335,3 +1335,20 @@ GitHub commit history অনুযায়ী প্রকল্পের প্�
 - PR #45 merged as `2def815ae723dc859ffc81a5bf794df50593b07a`; its parent is PR #44 merge `f9a6c9af36b363546944229b3ef754e5cf7de168`, so both changes are in the same mainline tree.
 - Render deployment `dep-dbu13t7pq7jc739ktl30` was queued at last check; live status not yet verified.
 - All subtitle frames remain required; timeout stays unavailable and publication stays blocked. No visual/audio gate was weakened.
+
+
+### PR #46 — motivational scene prompt grounding and repeated-slot identity — 2026-11-17
+
+- The user's video report contained 9 image slots for 3 narration scenes; each scene sentence was repeated three times to satisfy the selected 3-second image interval. The visual descriptions were unrelated agricultural activities despite a motivational script.
+- Added occurrence/total metadata for repeated narration slots to both storyboard planner and independent reviewer payloads, so repeated slots can vary the moment/composition while remaining faithful to the same narration.
+- Replaced vague motivation concepts with specific indoor desk/learning-workspace scenes; planner and storyboard reviewer are instructed not to invent farming, harvesting, crop work, or root sorting when the narration does not mention agriculture.
+- Added regression tests for repeated-slot metadata and grounded motivation prompts. Final PR backend CI run 44049785590 succeeded (141 tests). Earlier attempts exposed stale assertions; they were updated before merge.
+- PR #46 merged as `a29b2aa6ba61b1694ff9dd115ff9857cc6e892ef`. Render deploy `dep-dbu1abbbc2fs73fmc5kg` reached **live**. Main E2E run 44050081207 succeeded.
+
+### PR #47 — stricter visual acceptance for motivational scenes — 2026-11-17
+
+- Added a narration-grounded image-review question. Generic people doing unrelated tasks are explicitly not a match.
+- For motivational scripts that do not mention agriculture, the vision reviewer must reject images depicting farming, harvesting, crop work, dried roots/stalks, or agricultural sorting. Explicit agriculture narration is exempt from this guard.
+- Added regression tests for both off-topic motivational rejection and legitimate farmer scenes. PR backend CI run 44050411831 succeeded.
+- PR #47 merged as `35417cd71f30ec5a00a065914e664bc452bc7d9e`. Render deploy `dep-dbu1bnbbc2fs73fmdpe0` reached **live**. Main E2E run 44050498051 was still in progress at the last check; do not mark that E2E as passed until its final conclusion is confirmed.
+- These changes tighten prompts and review instructions; they do not guarantee perfect image semantics. Every image must still pass the independent review, and unavailable/mismatched images remain blocked from publication.
