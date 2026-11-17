@@ -1422,9 +1422,23 @@ def _parse_cloudflare_transcription_response(data, return_details=False, offset_
     if not transcript:
         raise RuntimeError("অডিওতে বোঝার মতো কথা পাওয়া যায়নি।")
     if return_details:
+        info = result.get("transcription_info")
+        if not isinstance(info, dict):
+            info = {}
+        language = str(info.get("language") or "").strip().lower()
+        try:
+            language_probability = float(info.get("language_probability"))
+            if not math.isfinite(language_probability) or not 0 <= language_probability <= 1:
+                language_probability = None
+        except (TypeError, ValueError):
+            language_probability = None
         return {
             "text": transcript,
             "word_timestamps": _extract_whisper_word_timestamps(result, offset_seconds),
+            "transcription_info": {
+                "language": language or None,
+                "language_probability": language_probability,
+            },
         }
     return transcript
 
@@ -1486,6 +1500,7 @@ def transcribe_uploaded_audio(audio_path: Path, folder: Path, progress_callback=
     )
     transcripts = []
     all_word_timestamps = []
+    transcription_info = []
     for index, chunk_path in enumerate(chunks):
         if progress_callback:
             progress_callback(
@@ -1517,6 +1532,9 @@ def transcribe_uploaded_audio(audio_path: Path, folder: Path, progress_callback=
             parsed = _parse_cloudflare_transcription_response(data, return_details=True, offset_seconds=index * 120.0)
             transcripts.append(parsed["text"])
             all_word_timestamps.extend(parsed["word_timestamps"])
+            info = parsed.get("transcription_info")
+            if isinstance(info, dict) and any(value is not None for value in info.values()):
+                transcription_info.append(info)
         except urllib.error.HTTPError as exc:
             status = int(getattr(exc, "code", 0) or 0)
             try:
@@ -1542,6 +1560,7 @@ def transcribe_uploaded_audio(audio_path: Path, folder: Path, progress_callback=
         return {
             "text": transcript,
             "word_timestamps": all_word_timestamps,
+            "transcription_info": transcription_info,
         }
     return transcript
 
@@ -4046,6 +4065,16 @@ def _audio_token_diagnostics_report(audio_verification):
     transcript_preview = re.sub(r"\s+", " ", str(audio_verification.get("transcript_preview") or "")).strip()
     if transcript_preview:
         report += "Whisper অডিওতে যা শুনেছে: " + transcript_preview[:1200] + " "
+    metadata = audio_verification.get("transcription_info")
+    if isinstance(metadata, list) and metadata and isinstance(metadata[0], dict):
+        info = metadata[0]
+        language = str(info.get("language") or "").strip()
+        probability = info.get("language_probability")
+        if language:
+            report += "Whisper শনাক্ত ভাষা: " + language
+            if isinstance(probability, (int, float)) and math.isfinite(float(probability)):
+                report += " (মডেলের ভাষা-আস্থার মান " + f"{float(probability) * 100:.1f}" + " শতাংশ)"
+            report += "। "
     return report
 
 def _audio_verification_from_transcription(script: str, transcription):
@@ -4058,6 +4087,13 @@ def _audio_verification_from_transcription(script: str, transcription):
     # Keep a short, user-visible transcript sample so a low similarity score
     # can be diagnosed without exposing the complete narration in server logs.
     result["transcript_preview"] = transcript[:1200]
+    metadata = transcription.get("transcription_info")
+    if isinstance(metadata, dict):
+        result["transcription_info"] = [metadata]
+    elif isinstance(metadata, list):
+        result["transcription_info"] = [
+            item for item in metadata if isinstance(item, dict)
+        ][:20]
     result["provider"] = "Cloudflare Workers AI Whisper large-v3-turbo"
     result["source"] = "source_narration_audio_before_mux"
     return result
