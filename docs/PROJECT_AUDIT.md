@@ -374,3 +374,21 @@ Section ৭-এর GitHub Actions সীমাবদ্ধতার বিবর
 - Render deployment dep-dbu11qjrjlhs73b742j0: **live**; exact merged commit চালু হয়েছে।
 - এই পরিবর্তন শুধু motivational visual prompt grounding উন্নত করে। Audio/ASR 40% mismatch, missing/extra words, explicit word timestamps না থাকা এবং subtitle OCR timeout এখনো অমীমাংসিত। Publication gate, duplicate detection বা OCR acceptance দুর্বল করা হয়নি।
 - বাস্তব ফোনে নতুন ভিডিও তৈরি করে ছবির প্রাসঙ্গিকতা, অডিওর হুবহু মিল, OCR ও TalkBack ফল যাচাই এখনো বাকি।
+
+
+## ১৮. Whisper ভাষা-সংকেত ও অডিও QC সংশোধন — ২০২৬-১১-১৭
+
+- ব্যবহারকারীর পরীক্ষায় Google TTS নির্বাচিত হয়েছিল; Render লগে Whisper প্রতিলিপি ৪৬টি শব্দ-সময় দিয়েছিল, কিন্তু মূল লেখার সঙ্গে মিল ০.৪০৪৫ (প্রায় ৪০%) ছিল। ASR language hint ছাড়া auto-detect চলছিল।
+- PR #44: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/pull/44 — script যদি স্পষ্টভাবে বাংলা বা ইংরেজি হয়, সেই ভাষা Cloudflare Whisper-কে জানানো হয়; মিশ্র ভাষা হলে auto-detect রাখা হয়। প্রতিটি অনুরোধে previous-text conditioning বন্ধ করা হয়েছে, যাতে আগের টেক্সটের পুনরাবৃত্তি/হ্যালুসিনেশন কমে।
+- Cloudflare Whisper model documentation-এ `language` ইনপুট সমর্থিত; মিশ্র ভাষায় স্বয়ংক্রিয় শনাক্তকরণ বজায় রাখা হয়েছে।
+- PR #44-এর প্রাথমিক CI-তে mixed-script threshold-এর একটি test ব্যর্থ হয়েছিল; threshold সংশোধনের পর run `44048026905` **success**। PR #44 squash merge commit `f9a6c9af36b363546944229b3ef754e5cf7de168`।
+- এই পরিবর্তন কেবল transcription-এর ভাষা hint দেয়; ৪০% mismatch স্বয়ংক্রিয়ভাবে ঠিক হয়েছে—এমন দাবি করা যাবে না। নতুন বাস্তব ভিডিওতে ASR ফল পুনরায় যাচাই দরকার। Publication gate অপরিবর্তিত।
+
+## ১৯. সাবটাইটেল OCR timeout সহনশীলতা — ২০২৬-১১-১৭
+
+- ব্যবহারকারীর প্রতিবেদনে ৪৩টি subtitle frame তৈরি হলেও OCR প্রথম ব্যাচেই timeout হয়েছিল; কোনো frame যাচাই সম্পন্ন হয়নি।
+- PR #45: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/pull/45 — Tesseract-এর default batch ৮ থেকে ৪ frame করা হয়েছে; প্রতি batch timeout ৩০ থেকে ৪৫ সেকেন্ড; timeout হলে ইতোমধ্যে সম্পূর্ণ হওয়া frame-এর সংখ্যা সঠিকভাবে report করা হয়।
+- নতুন regression test একটি batch সম্পন্ন করে পরের batch timeout ঘটিয়ে completed-frame count যাচাই করে। প্রথম CI-তে test import ও newline escaping ত্রুটি ছিল; সংশোধনের পর run `44048287657` **success** (syntax + 140 tests)।
+- PR #45 squash merge commit `2def815ae723dc859ffc81a5bf794df50593b07a`; parent commit `f9a6c9af36b363546944229b3ef754e5cf7de168`, অর্থাৎ PR #44-ও একই merged tree-তে অন্তর্ভুক্ত।
+- Render deployment `dep-dbu13t7pq7jc739ktl30` সর্বশেষ যাচাইয়ে **queued**; live হওয়া এখনো নিশ্চিত নয়।
+- OCR এখনো সব শব্দ/frame পরীক্ষা না করলে `unavailable` থাকবে; কোনো frame বাদ দিয়ে বা gate দুর্বল করে publication অনুমোদন করা হয়নি। বাস্তব ভিডিওতে OCR timeout কমেছে কি না পরীক্ষা করা বাকি।
