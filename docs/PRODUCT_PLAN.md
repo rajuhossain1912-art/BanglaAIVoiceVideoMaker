@@ -116,7 +116,7 @@ Known limitations that must remain visible to users:
 This section supersedes older statements above wherever they describe the current implementation.
 
 ### Android release and job recovery
-- Latest verified direct-distribution APK: v0.3.224. Release workflow #224 / run 43936012789 succeeded, including release build, package/version identity, persistent signing key, APK signature verification, artifact upload and GitHub Release publication.
+- Latest verified direct-distribution APK: v0.3.225. Release workflow run 44043382156 succeeded, including release build, package/version identity, persistent signing key, APK signature verification, artifact upload and GitHub Release publication. PR #42 merged as a4e27b32b43590da173ec15ab582af4a629ee85a; it clarifies Android background-work limits and uses direct stopService calls for four stop paths.
 - PR #41 is merged. Android stores the active backend job ID in SharedPreferences and, after Activity/process recreation, attempts to resume status polling for that existing server job. Temporary polling interruption retains the ID; a terminal server status clears it.
 - This is not guaranteed background execution and does not recover a job whose in-memory state or output file has already been lost by a Render restart/spin-down. Durable backend storage and a WorkManager/service-owned lifecycle remain future work.
 - No physical-device install/update, TalkBack acceptance or screen-off test has been completed.
@@ -136,13 +136,20 @@ This section supersedes older statements above wherever they describe the curren
 
 ### Hosting and live verification
 - Render service `bangla-ai-voice-video-maker-api` is currently not suspended, on Free Docker, one instance, auto-deploy from main; current service metadata reports healthCheckPath `/health`.
-- Latest inspected deploy `dep-dbtl9tfb9u1s73at7r7g` is live. The request-log query did not return a `/health` entry, so metadata and deploy are confirmed but an individual health-probe request is not independently evidenced by logs.
+- Android code merge deploy `dep-dbu0k73rjlhs73b6klv0` reached live; latest audit documentation deploy `dep-dbu0kn5bedkc73esa6a0` also reached live. The request-log query did not return a `/health` entry, so metadata and deploy are confirmed but an individual health-probe request is not independently evidenced by logs.
 - Job state remains in memory and files remain on ephemeral storage. No Render Postgres or Key Value service is attached. A server restart may lose active jobs and generated files.
 - Historical Render logs include external image-search/provider timeouts and an audio-QC unavailable event; they are not evidence of a current outage, but provider reliability remains a risk.
 
 ### Remaining acceptance work
-1. Test v0.3.224 update installation on the user's Android phone, with TalkBack, without asking for visual-only inspection.
+1. Test v0.3.225 update installation on the user's Android phone, with TalkBack, without asking for visual-only inspection.
 2. Exercise job resume with app process recreation while the backend job is still alive; separately document backend restart loss.
 3. Run a real Bangla, English and mixed-language voice-clone test with explicit consent and assess pronunciation, voice similarity and provider availability.
 4. Verify current provider timeouts and image diversity under realistic Free-tier constraints; do not bypass semantic review or publication gate.
 5. Add durable job/file storage only if a genuinely free and supportable option is available and explicitly approved; do not silently add paid services.
+
+
+### Latest release update — 2026-11-17
+- v0.3.225 release tag target: `a4e27b32b43590da173ec15ab582af4a629ee85a`.
+- APK SHA-256: `88e1d0bb193d95e6bbddff1a84135698515c275c49e5fa735052765744c6d7a8`; size 10,736,616 bytes.
+- Direct APK: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/releases/download/v0.3.225/BanglaAIVoiceVideoMaker-v0.3.225.apk
+- Physical install/update and TalkBack validation remain outstanding.
