@@ -190,3 +190,22 @@ This section supersedes older statements above wherever they describe the curren
 ### Real OCR integration test — 2026-11-17
 - PR #51 merged (cd76148515edb5e402632db628551185afb7ecb3): added a real Tesseract test that renders all 43 subtitle frames for the user's exact Bengali script through the production caption renderer and requires every active word to be recognized. It runs when Tesseract and both language packs are available; the Docker E2E image provides them. Backend CI 44055071535 passed.
 - Main Docker E2E run 44055157228 was queued at the time of this note. This test is synthetic and does not replace a real user video retest or guarantee Render production OCR timing.
+
+### Current engineering status — 2026-11-18 (supersedes earlier "Next engineering priorities" notes above)
+
+- PR #52–#56 strengthened Bengali active-word OCR without skipping caption frames: multiple Tesseract page-segmentation retries, isolated highlighted-word crops, Bengali/English language packs and Noto Bengali fonts in CI, and the PSM 10 fallback. PR #56's real Tesseract synthetic integration test recognized all 43 words from the user's 43-word sample.
+- PR #57 added a bounded transcript preview to the accessible audio QC report, so the user can compare what Whisper actually recognized. PR #58 classifies Cloudflare daily free-allocation exhaustion separately from authentication, rate-limit and server errors.
+- PR #59 preserves Whisper's detected language and language-confidence metadata. PR #60 preserves original audio duration, post-VAD duration and provider word count. These diagnostics help explain failures; they do not improve ASR recognition by themselves or guarantee transcript accuracy.
+- PRs #59 and #60 are merged to main. PR #60's main Docker E2E run 44152407718 completed SUCCESS with 48/48 steps, including Bangla/English video-generation smoke flows and live Render health. This smoke environment had no Cloudflare credentials and disabled external AI image/planner calls, so it did not validate a real Whisper response, real-provider word timestamps, semantic vision review, or final publication eligibility.
+- The audit document records the verified PR history and limitations: [PROJECT_AUDIT.md](PROJECT_AUDIT.md).
+
+### Remaining acceptance work (current)
+
+1. When Cloudflare's free allocation is available, run the same 43-word Bengali narration and inspect the actual Whisper transcript preview, detected language/confidence, duration, VAD duration and word count. Do not infer success from synthetic tests.
+2. Verify provider-supplied word-level timestamps for every spoken word. Never synthesize exact word times from sentence pauses; keep publication blocked when timestamps are missing or incomplete.
+3. Re-test the actual final scene images and their descriptions for relevance and visual variety. The previous 26.5-second user video used nine AI-generated desk/learning images with repetitive compositions; automated smoke tests without vision credentials cannot establish visual quality.
+4. Confirm all subtitle frames and active words pass OCR on a real generated video, not only synthetic rendered frames.
+5. Complete Android v0.3.225 installation/update and TalkBack acceptance on the user's phone. No physical-device or screen-off test is currently verified. Backend-only PRs #59/#60 did not create a new APK.
+6. Continue to disclose Render Free limitations: in-memory job state and ephemeral output files can be lost on restart/spin-down. Do not add paid storage or services without explicit approval.
+
+No paid provider, new secret, expected-script Whisper prompt, weakened quality threshold, or weakened fail-closed publication gate was introduced by PRs #52–#60.
