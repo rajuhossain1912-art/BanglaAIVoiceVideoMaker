@@ -4029,7 +4029,7 @@ def _audio_token_diagnostics_report(audio_verification):
         f"স্বয়ংক্রিয় প্রতিলিপিতে মূল লেখার {missing}টি শব্দ অনুপস্থিত, "
         f"{extra}টি অতিরিক্ত শব্দ এবং {matched}টি শব্দ মিলে গেছে। "
     )
-    transcript_preview = re.sub(r"\\s+", " ", str(audio_verification.get("transcript_preview") or "")).strip()
+    transcript_preview = re.sub(r"\s+", " ", str(audio_verification.get("transcript_preview") or "")).strip()
     if transcript_preview:
         report += "Whisper অডিওতে যা শুনেছে: " + transcript_preview[:1200] + " "
     return report
