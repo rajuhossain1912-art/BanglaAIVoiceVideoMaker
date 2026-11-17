@@ -3859,29 +3859,38 @@ def _verify_subtitle_frames_with_ocr(frame_list: Path, script: str, folder: Path
                     # the recognized word must spatially overlap the yellow highlight.
                     with Image.open(batch[panel_index]) as image:
                         context_panel = image.convert("RGB").crop((14, 440, 346, 622))
-                        context_panel = context_panel.resize((664, 364), Image.Resampling.LANCZOS)
+                        # Bengali conjuncts and vowel marks can be lost in a small
+                        # highlighted-word crop. Enlarge the full caption panel 4x
+                        # and retry with several segmentation modes while retaining
+                        # the strict spatial-overlap requirement for the active word.
+                        context_panel = context_panel.resize((1328, 728), Image.Resampling.LANCZOS)
                     context_path = ocr_folder / f"context-{global_index:06d}.png"
                     context_panel.save(context_path, optimize=True)
-                    try:
-                        context_result = subprocess.run(
-                            ["tesseract", str(context_path), "stdout", "-l", "ben+eng", "--psm", "11", "tsv"],
-                            capture_output=True, text=True, timeout=20,
-                        )
-                    except subprocess.TimeoutExpired:
-                        return {
-                            "status": "unavailable", "frames_checked": offset + panel_index,
-                            "words_detected": words_detected, "words_missing": None,
-                            "reason": "সাবটাইটেলের একটি অস্পষ্ট শব্দের প্রাসঙ্গিক OCR ২০ সেকেন্ডে সম্পূর্ণ হয়নি; পরীক্ষা নিরাপদে বন্ধ রাখা হয়েছে।",
-                        }
-                    if context_result.returncode != 0:
-                        return {
-                            "status": "unavailable", "frames_checked": offset + panel_index,
-                            "words_detected": words_detected, "words_missing": None,
-                            "reason": "সাবটাইটেলের একটি অস্পষ্ট শব্দের প্রাসঙ্গিক OCR সম্পূর্ণ হয়নি।",
-                        }
-                    if _tesseract_tsv_matches_highlighted_word(
-                        context_result.stdout, expected_tokens, bounds
-                    ):
+                    context_verified = False
+                    for page_segmentation in ("6", "11", "13"):
+                        try:
+                            context_result = subprocess.run(
+                                ["tesseract", str(context_path), "stdout", "-l", "ben+eng", "--psm", page_segmentation, "tsv"],
+                                capture_output=True, text=True, timeout=20,
+                            )
+                        except subprocess.TimeoutExpired:
+                            return {
+                                "status": "unavailable", "frames_checked": offset + panel_index,
+                                "words_detected": words_detected, "words_missing": None,
+                                "reason": "সাবটাইটেলের একটি অস্পষ্ট শব্দের প্রাসঙ্গিক OCR ২০ সেকেন্ডে সম্পূর্ণ হয়নি; পরীক্ষা নিরাপদে বন্ধ রাখা হয়েছে।",
+                            }
+                        if context_result.returncode != 0:
+                            return {
+                                "status": "unavailable", "frames_checked": offset + panel_index,
+                                "words_detected": words_detected, "words_missing": None,
+                                "reason": "সাবটাইটেলের একটি অস্পষ্ট শব্দের প্রাসঙ্গিক OCR সম্পূর্ণ হয়নি।",
+                            }
+                        if _tesseract_tsv_matches_highlighted_word(
+                            context_result.stdout, expected_tokens, bounds, scale=4
+                        ):
+                            context_verified = True
+                            break
+                    if context_verified:
                         words_detected += 1
                         continue
                 missing_indices.append(global_index + 1)
