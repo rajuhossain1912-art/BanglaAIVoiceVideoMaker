@@ -363,3 +363,14 @@ Section ৭-এর GitHub Actions সীমাবদ্ধতার বিবর
 - Render deployment for Android merge commit `a4e27b32b43590da173ec15ab582af4a629ee85a` reached **live** (`dep-dbu0k73rjlhs73b6klv0`) before the audit-doc-only deployment; latest documentation commit `7b88d45e434a11c29538243eb5be2b12133f3cf8` also reached **live** (`dep-dbu0kn5bedkc73esa6a0`).
 - Automatic audit-register workflow run `44043382221`: append-audit job **success**.
 - Release/CI success does not verify installation over an older APK on a physical phone. Android 16, TalkBack, screen-off, battery-saver and process-kill acceptance tests remain outstanding.
+
+## ১৭. অনুপ্রেরণামূলক দৃশ্যের প্রাসঙ্গিকতা সংশোধন — ২০২৬-১১-১৭
+
+- ব্যবহারকারীর ভিডিও পরীক্ষার প্রতিবেদনে একই বাক্যের জন্য তিনটি দৃশ্য এবং কৃষিকাজ/অপ্রাসঙ্গিক শ্রমের মতো বর্ণনা পাওয়া যায়। কোড পর্যালোচনায় দেখা যায়, আগের motivation prompt ছিল অতিরিক্ত সাধারণ; ফলে planner নির্দিষ্ট ব্যর্থতা, শেখা বা লক্ষ্যপূরণের দৃশ্য না বেছে সাধারণ কাজের ছবি তৈরি করতে পারত।
+- PR #43: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/pull/43 — ব্যর্থতার পর পুনরায় চেষ্টা, ভুল শনাক্ত করে সংশোধন, নিয়মিত অনুশীলন এবং লক্ষ্যপূরণের বাস্তব প্রথম পদক্ষেপের জন্য আলাদা narration-grounded prompt যোগ করা হয়েছে।
+- Regression test-এ পরীক্ষার তিনটি বাংলা বাক্য থেকে retry-after-failure, learning-from-mistake, practice-toward-goal এবং dream-to-first-step prompt যাচাই করা হয়েছে। পুরোনো motivation assertions নতুন prompt অনুযায়ী হালনাগাদ করা হয়েছে।
+- প্রথম CI run 44047225024-এ পুরোনো দুইটি prompt expectation ব্যর্থ হয়েছিল; সংশোধনের পর run 44047382875 **success** (Python syntax + 138 unit tests)।
+- PR #43 squash merge commit: 76f925bede140a6d5da7c83ad414786b13f05dc8।
+- Render deployment dep-dbu11qjrjlhs73b742j0: **live**; exact merged commit চালু হয়েছে।
+- এই পরিবর্তন শুধু motivational visual prompt grounding উন্নত করে। Audio/ASR 40% mismatch, missing/extra words, explicit word timestamps না থাকা এবং subtitle OCR timeout এখনো অমীমাংসিত। Publication gate, duplicate detection বা OCR acceptance দুর্বল করা হয়নি।
+- বাস্তব ফোনে নতুন ভিডিও তৈরি করে ছবির প্রাসঙ্গিকতা, অডিওর হুবহু মিল, OCR ও TalkBack ফল যাচাই এখনো বাকি।
