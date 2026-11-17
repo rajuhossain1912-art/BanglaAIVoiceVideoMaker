@@ -1445,7 +1445,7 @@ def _whisper_language_hint(script: str):
     return None
 
 
-def transcribe_uploaded_audio(audio_path: Path, folder: Path, progress_callback=None, return_details=False, language_hint=None):
+def transcribe_uploaded_audio(audio_path: Path, folder: Path, progress_callback=None, return_details=False, language_hint=None, vad_filter=True):
     """Transcribe audio-only uploads with Cloudflare Whisper in manageable two-minute chunks."""
     account_id = os.getenv("CLOUDFLARE_ACCOUNT_ID", "").strip()
     api_token = os.getenv("CLOUDFLARE_AI_API_TOKEN", os.getenv("CLOUDFLARE_API_TOKEN", "")).strip()
@@ -1478,7 +1478,7 @@ def transcribe_uploaded_audio(audio_path: Path, folder: Path, progress_callback=
         payload = {
             "audio": base64.b64encode(chunk_path.read_bytes()).decode("ascii"),
             "task": "transcribe",
-            "vad_filter": True,
+            "vad_filter": bool(vad_filter),
             "condition_on_previous_text": False,
             "initial_prompt": "বাংলা ও ইংরেজি কথার সঠিক প্রতিলিপি লিখুন। নাম, স্থান ও প্রযুক্তিগত শব্দ যতটা সম্ভব ঠিক রাখুন।"
         }
@@ -4023,7 +4023,7 @@ def render(job_id: str, script: str, mode: str, audio_path: Optional[Path], capt
                 language_hint = _whisper_language_hint(script)
                 narration_transcription = transcribe_uploaded_audio(
                     audio_path, folder / "narration-audio-qc", return_details=True,
-                    language_hint=language_hint
+                    language_hint=language_hint, vad_filter=False
                 )
                 if not isinstance(narration_transcription, dict):
                     narration_transcription = None
