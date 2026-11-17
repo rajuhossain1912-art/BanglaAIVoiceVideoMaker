@@ -470,3 +470,16 @@ Section ৭-এর GitHub Actions সীমাবদ্ধতার বিবর
 - Render deploy dep-dbu8mnt9el5s739gpupg সফলভাবে LIVE হয়েছে। নতুন instance startup সম্পূর্ণ এবং /health HTTP 200 দিয়েছে।
 - এখনো অজানা: Docker-এর Tesseract-সহ ৪৩-ফ্রেমের integration test-এ এই নতুন fallback সব শব্দ শনাক্ত করতে পারে কি না। আগের ৪০/৪৩ ফল PR #54-এর আগের code-এ ছিল। নতুন main Docker E2E ফল না আসা পর্যন্ত OCR সম্পূর্ণ সফল বলা যাবে না।
 - ASR-এর ৪০% similarity এবং explicit word timestamp-এর ঘাটতি এই PR-এর আওতার বাইরে; publication gate অপরিবর্তিত।
+
+
+
+## ২৯. বাংলা সক্রিয় শব্দ OCR-এর অতিরিক্ত segmentation retry — 2026-11-17
+
+- আগের নতুন main Docker E2E run 44134712698-এ ৪৩টি synthetic subtitle frame-এর মধ্যে ৪২টি শব্দ শনাক্ত হয়েছিল; শুধু ৩৪ নম্বর শব্দ “স্বপ্ন” OCR-এ নিশ্চিত হয়নি।
+- PR #55: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/pull/55 — isolated yellow active-word crop-এর strict retry-তে Tesseract PSM 7 ও 11 যোগ করা হয়েছে; আগের PSM 8 ও 13-ও রাখা হয়েছে।
+- isolated crop-এর সম্পূর্ণ normalized text এখনও প্রত্যাশিত শব্দের সঙ্গে exact match হতে হবে। অতিরিক্ত/ভুল লেখা প্রত্যাখ্যাত; publication gate বা OCR acceptance threshold শিথিল করা হয়নি।
+- PR Backend Check run 44135551906 সফল হয়েছে; syntax check এবং unit-test ধাপ সফল।
+- PR #55 squash merge commit f2a9364d27e856d17a136dcb2d299c3831b634c8। Render deploy dep-dbu8pqnb9u1s73a7de9g **LIVE**; নতুন instance থেকে /health HTTP 200 নিশ্চিত হয়েছে।
+- Main Docker E2E run 44135940074-এ container build সফল হয়েছে; backend unit test ধাপ চলমান—চূড়ান্ত ফল এখনো পাওয়া যায়নি।
+- PR #56: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/pull/56 — PR CI-তে Tesseract, Bengali ও English language pack ইনস্টল করে real 43-frame OCR integration test আর skip না করার ব্যবস্থা করা হয়েছে। PR check চলমান; ফল না আসা পর্যন্ত ৪৩/৪৩ OCR সফল বলা যাবে না।
+- ASR similarity ৪০% এবং explicit word-level timestamp-এর ঘাটতি এখনো অমীমাংসিত; publication gate অপরিবর্তিত।
