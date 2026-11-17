@@ -200,12 +200,41 @@ class SubtitleOcrLanguageFallbackTests(unittest.TestCase):
                         timeout=15,
                     )
                     self.assertEqual(result.returncode, 0, result.stderr)
-                    diagnostics.append(f"psm{psm}={result.stdout.strip()!r}")
+                    diagnostics.append(f"crop/psm{psm}={result.stdout.strip()!r}")
                     if video_app._tesseract_crop_matches_expected_tokens(
                         result.stdout, video_app._normalize_transcript_tokens(word)
                     ):
                         recognized = True
                         break
+
+                # Short all-capital acronyms such as AI are inherently ambiguous
+                # when OCR sees an isolated two-character crop (I and l share
+                # near-identical glyph shapes). Use the same contextual, spatially
+                # constrained fallback as production: OCR the caption panel and
+                # accept the exact token only when its box overlaps the yellow
+                # active-word highlight.
+                if not recognized:
+                    panel_path = root / f"production-panel-{index}.png"
+                    panel = frame.crop((14, 440, 346, 622)).resize(
+                        (664, 364), Image.Resampling.LANCZOS
+                    )
+                    panel.save(panel_path)
+                    result = subprocess.run(
+                        ["tesseract", str(panel_path), "stdout", "-l", language, "--psm", "6", "tsv"],
+                        capture_output=True,
+                        text=True,
+                        timeout=15,
+                    )
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    diagnostics.append(
+                        f"panel/psm6={video_app._normalize_transcript_tokens(result.stdout)!r}"
+                    )
+                    recognized = video_app._tesseract_tsv_matches_highlighted_word(
+                        result.stdout,
+                        video_app._normalize_transcript_tokens(word),
+                        bounds,
+                        scale=2,
+                    )
                 self.assertTrue(
                     recognized,
                     f"Production-rendered active word {word!r} was not OCR-matched: {'; '.join(diagnostics)}",
