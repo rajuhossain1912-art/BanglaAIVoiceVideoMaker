@@ -1415,7 +1415,7 @@ def _parse_cloudflare_transcription_response(data, return_details=False, offset_
 def _whisper_language_hint(script: str):
     """Choose a language hint only when the supplied script is clearly monolingual."""
     text = str(script or "")
-    bengali_chars = len(re.findall(r"[\\u0980-\\u09FF]", text))
+    bengali_chars = len(re.findall(r"[\u0980-\u09FF]", text))
     english_chars = len(re.findall(r"[A-Za-z]", text))
     if bengali_chars and not english_chars:
         return "bn"
