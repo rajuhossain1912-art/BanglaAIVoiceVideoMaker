@@ -243,7 +243,7 @@ private fun VideoMakerScreen() {
                 status = "আগের ভিডিওর অগ্রগতি এখন পাওয়া যাচ্ছে না। ইন্টারনেট ঠিক হলে অ্যাপ আবার খুলে চেষ্টা করুন।"
             } finally {
                 running = false
-                runCatching { context.startService(Intent(context, VideoWorkService::class.java).setAction(VideoWorkService.ACTION_STOP)) }
+                runCatching { context.stopService(Intent(context, VideoWorkService::class.java)) }
             }
         }
     }
@@ -297,7 +297,7 @@ private fun VideoMakerScreen() {
             recorder = null
             isRecording = false
             restorePhoneAudioAfterRecording()
-            runCatching { context.startService(Intent(context, VideoWorkService::class.java).setAction(VideoWorkService.ACTION_STOP)) }
+            runCatching { context.stopService(Intent(context, VideoWorkService::class.java)) }
             status = "রেকর্ডিং শুরু করা যায়নি। মাইক্রোফোনের অনুমতি ও ফোনের স্টোরেজ পরীক্ষা করুন।"
             }
         }
@@ -334,7 +334,7 @@ private fun VideoMakerScreen() {
             isRecording = false
             recordingStartedAt = 0L
             restorePhoneAudioAfterRecording()
-            runCatching { context.startService(Intent(context, VideoWorkService::class.java).setAction(VideoWorkService.ACTION_STOP)) }
+            runCatching { context.stopService(Intent(context, VideoWorkService::class.java)) }
         }
         if (saved && target != null) {
             previewFile = target
@@ -769,7 +769,7 @@ private fun VideoMakerScreen() {
                                 cloneConsent = false
                                 running = false
                                 runCatching {
-                                    context.startService(Intent(context, VideoWorkService::class.java).setAction(VideoWorkService.ACTION_STOP))
+                                    context.stopService(Intent(context, VideoWorkService::class.java))
                                 }
                             }
                         }
@@ -1053,8 +1053,8 @@ private fun SettingsScreen(
             expanded = expandedSection == "background",
             onToggle = { expandedSection = if (expandedSection == "background") "" else "background" }
         ) {
-            Text("ভিডিও তৈরি শুরু হলে চলমান বিজ্ঞপ্তি ও CPU চালু রাখার ব্যবস্থা ব্যবহার হবে। তাই স্ক্রিন বন্ধ করলেও ভিডিও তৈরির কাজ চলতে থাকবে।")
-            Text("ফোনের ব্যাটারি সেভার বা নির্মাতার ব্যাকগ্রাউন্ড সীমাবদ্ধতা অতিরিক্ত বাধা দিতে পারে।")
+            Text("ভিডিও তৈরি শুরু হলে চলমান বিজ্ঞপ্তি ও CPU চালু রাখার ব্যবস্থা ব্যবহার হবে, যাতে স্ক্রিন বন্ধ থাকলেও কাজ চলতে পারে।")
+            Text("তবে Android-এর ব্যাকগ্রাউন্ড সীমা, ব্যাটারি সেভার বা সার্ভার পুনরায় চালু হলে কাজ থেমে যেতে পারে। অ্যাপ আবার খুললে সংরক্ষিত কাজের অবস্থা পুনরায় খোঁজার চেষ্টা করবে।")
         }
 
         if (showDeleteConfirmation) {
