@@ -539,3 +539,15 @@ Section ৭-এর GitHub Actions সীমাবদ্ধতার বিবর
 - ইংরেজি ও mixed OCR-এর বাস্তব ব্যর্থতা নতুন follow-up কাজ: English sample ০/৮ এবং mixed ৫/১০। Bengali ৭/৭ synthetic smoke result-কে ইংরেজি OCR সফলতার প্রমাণ ধরা যাবে না। OCR-এর crop বর্তমানে নির্দিষ্ট caption panel coordinate ও yellow-highlight color threshold ব্যবহার করে; ইংরেজি rendered caption layout/active-word highlight crop-এর সঙ্গে মেলে কি না তা তদন্ত করতে হবে। কোনো OCR threshold বা publication gate শিথিল করা যাবে না।
 - PR #61 squash merge commit `8561e0f9f3838e398ebe3e5ddb3c189a4d0b7eb6`; Render deploy `dep-dbua8tk9v7es73dm09pg` LIVE। Main E2E live Render `/health` ধাপে HTTP 200 এবং প্রয়োজনীয় media tools-এর availability নিশ্চিত করেছে।
 - Android APK এই backend-only PR-এর কারণে পরিবর্তিত হয়নি; সর্বশেষ Android release v0.3.225। Physical Android installation/update, TalkBack, screen-off, এবং user-generated MP4 acceptance এখনো আলাদাভাবে যাচাই করতে হবে।
+
+
+## 35. PR #62 English OCR fallback — E2E result and follow-up diagnosis (2026-11-18)
+
+- PR #62 merged as `13e61482e8f4dc7d8735e0e73aa4ff0648123629`; Render deploy `dep-dbuac47b9u1s73aacn50` reached LIVE.
+- Backend Check passed 166 tests, including four OCR language-selection regression tests.
+- Main Docker E2E run [44155270569](https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/actions/runs/44155270569) completed successfully. Docker build, backend unit tests, multilingual video generation smoke, provider/image regression checks, and live Render `/health` all passed.
+- Real generated-video OCR did not validate the English fallback: English sample was 0/8 active words; mixed sample was 5/10. The Bengali sample was also blocked by the complete publication gate; do not treat this run as publication-quality acceptance.
+- All three smoke videos correctly had `share_allowed=false`, `download_url=null`, and `publication_status=blocked`. Whisper audio verification returned RuntimeError/unavailable in the smoke environment, no word-level ASR timestamps were available, and semantic image review was unavailable. The smoke environment had no Cloudflare credentials, so this does not prove current provider quota exhaustion.
+- PR #63 adds a test-only real-Tesseract diagnostic that recreates the production caption panel geometry, font, yellow highlight and crop. It will distinguish a basic font/crop recognition failure from a discrepancy in actual rendered video frames. No runtime OCR behavior, exact-match requirement, or fail-closed gate is changed by PR #63.
+- Next: use PR #63's measured OCR result to identify the actual cause; correct the English/mixed crop/render mismatch without weakening exact token matching; then rerun full multilingual E2E and the user's exact 43-word Bengali sample. Separately restore free Cloudflare transcription availability to verify actual transcript matching and per-word timestamps, and restore semantic image review availability.
+- Android APK remains v0.3.225; PR #62 is backend-only. Physical Android install/update and TalkBack acceptance are still outstanding.
