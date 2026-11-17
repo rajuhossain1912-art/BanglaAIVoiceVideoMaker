@@ -68,6 +68,23 @@ class SceneImageSimilarityTests(unittest.TestCase):
             concepts = video_app._matched_visual_concepts(text)
             self.assertTrue(any("steadily practicing a specific everyday skill" in item for item in concepts))
 
+    def test_failure_and_perseverance_words_select_motivation_graphic(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            motivation_dir = root / "motivation"
+            generic_dir = root / "generic"
+            motivation_dir.mkdir()
+            generic_dir.mkdir()
+            motivation = video_app.make_background(
+                "জীবনে সফল হতে হলে কখনো হাল ছেড়ে দেওয়া যাবে না। প্রতিটি ব্যর্থতা আমাদের নতুন কিছু শেখায়।",
+                motivation_dir, force_topic_graphic=True, variation_seed=1
+            )
+            generic = video_app.make_background(
+                "আজ আকাশ পরিষ্কার এবং বাতাস বইছে।",
+                generic_dir, force_topic_graphic=True, variation_seed=1
+            )
+            self.assertFalse(video_app._scene_images_too_similar(motivation, generic))
+
     def test_motivation_fallback_has_three_distinct_scene_variants(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
