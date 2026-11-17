@@ -1097,3 +1097,21 @@ GitHub commit history অনুযায়ী প্রকল্পের প্�
 - Render deploy dep-dbu11qjrjlhs73b742j0 reached **live** for the exact merge commit.
 - No change was made to audio verification, word-level timestamp requirements, subtitle OCR, semantic-review confidence, duplicate detection, or publication gating. The observed audio mismatch and OCR timeout remain unresolved; download stays blocked until every required check passes.
 - Physical-device and TalkBack validation remain outstanding.
+
+
+### PR #44 — Whisper language hint for narration QC — 2026-11-17
+
+- Render log for the user's test confirms Google TTS was selected; Whisper returned 46 word timestamps, but transcript similarity was 0.4045 (40.45%). The supplied script language was not passed to Whisper.
+- Added conservative script-language detection: `bn` or `en` only for clearly dominant single-language scripts; mixed scripts remain auto-detected. The narration QC request now passes the language hint and disables previous-text conditioning.
+- Cloudflare's official Whisper model page documents `language` as a supported input and word-level timestamps in its output: https://developers.cloudflare.com/workers-ai/models/whisper-large-v3-turbo/ .
+- Initial CI exposed one overly permissive mixed-language threshold; corrected threshold CI run 44048026905 succeeded. PR #44 merged as `f9a6c9af36b363546944229b3ef754e5cf7de168`.
+- This is a targeted ASR hint, not proof of improved recognition; the user's audio must be re-tested. Publication gate unchanged.
+
+### PR #45 — subtitle OCR batch timeout resilience — 2026-11-17
+
+- User's report showed 43 generated subtitle frames but OCR timed out before checking the first frame.
+- Reduced Tesseract batch size from 8 to 4 frames, increased per-batch timeout from 30 to 45 seconds, and report completed-frame count accurately when a batch times out.
+- Added a regression test for a successful first batch followed by a timeout. Initial CI failures were test import and newline escaping; after correction run 44048287657 succeeded (syntax + 140 tests).
+- PR #45 merged as `2def815ae723dc859ffc81a5bf794df50593b07a`; its parent is PR #44 merge `f9a6c9af36b363546944229b3ef754e5cf7de168`, so both changes are in the same mainline tree.
+- Render deployment `dep-dbu13t7pq7jc739ktl30` was queued at last check; live status not yet verified.
+- All subtitle frames remain required; timeout stays unavailable and publication stays blocked. No visual/audio gate was weakened.
