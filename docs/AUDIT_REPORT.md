@@ -1731,6 +1731,18 @@ GitHub commit history অনুযায়ী প্রকল্পের প্�
   - `docs/PROJECT_AUDIT.md`
 - Result: **push recorded**; this is not a test or deployment success claim.
 
+
+### Source update — 2026-11-17T17:29:48.412Z
+- Branch: `main`
+- Push range: `31069e9a10d7414c3e6ab6dff4daaa2a2c85f824` → `2f08cbad9f46c6316bb72a58ac6ef93fa167fd94`
+- Pushed by: rajuhossain1912-art
+- Commit: [2f08cbad9f46](https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/commit/2f08cbad9f46c6316bb72a58ac6ef93fa167fd94) — Run real Bengali Tesseract integration test in PR CI (#56)
+- Changed files:
+  - `.github/workflows/pr-backend-check.yml`
+  - `backend/app.py`
+  - `backend/tests/test_voice_clone.py`
+- Result: **push recorded**; this is not a test or deployment success claim.
+
 <!-- AUTO_LOG_END -->
 
 
