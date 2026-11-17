@@ -3754,22 +3754,27 @@ def make_caption_frames(script: str, duration: float, background: Path, folder: 
                     color = (255, 224, 65) if active else (255, 255, 255)
                     token_size = 32 if token.isascii() and token.isupper() and 1 < len(token) <= 4 else 25
                     token_font = load_caption_font(token, token_size, True)
-                    draw.text((x, y), token, font=token_font, fill=color, stroke_width=1, stroke_fill=(0, 0, 0))
-                    # Make uppercase I unambiguous at small video-caption sizes.
-                    # Some OCR engines otherwise read the serif glyph in "AI" as L/l.
                     if token.isascii() and token.isupper() and "I" in token and len(token) <= 4:
-                        prefix = token.split("I", 1)[0]
-                        i_x = x + draw.textbbox((0, 0), prefix, font=token_font)[2]
-                        i_box = draw.textbbox((i_x, y), "I", font=token_font)
-                        bar_pad = max(1, token_size // 16)
-                        bar_width = max(2, token_size // 10)
-                        # Anchor the bars to the actual font glyph bounds, not
-                        # an estimated baseline; this keeps the capital I
-                        # unmistakably serif-like in the extracted OCR crop.
-                        bar_y_top = i_box[1] + max(0, (i_box[3] - i_box[1]) // 12)
-                        bar_y_bottom = i_box[3] - max(1, (i_box[3] - i_box[1]) // 12)
-                        draw.line((i_box[0] - bar_pad, bar_y_top, i_box[2] + bar_pad, bar_y_top), fill=color, width=bar_width)
-                        draw.line((i_box[0] - bar_pad, bar_y_bottom, i_box[2] + bar_pad, bar_y_bottom), fill=color, width=bar_width)
+                        # A single-font two-letter acronym is ambiguous to OCR:
+                        # uppercase I is commonly read as lowercase l. Render
+                        # the A-like letters in DejaVu Sans and I in Noto Sans;
+                        # this pairing preserves normal typography while making
+                        # the complete active word reliably legible.
+                        char_x = x
+                        for character in token:
+                            if character == "I":
+                                i_font_path = Path("/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf")
+                                char_font = (
+                                    ImageFont.truetype(str(i_font_path), token_size)
+                                    if i_font_path.exists()
+                                    else load_caption_font(character, token_size, True)
+                                )
+                            else:
+                                char_font = load_caption_font(character, token_size, True)
+                            draw.text((char_x, y), character, font=char_font, fill=color, stroke_width=1, stroke_fill=(0, 0, 0))
+                            char_x += draw.textbbox((0, 0), character, font=char_font)[2] + 1
+                    else:
+                        draw.text((x, y), token, font=token_font, fill=color, stroke_width=1, stroke_fill=(0, 0, 0))
                     x += draw.textbbox((0, 0), token, font=token_font)[2] + draw.textbbox((0, 0), " ", font=token_font)[2]
                 y += 34
             path = frame_dir / f"frame-{image_index:06d}.png"
