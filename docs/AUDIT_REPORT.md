@@ -2352,6 +2352,17 @@ GitHub commit history অনুযায়ী প্রকল্পের প্�
   - `docs/PRODUCT_PLAN.md`
 - Result: **push recorded**; this is not a test or deployment success claim.
 
+
+### Source update — 2026-11-17T19:23:11.503Z
+- Branch: `main`
+- Push range: `f27ab8e7c47fb0b7a44a3cc20710fcfc9c330517` → `bf3ff3a6364ad1da13f9c7d3c71f92e8b55f4f41`
+- Pushed by: rajuhossain1912-art
+- Commit: [bf3ff3a6364a](https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/commit/bf3ff3a6364ad1da13f9c7d3c71f92e8b55f4f41) — Diagnose English OCR on rendered subtitle crops (#63)
+- Changed files:
+  - `backend/app.py`
+  - `backend/tests/test_subtitle_ocr.py`
+- Result: **push recorded**; this is not a test or deployment success claim.
+
 <!-- AUTO_LOG_END -->
 
 
