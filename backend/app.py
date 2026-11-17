@@ -3834,6 +3834,14 @@ def _tesseract_tsv_matches_highlighted_word(tsv_text: str, expected_tokens, boun
     return bool(expected_tokens) and all(token in found for token in expected_tokens)
 
 
+def _tesseract_language_candidates(expected_tokens):
+    """Prefer the English OCR model for ASCII-only words, retaining strict bilingual fallback."""
+    tokens = [str(token) for token in (expected_tokens or []) if str(token)]
+    if tokens and all(re.fullmatch(r"[A-Za-z0-9]+", token) for token in tokens):
+        return ("eng", "ben+eng")
+    return ("ben+eng",)
+
+
 def _tesseract_crop_matches_expected_tokens(ocr_text: str, expected_tokens):
     """Verify a single isolated highlighted-word crop, including split Bengali glyph groups."""
     expected = [str(token) for token in expected_tokens if str(token)]
@@ -3981,26 +3989,29 @@ def _verify_subtitle_frames_with_ocr(frame_list: Path, script: str, folder: Path
                     isolated_crop = word_crop.resize((1200, 480), Image.Resampling.LANCZOS)
                     isolated_crop.save(isolated_path, optimize=True)
                     isolated_verified = False
-                    for page_segmentation in ("7", "8", "10", "11", "13"):
-                        try:
-                            isolated_result = subprocess.run(
-                                ["tesseract", str(isolated_path), "stdout", "-l", "ben+eng", "--psm", page_segmentation],
-                                capture_output=True, text=True, timeout=15,
-                            )
-                        except subprocess.TimeoutExpired:
-                            return {
-                                "status": "unavailable", "frames_checked": offset + panel_index,
-                                "words_detected": words_detected, "words_missing": None,
-                                "reason": "সক্রিয় বাংলা শব্দের বড় OCR পরীক্ষা ১৫ সেকেন্ডে সম্পূর্ণ হয়নি; পরীক্ষা নিরাপদে বন্ধ রাখা হয়েছে।",
-                            }
-                        if isolated_result.returncode != 0:
-                            return {
-                                "status": "unavailable", "frames_checked": offset + panel_index,
-                                "words_detected": words_detected, "words_missing": None,
-                                "reason": "সক্রিয় বাংলা শব্দের বড় OCR পরীক্ষা সম্পূর্ণ হয়নি।",
-                            }
-                        if _tesseract_crop_matches_expected_tokens(isolated_result.stdout, expected_tokens):
-                            isolated_verified = True
+                    for ocr_language in _tesseract_language_candidates(expected_tokens):
+                        for page_segmentation in ("7", "8", "10", "11", "13"):
+                            try:
+                                isolated_result = subprocess.run(
+                                    ["tesseract", str(isolated_path), "stdout", "-l", ocr_language, "--psm", page_segmentation],
+                                    capture_output=True, text=True, timeout=15,
+                                )
+                            except subprocess.TimeoutExpired:
+                                return {
+                                    "status": "unavailable", "frames_checked": offset + panel_index,
+                                    "words_detected": words_detected, "words_missing": None,
+                                    "reason": "সক্রিয় শব্দের বড় OCR পরীক্ষা ১৫ সেকেন্ডে সম্পূর্ণ হয়নি; পরীক্ষা নিরাপদে বন্ধ রাখা হয়েছে।",
+                                }
+                            if isolated_result.returncode != 0:
+                                return {
+                                    "status": "unavailable", "frames_checked": offset + panel_index,
+                                    "words_detected": words_detected, "words_missing": None,
+                                    "reason": "সক্রিয় শব্দের বড় OCR পরীক্ষা সম্পূর্ণ হয়নি।",
+                                }
+                            if _tesseract_crop_matches_expected_tokens(isolated_result.stdout, expected_tokens):
+                                isolated_verified = True
+                                break
+                        if isolated_verified:
                             break
                     if isolated_verified:
                         words_detected += 1
