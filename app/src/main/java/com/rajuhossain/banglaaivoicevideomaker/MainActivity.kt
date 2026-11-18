@@ -171,8 +171,9 @@ private fun VideoMakerScreen() {
     }
     var speechOutput by remember { mutableStateOf<TextToSpeech?>(null) }
     fun saveChatMemory() {
+        while (chatMessages.size > 40) chatMessages.removeAt(0)
         val history = JSONArray()
-        chatMessages.takeLast(40).forEach(history::put)
+        chatMessages.forEach(history::put)
         chatMemoryPreferences.edit().putString("messages", history.toString()).apply()
     }
     fun clearChatMemory() {
