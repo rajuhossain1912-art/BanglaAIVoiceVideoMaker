@@ -4664,6 +4664,7 @@ def health():
         "tools": tools,
         "version": os.getenv("API_VERSION", "0.3.0"),
         "git_commit": os.getenv("RENDER_GIT_COMMIT", "unknown"),
+        "persistent_job_storage": "cloudflare_r2" if JOB_STORAGE.enabled else "ephemeral",
         "git_branch": os.getenv("RENDER_GIT_BRANCH", "unknown"),
     }
 
