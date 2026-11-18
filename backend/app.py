@@ -2353,7 +2353,7 @@ def _scene_mismatch_retry_prompt(narration: str, visual_prompt: Optional[str], r
     return (grounded_prompt[:620].rstrip() + instruction)[:1050]
 
 
-def make_background(script: str, folder: Path, model_visual_prompt: Optional[str] = None, force_topic_graphic: bool = False, force_licensed_contextual: bool = False, variation_seed: int = 0, scene_index: Optional[int] = None):
+def make_background(script: str, folder: Path, model_visual_prompt: Optional[str] = None, force_topic_graphic: bool = False, force_licensed_contextual: bool = False, prefer_licensed_contextual: bool = False, variation_seed: int = 0, scene_index: Optional[int] = None):
     # Small canvas is intentional: keep peak memory below Render Free's 512 MiB limit.
     width, height = 360, 640
     # Track the final source for this scene separately from provider-level attempt logs.
@@ -2377,6 +2377,16 @@ def make_background(script: str, folder: Path, model_visual_prompt: Optional[str
             "IMAGE_PROVIDER licensed_recovery=" + ("selected" if source_image else "unavailable"),
             flush=True,
         )
+    elif prefer_licensed_contextual and ALLOW_LICENSED_IMAGE_FALLBACK:
+        source_image, credit = find_contextual_image(script, folder, base_prompt)
+        if source_image:
+            scene_source = "licensed_contextual"
+            scene_provider = "openverse_or_wikimedia"
+            print("IMAGE_PROVIDER preferred=licensed_contextual selected=true", flush=True)
+        else:
+            print("IMAGE_PROVIDER preferred=licensed_contextual fallback=ai_generated", flush=True)
+            retry_prompt = _vary_visual_prompt(base_prompt, variation_seed)
+            source_image, credit = find_generated_image(script, folder, retry_prompt)
     else:
         # Every visual slot gets a distinct photographic composition, even when a long
         # sentence is intentionally repeated to fill the selected image interval.
@@ -3092,7 +3102,14 @@ def make_scene_backgrounds(script: str, folder: Path, progress_callback=None, du
         scene_dir.mkdir(parents=True, exist_ok=True)
         print(f"IMAGE_SCENE index={index + 1}/{len(scenes)} words={len(scene_text.split())}", flush=True)
         scene_visual_prompt = visual_prompts[index] if visual_prompts else None
-        background = make_background(scene_text, scene_dir, scene_visual_prompt, variation_seed=index, scene_index=index + 1)
+        # Mix licensed documentary photos into the AI-generated scenes when relevant,
+        # without making them mandatory: a failed licensed search falls back to AI imagery.
+        prefer_licensed = index % 3 == 1
+        background = make_background(
+            scene_text, scene_dir, scene_visual_prompt,
+            prefer_licensed_contextual=prefer_licensed,
+            variation_seed=index, scene_index=index + 1
+        )
         # Inspect every selected AI-generated or licensed contextual photograph.
         # Local topic graphics remain explicitly unreviewed and cannot pass the
         # publication gate until a dedicated illustration-review path is implemented.
