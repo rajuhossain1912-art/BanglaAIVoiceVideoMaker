@@ -162,24 +162,29 @@ class SubtitleOcrLanguageFallbackTests(unittest.TestCase):
         self.assertIn("eng", languages)
         self.assertIn("ben", languages)
 
-        script = "Hello বাংলা AI video"
+        script = (
+            "জীবনে সফল হতে হলে কখনো হাল ছেড়ে দেওয়া যাবে না। "
+            "প্রতিটি ব্যর্থতা আমাদের নতুন কিছু শেখায়। "
+            "আজ হয়তো পথ কঠিন, কিন্তু ধৈর্য, পরিশ্রম এবং আত্মবিশ্বাস থাকলে একদিন সফলতা আসবেই। "
+            "নিজের ওপর বিশ্বাস রাখুন, স্বপ্ন দেখুন এবং স্বপ্ন পূরণের জন্য প্রতিদিন চেষ্টা চালিয়ে যান।"
+        )
+        expected = re.findall(r"\\S+", script)
+        self.assertEqual(len(expected), 43)
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             background = root / "background.png"
             Image.new("RGB", (360, 640), (70, 85, 100)).save(background)
             listing, frame_count = video_app.make_caption_frames(
                 script=script,
-                duration=4.0,
+                duration=43.0,
                 background=background,
                 folder=root,
                 scene_interval=3,
             )
             self.assertTrue(listing.is_file())
-            self.assertEqual(frame_count, 4)
+            self.assertEqual(frame_count, len(expected))
             frame_paths = sorted((root / "caption-frames").glob("frame-*.png"))
-            self.assertEqual(len(frame_paths), 4)
-
-            expected = ["Hello", "বাংলা", "AI", "video"]
+            self.assertEqual(len(frame_paths), len(expected))
             for index, word in enumerate(expected):
                 with Image.open(frame_paths[index]) as source:
                     frame = source.convert("RGB")
