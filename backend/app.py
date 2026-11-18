@@ -784,10 +784,10 @@ VISUAL_CONCEPTS = [
     (("বন্যা", "ঘূর্ণিঝড়", "ঘূর্ণিঝড়", "দুর্যোগ", "জলোচ্ছ্বাস"), "a Bangladeshi village responding to monsoon flooding"),
     (("রাস্তা", "গাড়ি", "গাড়ি", "বাস", "পরিবহন", "চালক", "যাত্রী", "পথচারী"), "a realistic Bangladeshi street with safe public transport"),
     (("শিশু", "বাচ্চা", "ছেলে", "মেয়ে", "মেয়ে", "খেলাধুলা"), "children learning or playing safely outdoors"),
-    (("হাল ছেড়ে", "হাল ছেড়ে", "হাল ছাড়বেন", "হাল ছাড়বেন", "হাল ছাড়েন", "হাল ছাড়েন", "কখনো হাল", "never give up", "keep going", "perseverance"), "a Bangladeshi adult at a simple indoor desk or learning workspace, returning to the same unfinished task after an unsuccessful attempt and trying again, realistic documentary photography"),
-    (("ব্যর্থতা", "ব্যর্থ", "ভুল থেকে", "শেখায়", "শেখায়", "failure", "mistake"), "a Bangladeshi adult reviewing a clearly visible incorrect practice page at a desk, identifying the mistake in a notebook and correcting the answer, realistic documentary photography"),
-    (("ধৈর্য", "পরিশ্রম", "পরিশ্রমের", "আত্মবিশ্বাস", "সফলতা", "সাফল্য", "সফল", "দক্ষতা", "লক্ষ্য", "লক্ষ্যে", "লক্ষ্যের", "বাধা", "চেষ্টা", "চেষ্টা চালিয়ে", "চেষ্টা চালিয়ে"), "a Bangladeshi adult steadily practicing a specific everyday skill at a desk or learning workspace toward a personal goal, focused expression, realistic documentary photography"),
-    (("স্বপ্ন",), "a Bangladeshi adult writing a practical personal goal in a notebook and taking a concrete first step toward it, realistic documentary photography"),
+    (("হাল ছেড়ে", "হাল ছেড়ে", "হাল ছাড়বেন", "হাল ছাড়বেন", "হাল ছাড়েন", "হাল ছাড়েন", "কখনো হাল", "never give up", "keep going", "perseverance"), "a Bangladeshi adult resuming a hands-on skill practice in a shared community training room after an unsuccessful attempt, determined posture and the practical task clearly visible, realistic documentary photography"),
+    (("ব্যর্থতা", "ব্যর্থ", "ভুল থেকে", "শেখায়", "শেখায়", "failure", "mistake"), "a Bangladeshi adult examining a marked practice sheet and carefully correcting a specific mistake, with the hands and corrected work clearly visible, realistic documentary photography"),
+    (("ধৈর্য", "পরিশ্রম", "পরিশ্রমের", "আত্মবিশ্বাস", "সফলতা", "সাফল্য", "সফল", "দক্ষতা", "লক্ষ্য", "লক্ষ্যে", "লক্ষ্যের", "বাধা", "চেষ্টা", "চেষ্টা চালিয়ে", "চেষ্টা চালিয়ে"), "a Bangladeshi adult steadily completing a practical hands-on task in a small workshop or community training area, careful step-by-step effort and focused expression, realistic documentary photography"),
+    (("স্বপ্ন",), "a Bangladeshi adult walking with purpose along a familiar neighborhood path toward a learning opportunity, carrying a simple notebook, realistic documentary photography"),
     (("সকাল", "ভোর", "সূর্যোদয়", "সূর্যোদয়"), "sunrise over a peaceful green landscape"),
     (("গাছপালা", "গাছ", "সবুজ", "বন", "প্রকৃতি"), "lush green trees and natural scenery"),
     (("আকাশ", "মেঘ", "নীল আকাশ"), "blue sky with soft white clouds"),
@@ -1849,7 +1849,7 @@ def _plan_scene_visual_prompts(scenes, context_scenes=None, context_offset=0, br
         "Understand the narration as a connected story. Use context_before and context_after to resolve pronouns, implied subjects, people, places, and cause-and-effect, so the image fits what is being said. Use video_level_context only to understand overall topic, tone and audience; never let research snippets or global context replace the exact current scene subject. "
         "Depict the main action in the current scene text; neighboring context may clarify it but must not replace or blend the current scene subject. "
         "If repeated_narration_occurrence and repeated_narration_total show that the same sentence fills multiple image slots, make each slot a different faithful moment or camera composition of that exact narrated idea; do not invent a different occupation, crop, harvest, or unrelated task. "
-        "For motivational or abstract narration without a named occupation, use ordinary indoor learning, desk work, or a clearly stated everyday skill-practice setting; never invent farming, harvesting, sorting roots, or agricultural labor unless the narration mentions it. "
+        "For motivational or abstract narration without a named occupation, choose a realistic everyday setting and action that match the exact idea: resuming after a setback, correcting a mistake, sustained hands-on effort, or taking a concrete next step toward a goal. Vary settings and actions across adjacent scenes; do not default every scene to a desk, notebook, or classroom. Never invent a specific occupation, farming, harvesting, sorting roots, or agricultural labor unless the narration mentions it. "
         "Do not use generic symbols, flags, globes, maps, abstract gradients, or unrelated stock imagery unless that exact subject is discussed. "
         "Prefer real, recognizable objects and actions: if the scene says farmer or rice field, show a farmer working in a rice field; if it says city traffic, show actual buses and street traffic; if it says students, show students learning; if it says technology or smartphones, show a person using real digital devices. "
         "Use Bangladesh-local people and places when relevant. Never replace a specific subject with a vague landscape or symbolic icon. "
@@ -2353,7 +2353,7 @@ def _scene_mismatch_retry_prompt(narration: str, visual_prompt: Optional[str], r
     return (grounded_prompt[:620].rstrip() + instruction)[:1050]
 
 
-def make_background(script: str, folder: Path, model_visual_prompt: Optional[str] = None, force_topic_graphic: bool = False, force_licensed_contextual: bool = False, variation_seed: int = 0, scene_index: Optional[int] = None):
+def make_background(script: str, folder: Path, model_visual_prompt: Optional[str] = None, force_topic_graphic: bool = False, force_licensed_contextual: bool = False, prefer_licensed_contextual: bool = False, variation_seed: int = 0, scene_index: Optional[int] = None):
     # Small canvas is intentional: keep peak memory below Render Free's 512 MiB limit.
     width, height = 360, 640
     # Track the final source for this scene separately from provider-level attempt logs.
@@ -2377,6 +2377,16 @@ def make_background(script: str, folder: Path, model_visual_prompt: Optional[str
             "IMAGE_PROVIDER licensed_recovery=" + ("selected" if source_image else "unavailable"),
             flush=True,
         )
+    elif prefer_licensed_contextual and ALLOW_LICENSED_IMAGE_FALLBACK:
+        source_image, credit = find_contextual_image(script, folder, base_prompt)
+        if source_image:
+            scene_source = "licensed_contextual"
+            scene_provider = "openverse_or_wikimedia"
+            print("IMAGE_PROVIDER preferred=licensed_contextual selected=true", flush=True)
+        else:
+            print("IMAGE_PROVIDER preferred=licensed_contextual fallback=ai_generated", flush=True)
+            retry_prompt = _vary_visual_prompt(base_prompt, variation_seed)
+            source_image, credit = find_generated_image(script, folder, retry_prompt)
     else:
         # Every visual slot gets a distinct photographic composition, even when a long
         # sentence is intentionally repeated to fill the selected image interval.
@@ -3092,7 +3102,14 @@ def make_scene_backgrounds(script: str, folder: Path, progress_callback=None, du
         scene_dir.mkdir(parents=True, exist_ok=True)
         print(f"IMAGE_SCENE index={index + 1}/{len(scenes)} words={len(scene_text.split())}", flush=True)
         scene_visual_prompt = visual_prompts[index] if visual_prompts else None
-        background = make_background(scene_text, scene_dir, scene_visual_prompt, variation_seed=index, scene_index=index + 1)
+        # Mix licensed documentary photos into the AI-generated scenes when relevant,
+        # without making them mandatory: a failed licensed search falls back to AI imagery.
+        prefer_licensed = index % 3 == 1
+        background = make_background(
+            scene_text, scene_dir, scene_visual_prompt,
+            prefer_licensed_contextual=prefer_licensed,
+            variation_seed=index, scene_index=index + 1
+        )
         # Inspect every selected AI-generated or licensed contextual photograph.
         # Local topic graphics remain explicitly unreviewed and cannot pass the
         # publication gate until a dedicated illustration-review path is implemented.
