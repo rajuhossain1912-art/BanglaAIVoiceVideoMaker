@@ -169,7 +169,7 @@ class SubtitleOcrLanguageFallbackTests(unittest.TestCase):
             "আজ হয়তো পথ কঠিন, কিন্তু ধৈর্য, পরিশ্রম এবং আত্মবিশ্বাস থাকলে একদিন সফলতা আসবেই। "
             "নিজের ওপর বিশ্বাস রাখুন, স্বপ্ন দেখুন এবং স্বপ্ন পূরণের জন্য প্রতিদিন চেষ্টা চালিয়ে যান।"
         )
-        expected = re.findall(r"\\S+", script)
+        expected = re.findall(r"\S+", script)
         self.assertEqual(len(expected), 43)
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
