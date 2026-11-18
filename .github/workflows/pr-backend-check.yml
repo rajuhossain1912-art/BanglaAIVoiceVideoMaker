@@ -6,6 +6,7 @@ on:
     paths:
       - "backend/**"
       - ".github/workflows/pr-backend-check.yml"
+      - "Dockerfile"
 
 jobs:
   validate:
@@ -29,3 +30,7 @@ jobs:
         run: python -m py_compile backend/app.py
       - name: Run voice clone unit tests
         run: python -m unittest discover -s backend/tests -v
+      - name: Build production Docker image
+        run: docker build -t bangla-video-pr-test .
+      - name: Run all backend tests inside production Docker image
+        run: docker run --rm --workdir /service --entrypoint python bangla-video-pr-test -m unittest discover -s backend/tests -v
