@@ -23,7 +23,7 @@ class R2JobStorage:
         bucket_name: str = "",
         access_key_id: str = "",
         secret_access_key: str = "",
-        max_jobs: int = 100,
+        max_jobs: int = 50,
         max_video_bytes: int = 80 * 1024 * 1024,
         retention_seconds: int = 86400,
         client_factory: Callable[[], Any] | None = None,
@@ -55,7 +55,7 @@ class R2JobStorage:
             bucket_name=os.getenv("R2_BUCKET_NAME", ""),
             access_key_id=os.getenv("R2_ACCESS_KEY_ID", ""),
             secret_access_key=os.getenv("R2_SECRET_ACCESS_KEY", ""),
-            max_jobs=bounded_int("R2_MAX_STORED_JOBS", 100, 1, 100),
+            max_jobs=bounded_int("R2_MAX_STORED_JOBS", 50, 1, 100),
             max_video_bytes=bounded_int("R2_MAX_VIDEO_MB", 80, 1, 80) * 1024 * 1024,
             retention_seconds=bounded_int("R2_RETENTION_SECONDS", 86400, 3600, 604800),
         )
