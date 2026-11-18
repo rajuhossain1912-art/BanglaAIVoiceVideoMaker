@@ -73,7 +73,7 @@ class SceneImageSimilarityTests(unittest.TestCase):
             "কখনো হাল ছেড়ে দেওয়া যাবে না",
             "প্রতিটি ব্যর্থতা আমাদের নতুন কিছু শেখায়",
             "ধৈর্য ও পরিশ্রম থাকলে সফলতা আসবেই",
-            "নিজের স্বপ্ন পূরণের জন্য প্রতিদিন চেষ্টা করুন",
+            "স্বপ্ন দেখুন",
         )
         prompts = [
             video_app._matched_visual_concepts(sample, limit=1)[0]
