@@ -2533,6 +2533,18 @@ GitHub commit history অনুযায়ী প্রকল্পের প্�
   - Step 96. Post Checkout source: success
   - Step 97. Complete job: success
 
+
+### Source update — 2026-11-18T06:39:47.655Z
+- Branch: `main`
+- Push range: `50a69f69e3effa250cb5255965e02cae9015d61a` → `fac1c57bf04ac3c7b167587be8bcc55a019e05e8`
+- Pushed by: rajuhossain1912-art
+- Commit: [fac1c57bf04a](https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/commit/fac1c57bf04ac3c7b167587be8bcc55a019e05e8) — Test OCR across all 43 Bengali sample words
+- Changed files:
+  - `.github/workflows/pr-backend-check.yml`
+  - `Dockerfile`
+  - `backend/tests/test_subtitle_ocr.py`
+- Result: **push recorded**; this is not a test or deployment success claim.
+
 <!-- AUTO_LOG_END -->
 
 
