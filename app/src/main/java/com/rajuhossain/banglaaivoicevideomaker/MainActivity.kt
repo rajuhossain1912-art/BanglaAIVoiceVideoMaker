@@ -513,7 +513,7 @@ private fun VideoMakerScreen() {
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
                 Text("এআই-এর সঙ্গে কথা বলুন", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Text("লিখে অথবা মাইক্রোফোনে বাংলায় ও ইংরেজিতে প্রশ্ন করুন। উত্তর লেখা ও কণ্ঠে শোনানো হবে। শেষ ৪০টি বার্তা এই ফোনে থাকবে; নতুন উত্তরে শেষ ১০টি বার্তা AI-কে প্রসঙ্গ হিসেবে পাঠানো হবে।")
+                Text("লিখে অথবা মাইক্রোফোনে বাংলায় ও ইংরেজিতে প্রশ্ন করুন। উত্তর লেখা ও কণ্ঠে শোনানো হবে। শেষ ৪০টি বার্তা এই ফোনে থাকবে; নতুন উত্তরে শেষ ১০টি বার্তা Cloudflare AI-কে প্রসঙ্গ হিসেবে পাঠানো হবে।")
                 if (chatMessages.isNotEmpty()) {
                     Column(Modifier.fillMaxWidth().heightIn(max = 180.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         chatMessages.takeLast(10).forEach { line ->
