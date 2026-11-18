@@ -34,7 +34,7 @@ class R2JobStorage:
         self.access_key_id = str(access_key_id or "").strip()
         self.secret_access_key = str(secret_access_key or "").strip()
         self.max_jobs = max(1, min(100, int(max_jobs)))
-        self.max_video_bytes = max(1, min(80, int(max_video_bytes // (1024 * 1024)))) * 1024 * 1024
+        self.max_video_bytes = max(1, min(80 * 1024 * 1024, int(max_video_bytes)))
         self.retention_seconds = max(3600, int(retention_seconds))
         self.client_factory = client_factory
         self.clock = clock
