@@ -57,7 +57,7 @@ class SceneImageSimilarityTests(unittest.TestCase):
 
     def test_motivation_text_selects_motivation_visual_not_bus(self):
         concepts = video_app._matched_visual_concepts("নিজের ওপর বিশ্বাস রাখুন এবং চেষ্টা চালিয়ে যান")
-        self.assertTrue(any("steadily practicing a specific everyday skill" in item for item in concepts))
+        self.assertTrue(any("steadily completing a practical hands-on task" in item for item in concepts))
         self.assertFalse(any("passenger bus" in item for item in concepts))
 
     def test_success_and_forward_progress_select_motivation_visual(self):
@@ -66,7 +66,22 @@ class SceneImageSimilarityTests(unittest.TestCase):
             "বাধা এলেও নিজের লক্ষ্যের পথে থেমে যাবেন না",
         ):
             concepts = video_app._matched_visual_concepts(text)
-            self.assertTrue(any("steadily practicing a specific everyday skill" in item for item in concepts))
+            self.assertTrue(any("steadily completing a practical hands-on task" in item for item in concepts))
+
+    def test_motivational_visual_concepts_do_not_all_default_to_a_desk(self):
+        samples = (
+            "কখনো হাল ছেড়ে দেওয়া যাবে না",
+            "প্রতিটি ব্যর্থতা আমাদের নতুন কিছু শেখায়",
+            "ধৈর্য ও পরিশ্রম থাকলে সফলতা আসবেই",
+            "নিজের স্বপ্ন পূরণের জন্য প্রতিদিন চেষ্টা করুন",
+        )
+        prompts = [
+            video_app._matched_visual_concepts(sample, limit=1)[0]
+            for sample in samples
+        ]
+        self.assertEqual(len(set(prompts)), 4)
+        self.assertFalse(any("desk" in prompt.lower() for prompt in prompts))
+        self.assertFalse(any("learning workspace" in prompt.lower() for prompt in prompts))
 
     def test_failure_and_perseverance_words_select_motivation_graphic(self):
         with tempfile.TemporaryDirectory() as temp_dir:
