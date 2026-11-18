@@ -156,7 +156,29 @@ private fun VideoMakerScreen() {
 
     var chatInput by remember { mutableStateOf("") }
     var chatBusy by remember { mutableStateOf(false) }
-    val chatMessages = remember { mutableStateListOf<String>() }
+    val chatMemoryPreferences = remember(context) {
+        context.getSharedPreferences("ai_chat_memory", Context.MODE_PRIVATE)
+    }
+    val chatMessages = remember(context) {
+        mutableStateListOf<String>().apply {
+            val saved = chatMemoryPreferences.getString("messages", "[]").orEmpty()
+            runCatching { JSONArray(saved) }.getOrNull()?.let { history ->
+                for (index in 0 until minOf(history.length(), 40)) {
+                    history.optString(index).takeIf { it.isNotBlank() }?.let(::add)
+                }
+            }
+        }
+    }
+    fun saveChatMemory() {
+        val history = JSONArray()
+        chatMessages.takeLast(40).forEach(history::put)
+        chatMemoryPreferences.edit().putString("messages", history.toString()).apply()
+    }
+    fun clearChatMemory() {
+        chatMessages.clear()
+        chatMemoryPreferences.edit().remove("messages").apply()
+        speechOutput?.stop()
+    }
     var speechOutput by remember { mutableStateOf<TextToSpeech?>(null) }
     DisposableEffect(context) {
         val engine = TextToSpeech(context) { result ->
@@ -192,6 +214,7 @@ private fun VideoMakerScreen() {
         if (message.isBlank() || chatBusy) return
         chatInput = ""
         chatMessages.add("আপনি: " + message)
+        saveChatMemory()
         chatBusy = true
         scope.launch {
             try {
@@ -199,12 +222,14 @@ private fun VideoMakerScreen() {
                     sendChatMessage(BuildConfig.API_BASE_URL, chatMessages.toList().takeLast(10))
                 }
                 chatMessages.add("এআই: " + answer)
+                saveChatMemory()
                 speechOutput?.let { tts ->
                     val languageResult = tts.setLanguage(Locale.forLanguageTag("bn-BD"))
                     if (languageResult >= TextToSpeech.LANG_AVAILABLE) tts.speak(answer, TextToSpeech.QUEUE_FLUSH, null, "bangla-ai-chat")
                 }
             } catch (error: Exception) {
                 chatMessages.add("সমস্যা: " + (error.message ?: "এখন উত্তর পাওয়া যায়নি।"))
+                saveChatMemory()
             } finally {
                 chatBusy = false
             }
@@ -488,7 +513,7 @@ private fun VideoMakerScreen() {
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
                 Text("এআই-এর সঙ্গে কথা বলুন", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Text("লিখে অথবা মাইক্রোফোনে বাংলায় ও ইংরেজিতে প্রশ্ন করুন। উত্তর লেখা ও কণ্ঠে শোনানো হবে।")
+                Text("লিখে অথবা মাইক্রোফোনে বাংলায় ও ইংরেজিতে প্রশ্ন করুন। উত্তর লেখা ও কণ্ঠে শোনানো হবে। শেষ ৪০টি বার্তা এই ফোনে থাকবে; নতুন উত্তরে শেষ ১০টি বার্তা AI-কে প্রসঙ্গ হিসেবে পাঠানো হবে।")
                 if (chatMessages.isNotEmpty()) {
                     Column(Modifier.fillMaxWidth().heightIn(max = 180.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         chatMessages.takeLast(10).forEach { line ->
@@ -527,7 +552,14 @@ private fun VideoMakerScreen() {
                     }
                 }
                 if (chatMessages.isNotEmpty()) {
-                    TextButton(onClick = { speechOutput?.stop() }) { Text("উত্তর পড়া বন্ধ করুন") }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TextButton(onClick = { speechOutput?.stop() }, modifier = Modifier.weight(1f)) {
+                            Text("উত্তর পড়া বন্ধ করুন")
+                        }
+                        TextButton(onClick = { clearChatMemory() }, modifier = Modifier.weight(1f)) {
+                            Text("কথোপকথনের স্মৃতি মুছুন")
+                        }
+                    }
                 }
             }
         }
