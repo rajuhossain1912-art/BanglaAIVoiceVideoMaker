@@ -14,7 +14,7 @@ class FakeR2Client:
         self.objects = {}
         self.modified = {}
 
-    def upload_file(self, filename, bucket, key, ExtraArgs=None):
+    def upload_file(self, filename, bucket, key, ExtraArgs=None, Config=None):
         self.objects[key] = Path(filename).read_bytes()
         self.modified[key] = datetime.fromtimestamp(self.clock(), timezone.utc)
 
