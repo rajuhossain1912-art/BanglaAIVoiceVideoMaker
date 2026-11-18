@@ -167,9 +167,17 @@ class R2JobStorage:
         audit_stored = False
         if video.is_file() and video.stat().st_size > 0:
             if video.stat().st_size <= self.max_video_bytes:
+                from boto3.s3.transfer import TransferConfig
+
                 client.upload_file(
                     str(video), self.bucket_name, prefix + "video.mp4",
                     ExtraArgs={"ContentType": "video/mp4"},
+                    Config=TransferConfig(
+                        multipart_threshold=8 * 1024 * 1024,
+                        multipart_chunksize=8 * 1024 * 1024,
+                        max_concurrency=2,
+                        use_threads=False,
+                    ),
                 )
                 video_stored = True
         if audit.is_file():
