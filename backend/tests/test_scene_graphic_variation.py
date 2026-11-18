@@ -1,5 +1,6 @@
 import contextlib
 import io
+import json
 import tempfile
 import time
 import unittest
@@ -269,6 +270,39 @@ class SceneImageSimilarityTests(unittest.TestCase):
                 "IMAGE_SCENE_SOURCE index=4 source=licensed_contextual provider=openverse_or_wikimedia",
                 output.getvalue()
             )
+
+    def test_preferred_licensed_photo_is_used_before_ai_generation(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            folder = Path(temp_dir)
+            licensed = self._image(folder, "preferred-licensed.png", (130, 160, 190))
+            with patch.object(video_app, "ALLOW_LICENSED_IMAGE_FALLBACK", True), \
+                 patch.object(video_app, "find_contextual_image", return_value=(
+                     licensed, "CC BY contextual image"
+                 )), patch.object(video_app, "find_generated_image", side_effect=AssertionError("AI should not run")):
+                output = video_app.make_background(
+                    "বাংলাদেশের ট্রেন", folder,
+                    prefer_licensed_contextual=True, scene_index=8
+                )
+            self.assertTrue(output.exists())
+            source = json.loads((folder / "scene-source.json").read_text(encoding="utf-8"))
+            self.assertEqual(source.get("source"), "licensed_contextual")
+
+    def test_preferred_licensed_search_falls_back_to_ai_when_no_photo_matches(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            folder = Path(temp_dir)
+            generated = self._image(folder, "generated.png", (120, 150, 180))
+            with patch.object(video_app, "ALLOW_LICENSED_IMAGE_FALLBACK", True), \
+                 patch.object(video_app, "find_contextual_image", return_value=(None, "")), \
+                 patch.object(video_app, "find_generated_image", return_value=(
+                     generated, "AI-generated with test-provider"
+                 )):
+                output = video_app.make_background(
+                    "বাংলাদেশের ট্রেন", folder,
+                    prefer_licensed_contextual=True, scene_index=9
+                )
+            self.assertTrue(output.exists())
+            source = json.loads((folder / "scene-source.json").read_text(encoding="utf-8"))
+            self.assertEqual(source.get("source"), "ai_generated")
 
     def test_logs_topic_graphic_source_for_duplicate_scene(self):
         with tempfile.TemporaryDirectory() as temp_dir:
