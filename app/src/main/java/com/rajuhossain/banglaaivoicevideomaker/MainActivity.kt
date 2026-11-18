@@ -169,6 +169,7 @@ private fun VideoMakerScreen() {
             }
         }
     }
+    var speechOutput by remember { mutableStateOf<TextToSpeech?>(null) }
     fun saveChatMemory() {
         val history = JSONArray()
         chatMessages.takeLast(40).forEach(history::put)
@@ -179,7 +180,6 @@ private fun VideoMakerScreen() {
         chatMemoryPreferences.edit().remove("messages").apply()
         speechOutput?.stop()
     }
-    var speechOutput by remember { mutableStateOf<TextToSpeech?>(null) }
     DisposableEffect(context) {
         val engine = TextToSpeech(context) { result ->
             if (result == TextToSpeech.SUCCESS) {
