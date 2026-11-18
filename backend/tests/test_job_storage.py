@@ -2,6 +2,10 @@ import io
 import json
 import tempfile
 import unittest
+from unittest.mock import patch
+
+from fastapi import HTTPException
+from backend import app as video_app
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -151,6 +155,28 @@ class R2JobStorageTests(unittest.TestCase):
     def test_invalid_job_id_is_rejected_before_object_access(self):
         with self.assertRaises(ValueError):
             self.storage.load_job("../private")
+
+    def test_restored_blocked_video_still_cannot_bypass_publication_gate(self):
+        job_id = "c" * 32
+        blocked_job = {
+            "id": job_id,
+            "status": "completed",
+            "share_allowed": False,
+            "download_url": None,
+            "publication_status": "blocked",
+        }
+        with patch.dict(video_app.JOBS, {}, clear=True), \
+             patch.object(video_app.JOB_STORAGE, "load_job", return_value=blocked_job), \
+             patch.object(
+                 video_app, "video_quality_report",
+                 return_value={
+                     "share_allowed": False,
+                     "publication_reasons": ["অডিও ও শব্দের সময় যাচাই অসম্পূর্ণ।"],
+                 },
+             ):
+            with self.assertRaises(HTTPException) as caught:
+                video_app.download_video(job_id)
+        self.assertEqual(caught.exception.status_code, 409)
 
 
 if __name__ == "__main__":
