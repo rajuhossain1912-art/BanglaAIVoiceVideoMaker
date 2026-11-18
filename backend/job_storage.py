@@ -110,7 +110,7 @@ class R2JobStorage:
                     Delete={"Objects": batch, "Quiet": True},
                 )
 
-    def cleanup(self):
+    def cleanup(self, reserve_slot: bool = False):
         """Prune expired jobs and enforce a hard per-app object-count ceiling."""
         client = self._client()
         if client is None:
@@ -141,7 +141,8 @@ class R2JobStorage:
             self._delete_keys(client, groups[job_id]["keys"])
             groups.pop(job_id, None)
 
-        excess = max(0, len(groups) - self.max_jobs)
+        job_limit = max(0, self.max_jobs - (1 if reserve_slot else 0))
+        excess = max(0, len(groups) - job_limit)
         oldest = sorted(groups, key=lambda key: groups[key]["modified"])
         removed = 0
         for job_id in oldest[:excess]:
@@ -158,7 +159,7 @@ class R2JobStorage:
             return result
         prefix = self._prefix(job_id)
         client = self._client()
-        self.cleanup()
+        self.cleanup(reserve_slot=True)
 
         video = Path(video_path)
         audit = Path(audit_path)
