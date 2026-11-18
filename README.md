@@ -73,3 +73,19 @@ An online-only, TalkBack-friendly Android app for turning Bangla, English, or mi
 - বিস্তারিত পরিকল্পনা: docs/PRODUCT_PLAN.md
 - পূর্ণ ইতিহাস, model/provider inventory ও অমীমাংসিত কাজ: [docs/PROJECT_AUDIT.md](docs/PROJECT_AUDIT.md)
 
+## ঐচ্ছিক স্থায়ী ভিডিও সংরক্ষণ
+
+Render Free-এর অস্থায়ী ফাইল সিস্টেমে সার্ভার পুনরায় চালু হলে সম্পন্ন ভিডিও হারিয়ে যেতে পারে। চাইলে ব্যক্তিগত, public access বন্ধ রাখা Cloudflare R2 bucket যুক্ত করা যায়। এটি বাধ্যতামূলক নয়; R2 সেটিংস না থাকলে অ্যাপ আগের মতো Render-এর অস্থায়ী সংরক্ষণ ব্যবহার করবে।
+
+R2 চালু করতে Render-এর backend environment-এ নিচের মানগুলো দিতে হবে:
+
+- `R2_BUCKET_NAME`
+- `R2_ACCESS_KEY_ID`
+- `R2_SECRET_ACCESS_KEY`
+- আগে থেকেই থাকা `CLOUDFLARE_ACCOUNT_ID`
+
+API token শুধু নির্দিষ্ট private bucket-এর Object Read & Write permission-এ সীমাবদ্ধ রাখতে হবে। গোপন key কখনো GitHub source code-এ রাখা যাবে না।
+
+নিরাপত্তা ও খরচ সীমিত রাখতে ডিফল্টে সর্বশেষ ৫০টি কাজ রাখা হয়, প্রতিটি ভিডিও সর্বোচ্চ ৮০ MB এবং ২৪ ঘণ্টা পর পুরোনো কাজ মুছে যায়। ফলে এই অ্যাপের নিজস্ব সর্বোচ্চ ভিডিও সংরক্ষণ প্রায় ৪ GB-এর মধ্যে থাকে। Cloudflare account-এর অন্য R2 ব্যবহারও বিনামূল্যের বরাদ্দে গণনা হতে পারে; বরাদ্দের বাইরে ব্যবহার করলে Cloudflare-এর চার্জ প্রযোজ্য হতে পারে। R2 চালু না করলে কোনো R2 খরচ হবে না।
+
+শুধু সম্পন্ন বা ব্যর্থ কাজের তথ্য, scene audit এবং সীমার মধ্যে থাকা তৈরি MP4 সংরক্ষণ হয়। আপলোড করা মূল কণ্ঠের নমুনা বা অডিও R2-তে পাঠানো হয় না। চলমান কাজ সার্ভার restart হলে resume হয় না।
