@@ -22,6 +22,11 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from PIL import Image, ImageChops, ImageDraw, ImageFont, ImageOps
 
+try:
+    from .job_storage import R2JobStorage
+except ImportError:
+    from job_storage import R2JobStorage
+
 APP_DIR = Path(__file__).resolve().parent
 VOICE_CLONE_SPACE = os.getenv("VOICE_CLONE_SPACE", "kawshikbuet17/bengali-cosyvoice3-tts-demo")
 # Optional comma-separated public Gradio Spaces with the same API contract.
@@ -60,6 +65,7 @@ MAX_SCRIPT_CHARS = int(os.getenv("MAX_SCRIPT_CHARS", "50000"))
 MAX_AUDIO_MB = int(os.getenv("MAX_AUDIO_MB", "40"))
 JOBS = {}
 LOCK = threading.Lock()
+JOB_STORAGE = R2JobStorage.from_env()
 try:
     JOB_RETENTION_SECONDS = max(3600, int(os.getenv("JOB_RETENTION_SECONDS", "86400")))
 except (TypeError, ValueError):
@@ -69,6 +75,57 @@ try:
 except (TypeError, ValueError):
     MAX_ACTIVE_JOBS = 1
 app = FastAPI(title="Bangla AI Voice Video Maker API", version="0.3.0")
+
+
+def _restore_persisted_job(job_id: str, include_files: bool = False) -> bool:
+    """Restore a terminal job after Render restarts its ephemeral container."""
+    try:
+        restored = JOB_STORAGE.load_job(job_id)
+        if not restored:
+            return False
+        with LOCK:
+            current = JOBS.get(job_id)
+            if current is None:
+                JOBS[job_id] = restored
+                current = restored
+        if include_files:
+            JOB_STORAGE.restore_files(job_id, WORK_DIR / job_id, current)
+        return True
+    except Exception as storage_error:
+        print(f"R2_STORAGE restore_unavailable error={type(storage_error).__name__}", flush=True)
+        return False
+
+
+def _persist_terminal_job(job_id: str):
+    """Back up a completed/failed job without letting storage failure fail rendering."""
+    try:
+        with LOCK:
+            snapshot = dict(JOBS.get(job_id) or {})
+        if snapshot.get("status") not in ("completed", "failed"):
+            return
+        stored = JOB_STORAGE.save_job(
+            snapshot,
+            WORK_DIR / job_id / "video.mp4",
+            WORK_DIR / job_id / "scene-audit.json",
+        )
+        with LOCK:
+            if job_id in JOBS:
+                JOBS[job_id].update(
+                    storage_backend=stored.get("storage_backend", "ephemeral"),
+                    video_stored=bool(stored.get("video_stored")),
+                    scene_audit_stored=bool(stored.get("scene_audit_stored")),
+                )
+        print(
+            "R2_STORAGE job=" + job_id
+            + " backend=" + str(stored.get("storage_backend", "ephemeral"))
+            + " video_stored=" + str(bool(stored.get("video_stored"))).lower(),
+            flush=True,
+        )
+    except Exception as storage_error:
+        with LOCK:
+            if job_id in JOBS:
+                JOBS[job_id].update(storage_backend="ephemeral", storage_error=type(storage_error).__name__)
+        print(f"R2_STORAGE persist_failed error={type(storage_error).__name__}: {str(storage_error)[:180]}", flush=True)
 
 
 def _cleanup_expired_jobs(now=None):
@@ -91,6 +148,10 @@ def _cleanup_expired_jobs(now=None):
         active_ids = set(JOBS)
     for job_id in expired_ids:
         shutil.rmtree(WORK_DIR / job_id, ignore_errors=True)
+    try:
+        JOB_STORAGE.cleanup()
+    except Exception as storage_error:
+        print(f"R2_STORAGE cleanup_unavailable error={type(storage_error).__name__}", flush=True)
     # A process restart clears in-memory JOBS. Remove only folders older than the
     # same retention window, never folders belonging to active in-memory jobs.
     try:
@@ -4498,6 +4559,7 @@ def render(job_id: str, script: str, mode: str, audio_path: Optional[Path], capt
                 uploaded_audio_path.unlink(missing_ok=True)
             except Exception:
                 pass
+        _persist_terminal_job(job_id)
 
 
 @app.post("/api/chat")
@@ -4750,8 +4812,12 @@ async def create_job(script: str = Form(""), mode: str = Form("auto"), audio: Op
 def job_status(job_id: str):
     with LOCK:
         job = JOBS.get(job_id)
+    if not job:
+        _restore_persisted_job(job_id, include_files=False)
+    with LOCK:
+        job = JOBS.get(job_id)
         if not job:
-            raise HTTPException(404, "কাজটি পাওয়া যায়নি। সার্ভার পুনরায় চালু হলে অস্থায়ী কাজের তথ্য মুছে যেতে পারে।")
+            raise HTTPException(404, "কাজটি পাওয়া যায়নি। স্থায়ী Cloudflare R2 সংরক্ষণ চালু না থাকলে সার্ভার পুনরায় চালু হলে কাজের তথ্য হারিয়ে যেতে পারে।")
         return dict(job)
 
 
@@ -4783,12 +4849,21 @@ def video_quality_report(job_id: str):
     """Create a TalkBack-friendly, free technical report for a completed MP4."""
     with LOCK:
         job = JOBS.get(job_id)
+    if not job:
+        _restore_persisted_job(job_id, include_files=True)
+    with LOCK:
+        job = JOBS.get(job_id)
         if not job:
-            raise HTTPException(404, "ভিডিওর কাজটি পাওয়া যায়নি। সার্ভার পুনরায় চালু হলে অস্থায়ী কাজের তথ্য মুছে যেতে পারে।")
+            raise HTTPException(404, "ভিডিওর কাজটি পাওয়া যায়নি।")
         snapshot = dict(job)
     if snapshot.get("status") != "completed":
         raise HTTPException(409, "ভিডিও তৈরি সম্পূর্ণ হলে পরীক্ষা করা যাবে।")
     video_path = WORK_DIR / job_id / "video.mp4"
+    if not video_path.exists() or video_path.stat().st_size <= 0:
+        try:
+            JOB_STORAGE.restore_files(job_id, WORK_DIR / job_id, snapshot)
+        except Exception as storage_error:
+            print(f"R2_STORAGE video_restore_failed error={type(storage_error).__name__}", flush=True)
     if not video_path.exists() or video_path.stat().st_size <= 0:
         raise HTTPException(404, "ভিডিও ফাইলটি পাওয়া যাচ্ছে না।")
     try:
@@ -5181,6 +5256,10 @@ def video_quality_report(job_id: str):
 def download_video(job_id: str):
     with LOCK:
         job = JOBS.get(job_id)
+    if not job:
+        _restore_persisted_job(job_id, include_files=False)
+        with LOCK:
+            job = JOBS.get(job_id)
     if not job:
         raise HTTPException(404, "ভিডিওর কাজটি পাওয়া যায়নি।")
     if job["status"] != "completed":
