@@ -111,6 +111,7 @@ private fun VideoMakerScreen() {
     var recordingStartedAt by remember { mutableLongStateOf(0L) }
     var autoStopTriggered by remember { mutableStateOf(false) }
     var recorder by remember { mutableStateOf<MediaRecorder?>(null) }
+    var recordingSecondsRemaining by remember { mutableIntStateOf(120) }
     var recordingFile by remember { mutableStateOf<File?>(null) }
     var previewFile by remember { mutableStateOf(File(context.cacheDir, "voice_recording_preview.m4a").takeIf { it.exists() && it.length() > 1000L }) }
     var previewPlayer by remember { mutableStateOf<MediaPlayer?>(null) }
@@ -276,8 +277,9 @@ private fun VideoMakerScreen() {
             newRecorder.setAudioSource(MediaRecorder.AudioSource.VOICE_COMMUNICATION)
             newRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
             newRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
-            newRecorder.setAudioSamplingRate(16000)
-            newRecorder.setAudioEncodingBitRate(64000)
+            // Capture speech at a higher quality AAC setting for a cleaner source file.
+            newRecorder.setAudioSamplingRate(48000)
+            newRecorder.setAudioEncodingBitRate(128000)
             newRecorder.setOutputFile(target.absolutePath)
             newRecorder.prepare()
             ContextCompat.startForegroundService(
@@ -290,6 +292,7 @@ private fun VideoMakerScreen() {
             recordingFile = target
             isRecording = true
             recordingStartedAt = System.currentTimeMillis()
+            recordingSecondsRemaining = 120
             autoStopTriggered = false
             status = "রেকর্ডিং শুরু হয়েছে। সর্বোচ্চ ২ মিনিট পর অ্যাপ নিজে থেকেই রেকর্ড বন্ধ করবে।"
         } catch (e: Exception) {
@@ -338,6 +341,7 @@ private fun VideoMakerScreen() {
             recordingFile = null
             isRecording = false
             recordingStartedAt = 0L
+            recordingSecondsRemaining = 120
 
             runCatching { context.stopService(Intent(context, VideoWorkService::class.java)) }
         }
@@ -359,7 +363,7 @@ private fun VideoMakerScreen() {
                 "এখনো ফোনে সংরক্ষণ করা হয়নি। আগে রেকর্ড করা কণ্ঠ শুনুন, তারপর ভালো লাগলে সংরক্ষণ বোতাম চাপুন।"
             }
             status = (if (autoStopTriggered) "দুই মিনিট পূর্ণ হওয়ায় রেকর্ডিং স্বয়ংক্রিয়ভাবে বন্ধ হয়েছে। " else "রেকর্ডিং সম্পন্ন হয়েছে। ") +
-                completion + " এখন নিজের কণ্ঠ শুনে দেখুন। Android-এর ইকো কমানোর ব্যবস্থা ফোনে থাকলে TalkBack-এর আওয়াজ কমাতে পারে, তবে পুরোপুরি বাদ পড়ার নিশ্চয়তা নেই। TalkBack-এর আওয়াজ রেকর্ডে এলে হেডফোন ব্যবহার করে আবার রেকর্ড করুন।"
+                completion + " এখন নিজের কণ্ঠ শুনে দেখুন। VOICE_COMMUNICATION অডিও উৎস ফোনের সমর্থন অনুযায়ী ইকো কমাতে পারে। TalkBack চালু রেখেই হেডফোন ছাড়া রেকর্ড করা যাবে, তবে TalkBack-এর শব্দ পুরোপুরি বাদ পড়বে—এ নিশ্চয়তা সব ফোনে নেই।"
         } else {
             target?.delete()
             previewFile = null
@@ -374,10 +378,16 @@ private fun VideoMakerScreen() {
     LaunchedEffect(recordingStartedAt) {
         val startedAt = recordingStartedAt
         if (startedAt > 0L) {
-            delay(120_000L)
-            if (isRecording && recordingStartedAt == startedAt) {
-                autoStopTriggered = true
-                stopVoiceRecording()
+            while (isRecording && recordingStartedAt == startedAt) {
+                val elapsed = (System.currentTimeMillis() - startedAt).coerceAtLeast(0L)
+                val remaining = (120 - (elapsed / 1000L).toInt()).coerceAtLeast(0)
+                recordingSecondsRemaining = remaining
+                if (remaining == 0) {
+                    autoStopTriggered = true
+                    stopVoiceRecording()
+                    break
+                }
+                delay(250L)
             }
         }
     }
@@ -615,6 +625,13 @@ private fun VideoMakerScreen() {
                 enabled = !running
             ) {
                 Text(if (isRecording) "রেকর্ডিং বন্ধ করুন" else "নিজের কণ্ঠ রেকর্ড করুন")
+            }
+            if (isRecording) {
+                Text(
+                    "রেকর্ডিং চলছে। সময় বাকি: " + String.format(Locale.US, "%02d:%02d", recordingSecondsRemaining / 60, recordingSecondsRemaining % 60),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
             }
             if (previewFile == null && !isRecording) {
                 Text(
