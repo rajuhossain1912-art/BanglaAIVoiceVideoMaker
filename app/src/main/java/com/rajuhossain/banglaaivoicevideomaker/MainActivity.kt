@@ -9,9 +9,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.MediaRecorder
-import android.media.audiofx.AcousticEchoCanceler
-import android.media.audiofx.NoiseSuppressor
-import android.media.audiofx.AutomaticGainControl
 import android.media.MediaMetadataRetriever
 import android.media.MediaPlayer
 import android.media.AudioManager
@@ -114,9 +111,6 @@ private fun VideoMakerScreen() {
     var recordingStartedAt by remember { mutableLongStateOf(0L) }
     var autoStopTriggered by remember { mutableStateOf(false) }
     var recorder by remember { mutableStateOf<MediaRecorder?>(null) }
-    var echoCanceler by remember { mutableStateOf<AcousticEchoCanceler?>(null) }
-    var noiseSuppressor by remember { mutableStateOf<NoiseSuppressor?>(null) }
-    var automaticGainControl by remember { mutableStateOf<AutomaticGainControl?>(null) }
     var recordingSecondsRemaining by remember { mutableIntStateOf(120) }
     var recordingFile by remember { mutableStateOf<File?>(null) }
     var previewFile by remember { mutableStateOf(File(context.cacheDir, "voice_recording_preview.m4a").takeIf { it.exists() && it.length() > 1000L }) }
@@ -288,17 +282,6 @@ private fun VideoMakerScreen() {
             newRecorder.setAudioEncodingBitRate(128000)
             newRecorder.setOutputFile(target.absolutePath)
             newRecorder.prepare()
-            // Best-effort device capture effects; never mute or alter TalkBack audio.
-            val audioSession = newRecorder.audioSessionId
-            echoCanceler = if (AcousticEchoCanceler.isAvailable()) runCatching {
-                AcousticEchoCanceler.create(audioSession)?.apply { enabled = true }
-            }.getOrNull() else null
-            noiseSuppressor = if (NoiseSuppressor.isAvailable()) runCatching {
-                NoiseSuppressor.create(audioSession)?.apply { enabled = true }
-            }.getOrNull() else null
-            automaticGainControl = if (AutomaticGainControl.isAvailable()) runCatching {
-                AutomaticGainControl.create(audioSession)?.apply { enabled = true }
-            }.getOrNull() else null
             ContextCompat.startForegroundService(
                 context,
                 Intent(context, VideoWorkService::class.java).setAction(VideoWorkService.ACTION_START_RECORDING)
@@ -352,15 +335,6 @@ private fun VideoMakerScreen() {
         } catch (_: Exception) {
             status = "রেকর্ডিং খুব ছোট হয়েছে বা সংরক্ষণ করা যায়নি। আবার ২০ থেকে ৩০ সেকেন্ড রেকর্ড করুন।"
         } finally {
-            runCatching { echoCanceler?.enabled = false }
-            runCatching { echoCanceler?.release() }
-            echoCanceler = null
-            runCatching { noiseSuppressor?.enabled = false }
-            runCatching { noiseSuppressor?.release() }
-            noiseSuppressor = null
-            runCatching { automaticGainControl?.enabled = false }
-            runCatching { automaticGainControl?.release() }
-            automaticGainControl = null
             runCatching { currentRecorder?.reset() }
             runCatching { currentRecorder?.release() }
             recorder = null
@@ -389,7 +363,7 @@ private fun VideoMakerScreen() {
                 "এখনো ফোনে সংরক্ষণ করা হয়নি। আগে রেকর্ড করা কণ্ঠ শুনুন, তারপর ভালো লাগলে সংরক্ষণ বোতাম চাপুন।"
             }
             status = (if (autoStopTriggered) "দুই মিনিট পূর্ণ হওয়ায় রেকর্ডিং স্বয়ংক্রিয়ভাবে বন্ধ হয়েছে। " else "রেকর্ডিং সম্পন্ন হয়েছে। ") +
-                completion + " এখন নিজের কণ্ঠ শুনে দেখুন। ফোনে সমর্থন থাকলে ইকো ও নয়েজ কমানোর ব্যবস্থা চালু ছিল। TalkBack চালু রেখেই হেডফোন ছাড়া রেকর্ড করা যাবে, তবে TalkBack-এর শব্দ পুরোপুরি বাদ পড়বে—এ নিশ্চয়তা সব ফোনে নেই।"
+                completion + " এখন নিজের কণ্ঠ শুনে দেখুন। VOICE_COMMUNICATION অডিও উৎস ফোনের সমর্থন অনুযায়ী ইকো কমাতে পারে। TalkBack চালু রেখেই হেডফোন ছাড়া রেকর্ড করা যাবে, তবে TalkBack-এর শব্দ পুরোপুরি বাদ পড়বে—এ নিশ্চয়তা সব ফোনে নেই।"
         } else {
             target?.delete()
             previewFile = null
