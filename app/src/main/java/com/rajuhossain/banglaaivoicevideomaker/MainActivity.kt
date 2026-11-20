@@ -272,29 +272,60 @@ private fun VideoMakerScreen() {
             delay(300)
             val target = File(context.cacheDir, "voice_recording_preview.m4a")
             target.delete()
-            val newRecorder = MediaRecorder()
-            pendingRecorder = newRecorder
-            newRecorder.setAudioSource(MediaRecorder.AudioSource.VOICE_COMMUNICATION)
-            newRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
-            newRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
-            // Capture speech at a higher quality AAC setting for a cleaner source file.
-            newRecorder.setAudioSamplingRate(48000)
-            newRecorder.setAudioEncodingBitRate(128000)
-            newRecorder.setOutputFile(target.absolutePath)
-            newRecorder.prepare()
+            // Prefer Android's communication source for best-effort echo reduction, but
+            // retry supported microphone/rate combinations when a device rejects it.
+            // Never alter accessibility audio or disable TalkBack.
+            val recorderOptions = listOf(
+                Triple(MediaRecorder.AudioSource.VOICE_COMMUNICATION, 48000, 128000),
+                Triple(MediaRecorder.AudioSource.VOICE_COMMUNICATION, 44100, 96000),
+                Triple(MediaRecorder.AudioSource.MIC, 48000, 128000),
+                Triple(MediaRecorder.AudioSource.MIC, 44100, 96000)
+            )
+            var newRecorder: MediaRecorder? = null
+            var usedVoiceCommunication = false
+            var lastRecorderError: Exception? = null
+            for ((audioSource, sampleRate, bitRate) in recorderOptions) {
+                val candidate = MediaRecorder()
+                try {
+                    candidate.setAudioSource(audioSource)
+                    candidate.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+                    candidate.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+                    candidate.setAudioSamplingRate(sampleRate)
+                    candidate.setAudioEncodingBitRate(bitRate)
+                    candidate.setOutputFile(target.absolutePath)
+                    candidate.prepare()
+                    newRecorder = candidate
+                    usedVoiceCommunication = audioSource == MediaRecorder.AudioSource.VOICE_COMMUNICATION
+                    break
+                } catch (configurationError: Exception) {
+                    lastRecorderError = configurationError
+                    runCatching { candidate.reset() }
+                    runCatching { candidate.release() }
+                    target.delete()
+                }
+            }
+            val preparedRecorder = newRecorder ?: throw IllegalStateException(
+                "এই ফোনে সমর্থিত অডিও সেটিং পাওয়া যায়নি।",
+                lastRecorderError
+            )
+            pendingRecorder = preparedRecorder
             ContextCompat.startForegroundService(
                 context,
                 Intent(context, VideoWorkService::class.java).setAction(VideoWorkService.ACTION_START_RECORDING)
             )
-            newRecorder.start()
-            recorder = newRecorder
+            preparedRecorder.start()
+            recorder = preparedRecorder
             pendingRecorder = null
             recordingFile = target
             isRecording = true
             recordingStartedAt = System.currentTimeMillis()
             recordingSecondsRemaining = 120
             autoStopTriggered = false
-            status = "রেকর্ডিং শুরু হয়েছে। সর্বোচ্চ ২ মিনিট পর অ্যাপ নিজে থেকেই রেকর্ড বন্ধ করবে।"
+            status = if (usedVoiceCommunication) {
+                "রেকর্ডিং শুরু হয়েছে। ফোনের যোগাযোগ-অডিও উৎস ব্যবহার হচ্ছে। সর্বোচ্চ ২ মিনিট পর অ্যাপ নিজে থেকেই রেকর্ড বন্ধ করবে।"
+            } else {
+                "রেকর্ডিং শুরু হয়েছে। ফোনের সমর্থনের জন্য সাধারণ মাইক্রোফোন উৎস ব্যবহার হচ্ছে। TalkBack-এর শব্দ রেকর্ডে আসতে পারে। সর্বোচ্চ ২ মিনিট পর অ্যাপ নিজে থেকেই রেকর্ড বন্ধ করবে।"
+            }
         } catch (e: Exception) {
             // Release the recorder created in this attempt, even if prepare()/start()
             // failed before it could be assigned to the screen's recorder state.
