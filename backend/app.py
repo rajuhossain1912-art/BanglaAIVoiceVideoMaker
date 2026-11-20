@@ -653,7 +653,9 @@ def synthesize_cloned_voice(script: str, reference_audio: Path, folder: Path, pr
     try:
         if progress_callback:
             progress_callback(12, "নিজের কণ্ঠের নমুনা অডিও প্রস্তুত করা হচ্ছে।")
-        run(["ffmpeg", "-y", "-i", str(reference_audio), "-t", "12", "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", str(normalized)], 120)
+        # Remove low-frequency handling noise and normalize speech loudness before external cloning.
+        # This only processes the temporary server-side copy; the saved phone sample is untouched.
+        run(["ffmpeg", "-y", "-i", str(reference_audio), "-t", "12", "-af", "highpass=f=70,loudnorm=I=-20:TP=-1.5:LRA=11", "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", str(normalized)], 120)
         if progress_callback:
             progress_callback(13, "ফ্রি কণ্ঠসেবার সঙ্গে সংযোগ করা হচ্ছে।")
         output = folder / "cloned_voice.wav"
