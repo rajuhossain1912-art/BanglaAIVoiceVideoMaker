@@ -205,5 +205,71 @@ class AudioTranscriptReportTests(unittest.TestCase):
         self.assertEqual(len(result["transcript_preview"]), 1200)
 
 
+class WhisperWordTimestampTests(unittest.TestCase):
+    def test_parses_documented_segment_level_word_timestamps(self):
+        parsed = video_app._parse_cloudflare_transcription_response({
+            "result": {
+                "text": "আমি আজ কথা বলি",
+                "segments": [{
+                    "start": 0.0,
+                    "end": 2.4,
+                    "text": "আমি আজ কথা বলি",
+                    "words": [
+                        {"word": "আমি", "start": 0.10, "end": 0.55},
+                        {"word": "আজ", "start": 0.60, "end": 0.92},
+                        {"word": "কথা", "start": 1.00, "end": 1.55},
+                        {"word": "বলি", "start": 1.60, "end": 2.20},
+                    ],
+                }],
+            }
+        }, return_details=True)
+        self.assertEqual(
+            parsed["word_timestamps"],
+            [
+                {"word": "আমি", "start": 0.1, "end": 0.55},
+                {"word": "আজ", "start": 0.6, "end": 0.92},
+                {"word": "কথা", "start": 1.0, "end": 1.55},
+                {"word": "বলি", "start": 1.6, "end": 2.2},
+            ],
+        )
+
+    def test_parses_top_level_word_timestamps_and_applies_chunk_offset(self):
+        parsed = video_app._parse_cloudflare_transcription_response({
+            "result": {
+                "text": "hello world",
+                "words": [
+                    {"word": "hello", "start": 0.2, "end": 0.7},
+                    {"word": "world", "start": 0.8, "end": 1.3},
+                ],
+            }
+        }, return_details=True, offset_seconds=120.0)
+        self.assertEqual(
+            parsed["word_timestamps"],
+            [
+                {"word": "hello", "start": 120.2, "end": 120.7},
+                {"word": "world", "start": 120.8, "end": 121.3},
+            ],
+        )
+
+    def test_ignores_invalid_or_incomplete_word_timestamp_entries(self):
+        parsed = video_app._parse_cloudflare_transcription_response({
+            "result": {
+                "text": "আমি আজ",
+                "segments": [{
+                    "words": [
+                        {"word": "আমি", "start": 0.2, "end": 0.6},
+                        {"word": "আজ", "start": 0.9},
+                        {"word": "ভুল", "start": -1.0, "end": 0.1},
+                        {"word": "উল্টো", "start": 1.4, "end": 1.1},
+                    ],
+                }],
+            }
+        }, return_details=True)
+        self.assertEqual(
+            parsed["word_timestamps"],
+            [{"word": "আমি", "start": 0.2, "end": 0.6}],
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
