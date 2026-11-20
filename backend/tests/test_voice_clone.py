@@ -186,6 +186,10 @@ class VoiceCloneUnitTests(unittest.TestCase):
             self.assertIs(calls[1][2], video_app._clone_with_chatterbox)
             self.assertEqual(calls[2][1], ["bengali-space"])
             self.assertIs(calls[2][2], video_app._clone_with_cosyvoice)
+            reference_conversion = next(command for command in ffmpeg_commands if str(folder / "voice_reference.wav") in str(command[-1]))
+            self.assertIn("highpass=f=70,loudnorm=I=-20:TP=-1.5:LRA=11", reference_conversion)
+            self.assertIn("-ar", reference_conversion)
+            self.assertIn("16000", reference_conversion)
             chunk_conversions = [command for command in ffmpeg_commands if str(folder / "clone-part-") in str(command[-1])]
             self.assertEqual(len(chunk_conversions), 3)
             self.assertTrue(all("-af" in command and "apad=pad_dur=0.25" in command for command in chunk_conversions))
