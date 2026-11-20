@@ -108,8 +108,8 @@ internal class PcmVoiceRecorder(private val outputFile: File) {
         if (effect == null) return
         runCatching {
             if (effect.hasControl()) {
-                effect.enabled = true
-                if (effect.enabled) enabledEffects.add(label)
+                effect.setEnabled(true)
+                if (effect.getEnabled()) enabledEffects.add(label)
             }
         }
     }
