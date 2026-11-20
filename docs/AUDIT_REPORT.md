@@ -2954,6 +2954,16 @@ GitHub commit history অনুযায়ী প্রকল্পের প্�
   - Step 22. Post Checkout source: success
   - Step 23. Complete job: success
 
+
+### Source update — 2026-11-20T15:49:35.724Z
+- Branch: `main`
+- Push range: `131f9fde7a63b2b5c6c493f80a0f78be0be1ee5f` → `0b4bf60df7cc0951d619e9f4e9718870a50ed6c4`
+- Pushed by: rajuhossain1912-art
+- Commit: [0b4bf60df7cc](https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/commit/0b4bf60df7cc0951d619e9f4e9718870a50ed6c4) — Add device-compatible voice recording fallbacks
+- Changed files:
+  - `app/src/main/java/com/rajuhossain/banglaaivoicevideomaker/MainActivity.kt`
+- Result: **push recorded**; this is not a test or deployment success claim.
+
 <!-- AUTO_LOG_END -->
 
 
