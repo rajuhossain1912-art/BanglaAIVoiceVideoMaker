@@ -8,7 +8,6 @@ import android.app.DownloadManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.media.MediaRecorder
 import android.media.MediaMetadataRetriever
 import android.media.MediaPlayer
 import android.media.AudioManager
@@ -110,10 +109,10 @@ private fun VideoMakerScreen() {
 
     var recordingStartedAt by remember { mutableLongStateOf(0L) }
     var autoStopTriggered by remember { mutableStateOf(false) }
-    var recorder by remember { mutableStateOf<MediaRecorder?>(null) }
+    var recorder by remember { mutableStateOf<PcmVoiceRecorder?>(null) }
     var recordingSecondsRemaining by remember { mutableIntStateOf(120) }
     var recordingFile by remember { mutableStateOf<File?>(null) }
-    var previewFile by remember { mutableStateOf(File(context.cacheDir, "voice_recording_preview.m4a").takeIf { it.exists() && it.length() > 1000L }) }
+    var previewFile by remember { mutableStateOf(File(context.cacheDir, "voice_recording_preview.wav").takeIf { it.exists() && it.length() > 1000L }) }
     var previewPlayer by remember { mutableStateOf<MediaPlayer?>(null) }
     var previewPlaying by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf("অনলাইন সার্ভার যুক্ত হলে এখানে ভিডিও তৈরির অবস্থা দেখা যাবে।") }
@@ -259,85 +258,38 @@ private fun VideoMakerScreen() {
 
     val startVoiceRecording: () -> Unit = {
         // Give TalkBack time to finish speaking the button label before the microphone opens.
-        // The user can keep TalkBack enabled; no app status or start beep is spoken into the sample.
         scope.launch {
             status = "রেকর্ডিং শুরু হচ্ছে। টকব্যাকের কথা শেষ হওয়া পর্যন্ত একটু অপেক্ষা করুন।"
             delay(3000)
-            var pendingRecorder: MediaRecorder? = null
+            var pendingRecorder: PcmVoiceRecorder? = null
             try {
-            // Stop only this app's own TTS. Ordinary apps cannot change TalkBack's
-            // protected accessibility volume, so never claim that TalkBack is muted.
-            // VOICE_COMMUNICATION selects Android's echo-cancellation path when supported.
-            speechOutput?.stop()
-            delay(300)
-            val target = File(context.cacheDir, "voice_recording_preview.m4a")
-            target.delete()
-            // Prefer Android's communication source for best-effort echo reduction, but
-            // retry supported microphone/rate combinations when a device rejects it.
-            // Never alter accessibility audio or disable TalkBack.
-            val recorderOptions = listOf(
-                Triple(MediaRecorder.AudioSource.VOICE_COMMUNICATION, 48000, 128000),
-                Triple(MediaRecorder.AudioSource.VOICE_COMMUNICATION, 44100, 96000),
-                Triple(MediaRecorder.AudioSource.MIC, 48000, 128000),
-                Triple(MediaRecorder.AudioSource.MIC, 44100, 96000)
-            )
-            var newRecorder: MediaRecorder? = null
-            var usedVoiceCommunication = false
-            var lastRecorderError: Exception? = null
-            for ((audioSource, sampleRate, bitRate) in recorderOptions) {
-                val candidate = MediaRecorder()
-                try {
-                    candidate.setAudioSource(audioSource)
-                    candidate.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
-                    candidate.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
-                    candidate.setAudioSamplingRate(sampleRate)
-                    candidate.setAudioEncodingBitRate(bitRate)
-                    candidate.setOutputFile(target.absolutePath)
-                    candidate.prepare()
-                    newRecorder = candidate
-                    usedVoiceCommunication = audioSource == MediaRecorder.AudioSource.VOICE_COMMUNICATION
-                    break
-                } catch (configurationError: Exception) {
-                    lastRecorderError = configurationError
-                    runCatching { candidate.reset() }
-                    runCatching { candidate.release() }
-                    target.delete()
-                }
-            }
-            val preparedRecorder = newRecorder ?: throw IllegalStateException(
-                "এই ফোনে সমর্থিত অডিও সেটিং পাওয়া যায়নি।",
-                lastRecorderError
-            )
-            pendingRecorder = preparedRecorder
-            ContextCompat.startForegroundService(
-                context,
-                Intent(context, VideoWorkService::class.java).setAction(VideoWorkService.ACTION_START_RECORDING)
-            )
-            preparedRecorder.start()
-            recorder = preparedRecorder
-            pendingRecorder = null
-            recordingFile = target
-            isRecording = true
-            recordingStartedAt = System.currentTimeMillis()
-            recordingSecondsRemaining = 120
-            autoStopTriggered = false
-            status = if (usedVoiceCommunication) {
-                "রেকর্ডিং শুরু হয়েছে। ফোনের যোগাযোগ-অডিও উৎস ব্যবহার হচ্ছে। সর্বোচ্চ ২ মিনিট পর অ্যাপ নিজে থেকেই রেকর্ড বন্ধ করবে।"
-            } else {
-                "রেকর্ডিং শুরু হয়েছে। ফোনের সমর্থনের জন্য সাধারণ মাইক্রোফোন উৎস ব্যবহার হচ্ছে। TalkBack-এর শব্দ রেকর্ডে আসতে পারে। সর্বোচ্চ ২ মিনিট পর অ্যাপ নিজে থেকেই রেকর্ড বন্ধ করবে।"
-            }
-        } catch (e: Exception) {
-            // Release the recorder created in this attempt, even if prepare()/start()
-            // failed before it could be assigned to the screen's recorder state.
-            pendingRecorder?.let { failedRecorder ->
-                runCatching { failedRecorder.reset() }
-                runCatching { failedRecorder.release() }
-            }
-            recorder = null
-            isRecording = false
-
-            runCatching { context.stopService(Intent(context, VideoWorkService::class.java)) }
-            status = "রেকর্ডিং শুরু করা যায়নি। মাইক্রোফোনের অনুমতি ও ফোনের স্টোরেজ পরীক্ষা করুন।"
+                // Stop only this app's own TTS; never change accessibility audio.
+                speechOutput?.stop()
+                delay(300)
+                val target = File(context.cacheDir, "voice_recording_preview.wav")
+                target.delete()
+                val candidate = PcmVoiceRecorder(target)
+                pendingRecorder = candidate
+                candidate.prepare()
+                ContextCompat.startForegroundService(
+                    context,
+                    Intent(context, VideoWorkService::class.java).setAction(VideoWorkService.ACTION_START_RECORDING)
+                )
+                candidate.start()
+                recorder = candidate
+                pendingRecorder = null
+                recordingFile = target
+                isRecording = true
+                recordingStartedAt = System.currentTimeMillis()
+                recordingSecondsRemaining = 120
+                autoStopTriggered = false
+                status = "রেকর্ডিং শুরু হয়েছে। ফোনে সমর্থিত নয়েজ কমানো, ইকো কমানো ও ভলিউম সমান করার সুবিধা থাকলে অ্যাপ সেগুলো চালু করেছে। সর্বোচ্চ ২ মিনিট পর নিজে থেকেই বন্ধ হবে।"
+            } catch (e: Exception) {
+                pendingRecorder?.release()
+                recorder = null
+                isRecording = false
+                runCatching { context.stopService(Intent(context, VideoWorkService::class.java)) }
+                status = "রেকর্ডিং শুরু করা যায়নি। মাইক্রোফোনের অনুমতি ও ফোনের স্টোরেজ পরীক্ষা করুন।"
             }
         }
     }
@@ -348,32 +300,23 @@ private fun VideoMakerScreen() {
     fun stopVoiceRecording() {
         val currentRecorder = recorder
         val target = recordingFile
+        var captureResult: PcmVoiceRecorder.Result? = null
         var saved = false
         var tooShort = false
         try {
-            currentRecorder?.stop()
-            if (target != null && target.exists() && target.length() > 1000) {
-                val metadata = MediaMetadataRetriever()
-                val durationMs = try {
-                    metadata.setDataSource(target.absolutePath)
-                    metadata.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
-                } finally {
-                    metadata.release()
-                }
-                saved = durationMs >= 10_000L
-                tooShort = !saved
-            }
+            captureResult = currentRecorder?.stop()
+            saved = target != null && target.exists() && target.length() > 1000L &&
+                captureResult != null && captureResult.durationMs >= 10_000L
+            tooShort = !saved && captureResult != null
         } catch (_: Exception) {
             status = "রেকর্ডিং খুব ছোট হয়েছে বা সংরক্ষণ করা যায়নি। আবার ২০ থেকে ৩০ সেকেন্ড রেকর্ড করুন।"
         } finally {
-            runCatching { currentRecorder?.reset() }
-            runCatching { currentRecorder?.release() }
+            currentRecorder?.release()
             recorder = null
             recordingFile = null
             isRecording = false
             recordingStartedAt = 0L
             recordingSecondsRemaining = 120
-
             runCatching { context.stopService(Intent(context, VideoWorkService::class.java)) }
         }
         if (saved && target != null) {
@@ -382,8 +325,7 @@ private fun VideoMakerScreen() {
             previewPlayer = null
             previewPlaying = false
 
-            // Keep the recording as a temporary preview until the user listens and explicitly saves it.
-            // Never replace an existing voice profile without the user's save-button action.
+            // Keep the recording as a temporary preview until the user explicitly saves it.
             val profile = File(context.filesDir, "voice_profile_sample")
             val tone = ToneGenerator(AudioManager.STREAM_MUSIC, 80)
             tone.startTone(ToneGenerator.TONE_PROP_ACK, 250)
@@ -393,8 +335,17 @@ private fun VideoMakerScreen() {
             } else {
                 "এখনো ফোনে সংরক্ষণ করা হয়নি। আগে রেকর্ড করা কণ্ঠ শুনুন, তারপর ভালো লাগলে সংরক্ষণ বোতাম চাপুন।"
             }
+            val result = captureResult
+            val sourceText = if (result?.usedVoiceCommunication == true) {
+                "ফোনের যোগাযোগ-অডিও উৎস ব্যবহার হয়েছে।"
+            } else {
+                "ফোনের সাধারণ মাইক্রোফোন উৎস ব্যবহার হয়েছে; TalkBack-এর শব্দ রেকর্ডে আসতে পারে।"
+            }
+            val effectsText = result?.enabledEffects?.takeIf { it.isNotEmpty() }?.joinToString("، ")?.let {
+                "চালু হওয়া অডিও সুবিধা: $it।"
+            } ?: "এই ফোনে আলাদা অডিও পরিষ্কার করার সুবিধা পাওয়া যায়নি; মূল রেকর্ডিং অক্ষত রাখা হয়েছে।"
             status = (if (autoStopTriggered) "দুই মিনিট পূর্ণ হওয়ায় রেকর্ডিং স্বয়ংক্রিয়ভাবে বন্ধ হয়েছে। " else "রেকর্ডিং সম্পন্ন হয়েছে। ") +
-                completion + " এখন নিজের কণ্ঠ শুনে দেখুন। VOICE_COMMUNICATION অডিও উৎস ফোনের সমর্থন অনুযায়ী ইকো কমাতে পারে। TalkBack চালু রেখেই হেডফোন ছাড়া রেকর্ড করা যাবে, তবে TalkBack-এর শব্দ পুরোপুরি বাদ পড়বে—এ নিশ্চয়তা সব ফোনে নেই।"
+                completion + " এখন নিজের কণ্ঠ শুনে দেখুন। $sourceText $effectsText TalkBack-এর শব্দ পুরোপুরি বাদ পড়বে—এ নিশ্চয়তা সব ফোনে নেই।"
         } else {
             target?.delete()
             previewFile = null
