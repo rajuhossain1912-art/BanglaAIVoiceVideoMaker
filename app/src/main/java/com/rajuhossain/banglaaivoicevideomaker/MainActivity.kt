@@ -262,6 +262,7 @@ private fun VideoMakerScreen() {
         scope.launch {
             status = "রেকর্ডিং শুরু হচ্ছে। টকব্যাকের কথা শেষ হওয়া পর্যন্ত একটু অপেক্ষা করুন।"
             delay(3000)
+            var pendingRecorder: MediaRecorder? = null
             try {
             // Stop only this app's own TTS. Ordinary apps cannot change TalkBack's
             // protected accessibility volume, so never claim that TalkBack is muted.
@@ -271,6 +272,7 @@ private fun VideoMakerScreen() {
             val target = File(context.cacheDir, "voice_recording_preview.m4a")
             target.delete()
             val newRecorder = MediaRecorder()
+            pendingRecorder = newRecorder
             newRecorder.setAudioSource(MediaRecorder.AudioSource.VOICE_COMMUNICATION)
             newRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
             newRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
@@ -284,13 +286,19 @@ private fun VideoMakerScreen() {
             )
             newRecorder.start()
             recorder = newRecorder
+            pendingRecorder = null
             recordingFile = target
             isRecording = true
             recordingStartedAt = System.currentTimeMillis()
             autoStopTriggered = false
             status = "রেকর্ডিং শুরু হয়েছে। সর্বোচ্চ ২ মিনিট পর অ্যাপ নিজে থেকেই রেকর্ড বন্ধ করবে।"
         } catch (e: Exception) {
-            runCatching { recorder?.release() }
+            // Release the recorder created in this attempt, even if prepare()/start()
+            // failed before it could be assigned to the screen's recorder state.
+            pendingRecorder?.let { failedRecorder ->
+                runCatching { failedRecorder.reset() }
+                runCatching { failedRecorder.release() }
+            }
             recorder = null
             isRecording = false
 
