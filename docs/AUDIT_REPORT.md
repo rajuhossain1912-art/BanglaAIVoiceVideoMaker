@@ -2852,6 +2852,16 @@ GitHub commit history অনুযায়ী প্রকল্পের প্�
   - Step 96. Post Checkout source: success
   - Step 97. Complete job: success
 
+
+### Source update — 2026-11-20T10:12:37.579Z
+- Branch: `main`
+- Push range: `6021767578bebe00d123469b37ce5a15cfc9000d` → `42351b87fbeb96e725c0afd9461fb0e25d58f43c`
+- Pushed by: rajuhossain1912-art
+- Commit: [42351b87fbeb](https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/commit/42351b87fbeb96e725c0afd9461fb0e25d58f43c) — fix: make voice recording TalkBack-safe (#70)
+- Changed files:
+  - `app/src/main/java/com/rajuhossain/banglaaivoicevideomaker/MainActivity.kt`
+- Result: **push recorded**; this is not a test or deployment success claim.
+
 <!-- AUTO_LOG_END -->
 
 
