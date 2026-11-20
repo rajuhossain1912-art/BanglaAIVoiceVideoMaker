@@ -112,35 +112,6 @@ private fun VideoMakerScreen() {
     var autoStopTriggered by remember { mutableStateOf(false) }
     var recorder by remember { mutableStateOf<MediaRecorder?>(null) }
     var recordingFile by remember { mutableStateOf<File?>(null) }
-    val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
-    var previousAudioVolumes by remember { mutableStateOf<Map<Int, Int>?>(null) }
-    fun mutePhoneAudioForRecording() {
-        val streams = buildList {
-            add(AudioManager.STREAM_MUSIC)
-            add(AudioManager.STREAM_SYSTEM)
-            add(AudioManager.STREAM_NOTIFICATION)
-            add(AudioManager.STREAM_RING)
-            add(AudioManager.STREAM_ALARM)
-            add(AudioManager.STREAM_DTMF)
-            if (android.os.Build.VERSION.SDK_INT >= 26) add(AudioManager.STREAM_ACCESSIBILITY)
-        }.distinct()
-        previousAudioVolumes = streams.associateWith { stream ->
-            runCatching { audioManager.getStreamVolume(stream) }.getOrDefault(0)
-        }
-        streams.forEach { stream ->
-            runCatching { audioManager.setStreamVolume(stream, 0, 0) }
-        }
-    }
-    fun restorePhoneAudioAfterRecording() {
-        val saved = previousAudioVolumes ?: return
-        saved.forEach { (stream, volume) ->
-            runCatching { audioManager.setStreamVolume(stream, volume, 0) }
-        }
-        previousAudioVolumes = null
-    }
-    DisposableEffect(Unit) {
-        onDispose { restorePhoneAudioAfterRecording() }
-    }
     var previewFile by remember { mutableStateOf(File(context.cacheDir, "voice_recording_preview.m4a").takeIf { it.exists() && it.length() > 1000L }) }
     var previewPlayer by remember { mutableStateOf<MediaPlayer?>(null) }
     var previewPlaying by remember { mutableStateOf(false) }
@@ -292,15 +263,15 @@ private fun VideoMakerScreen() {
             status = "রেকর্ডিং শুরু হচ্ছে। টকব্যাকের কথা শেষ হওয়া পর্যন্ত একটু অপেক্ষা করুন।"
             delay(3000)
             try {
-            // Temporarily silence TalkBack and other phone playback streams.
-            // Restore the user's original volume levels immediately after recording.
+            // Stop only this app's own TTS. Ordinary apps cannot change TalkBack's
+            // protected accessibility volume, so never claim that TalkBack is muted.
+            // VOICE_COMMUNICATION selects Android's echo-cancellation path when supported.
             speechOutput?.stop()
-            mutePhoneAudioForRecording()
             delay(300)
             val target = File(context.cacheDir, "voice_recording_preview.m4a")
             target.delete()
             val newRecorder = MediaRecorder()
-            newRecorder.setAudioSource(MediaRecorder.AudioSource.MIC)
+            newRecorder.setAudioSource(MediaRecorder.AudioSource.VOICE_COMMUNICATION)
             newRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
             newRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
             newRecorder.setAudioSamplingRate(16000)
@@ -317,12 +288,12 @@ private fun VideoMakerScreen() {
             isRecording = true
             recordingStartedAt = System.currentTimeMillis()
             autoStopTriggered = false
-            status = "রেকর্ডিং শুরু হয়েছে। এই সময় TalkBack ও ফোনের অন্যান্য শব্দ সাময়িক নীরব থাকবে। রেকর্ডিং শেষ হলে আগের শব্দের মাত্রা ফিরে আসবে। সর্বোচ্চ ২ মিনিট পর অ্যাপ নিজে থেকেই রেকর্ড বন্ধ করবে।"
+            status = "রেকর্ডিং শুরু হয়েছে। সর্বোচ্চ ২ মিনিট পর অ্যাপ নিজে থেকেই রেকর্ড বন্ধ করবে।"
         } catch (e: Exception) {
             runCatching { recorder?.release() }
             recorder = null
             isRecording = false
-            restorePhoneAudioAfterRecording()
+
             runCatching { context.stopService(Intent(context, VideoWorkService::class.java)) }
             status = "রেকর্ডিং শুরু করা যায়নি। মাইক্রোফোনের অনুমতি ও ফোনের স্টোরেজ পরীক্ষা করুন।"
             }
@@ -359,7 +330,7 @@ private fun VideoMakerScreen() {
             recordingFile = null
             isRecording = false
             recordingStartedAt = 0L
-            restorePhoneAudioAfterRecording()
+
             runCatching { context.stopService(Intent(context, VideoWorkService::class.java)) }
         }
         if (saved && target != null) {
@@ -380,7 +351,7 @@ private fun VideoMakerScreen() {
                 "এখনো ফোনে সংরক্ষণ করা হয়নি। আগে রেকর্ড করা কণ্ঠ শুনুন, তারপর ভালো লাগলে সংরক্ষণ বোতাম চাপুন।"
             }
             status = (if (autoStopTriggered) "দুই মিনিট পূর্ণ হওয়ায় রেকর্ডিং স্বয়ংক্রিয়ভাবে বন্ধ হয়েছে। " else "রেকর্ডিং সম্পন্ন হয়েছে। ") +
-                completion + " এখন নিজের কণ্ঠ শুনে দেখুন।"
+                completion + " এখন নিজের কণ্ঠ শুনে দেখুন। Android-এর ইকো কমানোর ব্যবস্থা ফোনে থাকলে TalkBack-এর আওয়াজ কমাতে পারে, তবে পুরোপুরি বাদ পড়ার নিশ্চয়তা নেই। TalkBack-এর আওয়াজ রেকর্ডে এলে হেডফোন ব্যবহার করে আবার রেকর্ড করুন।"
         } else {
             target?.delete()
             previewFile = null
