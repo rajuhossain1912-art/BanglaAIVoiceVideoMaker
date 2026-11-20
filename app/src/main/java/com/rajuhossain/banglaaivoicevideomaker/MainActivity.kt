@@ -13,10 +13,6 @@ import android.media.MediaMetadataRetriever
 import android.media.MediaPlayer
 import android.media.AudioManager
 import android.media.ToneGenerator
-import android.media.audiofx.AudioEffect
-import android.media.audiofx.AcousticEchoCanceler
-import android.media.audiofx.AutomaticGainControl
-import android.media.audiofx.NoiseSuppressor
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.Uri
@@ -115,8 +111,6 @@ private fun VideoMakerScreen() {
     var recordingStartedAt by remember { mutableLongStateOf(0L) }
     var autoStopTriggered by remember { mutableStateOf(false) }
     var recorder by remember { mutableStateOf<MediaRecorder?>(null) }
-    var recordingAudioEffects by remember { mutableStateOf<List<AudioEffect>>(emptyList()) }
-    var recordingEnhancements by remember { mutableStateOf("") }
     var recordingSecondsRemaining by remember { mutableIntStateOf(120) }
     var recordingFile by remember { mutableStateOf<File?>(null) }
     var previewFile by remember { mutableStateOf(File(context.cacheDir, "voice_recording_preview.m4a").takeIf { it.exists() && it.length() > 1000L }) }
@@ -289,13 +283,9 @@ private fun VideoMakerScreen() {
             )
             var newRecorder: MediaRecorder? = null
             var usedVoiceCommunication = false
-            var selectedAudioEffects: List<AudioEffect> = emptyList()
-            var selectedEnhancements = ""
             var lastRecorderError: Exception? = null
             for ((audioSource, sampleRate, bitRate) in recorderOptions) {
                 val candidate = MediaRecorder()
-                val candidateEffects = mutableListOf<AudioEffect>()
-                val candidateEnhancements = mutableListOf<String>()
                 try {
                     candidate.setAudioSource(audioSource)
                     candidate.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
@@ -304,35 +294,11 @@ private fun VideoMakerScreen() {
                     candidate.setAudioEncodingBitRate(bitRate)
                     candidate.setOutputFile(target.absolutePath)
                     candidate.prepare()
-                    // Best-effort platform effects; unsupported effects never block recording.
-                    fun attachEffect(effect: AudioEffect?, label: String) {
-                        if (effect == null) return
-                        try {
-                            effect.enabled = true
-                            candidateEffects.add(effect)
-                            candidateEnhancements.add(label)
-                        } catch (_: Exception) {
-                            runCatching { effect.release() }
-                        }
-                    }
-                    val sessionId = candidate.audioSessionId
-                    if (NoiseSuppressor.isAvailable()) {
-                        attachEffect(runCatching { NoiseSuppressor.create(sessionId) }.getOrNull(), "নয়েজ কমানো")
-                    }
-                    if (AcousticEchoCanceler.isAvailable()) {
-                        attachEffect(runCatching { AcousticEchoCanceler.create(sessionId) }.getOrNull(), "ইকো কমানো")
-                    }
-                    if (AutomaticGainControl.isAvailable()) {
-                        attachEffect(runCatching { AutomaticGainControl.create(sessionId) }.getOrNull(), "ভলিউম সমান করা")
-                    }
                     newRecorder = candidate
-                    selectedAudioEffects = candidateEffects.toList()
-                    selectedEnhancements = candidateEnhancements.joinToString(" ও ")
                     usedVoiceCommunication = audioSource == MediaRecorder.AudioSource.VOICE_COMMUNICATION
                     break
                 } catch (configurationError: Exception) {
                     lastRecorderError = configurationError
-                    candidateEffects.forEach { runCatching { it.release() } }
                     runCatching { candidate.reset() }
                     runCatching { candidate.release() }
                     target.delete()
@@ -343,8 +309,6 @@ private fun VideoMakerScreen() {
                 lastRecorderError
             )
             pendingRecorder = preparedRecorder
-            recordingAudioEffects = selectedAudioEffects
-            recordingEnhancements = selectedEnhancements
             ContextCompat.startForegroundService(
                 context,
                 Intent(context, VideoWorkService::class.java).setAction(VideoWorkService.ACTION_START_RECORDING)
@@ -361,7 +325,7 @@ private fun VideoMakerScreen() {
                 "রেকর্ডিং শুরু হয়েছে। ফোনের যোগাযোগ-অডিও উৎস ব্যবহার হচ্ছে। "
             } else {
                 "রেকর্ডিং শুরু হয়েছে। সাধারণ মাইক্রোফোন উৎস ব্যবহার হচ্ছে। TalkBack-এর শব্দ রেকর্ডে আসতে পারে। "
-            }) + (if (recordingEnhancements.isNotBlank()) "ফোনের সমর্থিত অডিও উন্নতি চালু: $recordingEnhancements। " else "এই ফোনে অতিরিক্ত অডিও উন্নতি পাওয়া যায়নি। ") + "সর্বোচ্চ ২ মিনিট পর অ্যাপ নিজে থেকেই রেকর্ড বন্ধ করবে।"
+            }) + "সর্বোচ্চ ২ মিনিট পর অ্যাপ নিজে থেকেই রেকর্ড বন্ধ করবে।"
         } catch (e: Exception) {
             // Release the recorder created in this attempt, even if prepare()/start()
             // failed before it could be assigned to the screen's recorder state.
@@ -369,9 +333,6 @@ private fun VideoMakerScreen() {
                 runCatching { failedRecorder.reset() }
                 runCatching { failedRecorder.release() }
             }
-            recordingAudioEffects.forEach { runCatching { it.release() } }
-            recordingAudioEffects = emptyList()
-            recordingEnhancements = ""
             recorder = null
             isRecording = false
 
@@ -407,8 +368,6 @@ private fun VideoMakerScreen() {
         } finally {
             runCatching { currentRecorder?.reset() }
             runCatching { currentRecorder?.release() }
-            recordingAudioEffects.forEach { runCatching { it.release() } }
-            recordingAudioEffects = emptyList()
             recorder = null
             recordingFile = null
             isRecording = false
