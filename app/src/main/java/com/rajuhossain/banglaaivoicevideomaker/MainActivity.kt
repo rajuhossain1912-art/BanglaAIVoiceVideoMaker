@@ -11,6 +11,7 @@ import android.content.pm.PackageManager
 import android.media.MediaRecorder
 import android.media.audiofx.AcousticEchoCanceler
 import android.media.audiofx.NoiseSuppressor
+import android.media.audiofx.AutomaticGainControl
 import android.media.MediaMetadataRetriever
 import android.media.MediaPlayer
 import android.media.AudioManager
@@ -115,6 +116,7 @@ private fun VideoMakerScreen() {
     var recorder by remember { mutableStateOf<MediaRecorder?>(null) }
     var echoCanceler by remember { mutableStateOf<AcousticEchoCanceler?>(null) }
     var noiseSuppressor by remember { mutableStateOf<NoiseSuppressor?>(null) }
+    var automaticGainControl by remember { mutableStateOf<AutomaticGainControl?>(null) }
     var recordingSecondsRemaining by remember { mutableIntStateOf(120) }
     var recordingFile by remember { mutableStateOf<File?>(null) }
     var previewFile by remember { mutableStateOf(File(context.cacheDir, "voice_recording_preview.m4a").takeIf { it.exists() && it.length() > 1000L }) }
@@ -281,8 +283,9 @@ private fun VideoMakerScreen() {
             newRecorder.setAudioSource(MediaRecorder.AudioSource.VOICE_COMMUNICATION)
             newRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
             newRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
-            newRecorder.setAudioSamplingRate(16000)
-            newRecorder.setAudioEncodingBitRate(64000)
+            // Capture speech at a higher quality AAC setting for a cleaner source file.
+            newRecorder.setAudioSamplingRate(48000)
+            newRecorder.setAudioEncodingBitRate(128000)
             newRecorder.setOutputFile(target.absolutePath)
             newRecorder.prepare()
             // Best-effort device capture effects; never mute or alter TalkBack audio.
@@ -292,6 +295,9 @@ private fun VideoMakerScreen() {
             }.getOrNull() else null
             noiseSuppressor = if (NoiseSuppressor.isAvailable()) runCatching {
                 NoiseSuppressor.create(audioSession)?.apply { enabled = true }
+            }.getOrNull() else null
+            automaticGainControl = if (AutomaticGainControl.isAvailable()) runCatching {
+                AutomaticGainControl.create(audioSession)?.apply { enabled = true }
             }.getOrNull() else null
             ContextCompat.startForegroundService(
                 context,
@@ -352,6 +358,9 @@ private fun VideoMakerScreen() {
             runCatching { noiseSuppressor?.enabled = false }
             runCatching { noiseSuppressor?.release() }
             noiseSuppressor = null
+            runCatching { automaticGainControl?.enabled = false }
+            runCatching { automaticGainControl?.release() }
+            automaticGainControl = null
             runCatching { currentRecorder?.reset() }
             runCatching { currentRecorder?.release() }
             recorder = null
