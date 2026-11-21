@@ -167,6 +167,7 @@ internal class PcmVoiceRecorder(private val outputFile: File) {
         runCatching { output?.flush() }
         runCatching { output?.close() }
         output = null
+        val confirmedEffects = enabledEffects.toList()
         releaseCapture()
         workerError?.let { throw IOException("রেকর্ডিংয়ের সময় অডিও ত্রুটি হয়েছে।", it) }
 
@@ -176,7 +177,7 @@ internal class PcmVoiceRecorder(private val outputFile: File) {
         return Result(
             durationMs = dataLength * 1000L / (sampleRate * 2L),
             usedVoiceCommunication = usedVoiceCommunication,
-            enabledEffects = enabledEffects.toList()
+            enabledEffects = confirmedEffects
         )
     }
 
