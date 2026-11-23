@@ -292,7 +292,7 @@ def synthesize_mixed_speech(script: str, folder: Path) -> Path:
     return combined
 
 
-def _write_gradio_audio_result(audio_result, folder: Path, stem: str, base_url: str = ""):
+def _write_gradio_audio_result(audio_result, folder: Path, stem: str, base_url: str = "", timeout_seconds: float = 45.0):
     """Normalize Gradio audio results, including FileData objects and relative URLs."""
     if audio_result is None:
         return None
@@ -387,7 +387,7 @@ def _write_gradio_audio_result(audio_result, folder: Path, stem: str, base_url: 
                     remote_url,
                     headers={"User-Agent": "BanglaAIVoiceVideoMaker/0.4"},
                 )
-                with urllib.request.urlopen(request, timeout=45) as response:
+                with urllib.request.urlopen(request, timeout=min(45.0, max(1.0, timeout_seconds))) as response:
                     data = response.read(50 * 1024 * 1024 + 1)
                     response_headers = getattr(response, "headers", None)
                     content_type = response_headers.get("Content-Type", "") if hasattr(response_headers, "get") else ""
@@ -542,7 +542,9 @@ def _clone_with_provider_fallback(
                 base_url = ""
                 if isinstance(result, tuple) and len(result) == 2 and isinstance(result[1], str):
                     result, base_url = result
-                candidate = _write_gradio_audio_result(result, folder, stem, base_url=base_url)
+                candidate = _write_gradio_audio_result(
+                    result, folder, stem, base_url=base_url, timeout_seconds=provider_timeout
+                )
                 if candidate is None or not candidate.exists() or candidate.stat().st_size < 100:
                     raise RuntimeError("Space returned no usable audio file")
                 print(f"VOICE_CLONE_OK language={language} space={space}", flush=True)
