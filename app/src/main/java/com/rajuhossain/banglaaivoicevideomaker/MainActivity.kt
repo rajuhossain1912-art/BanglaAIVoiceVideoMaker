@@ -763,6 +763,12 @@ private fun VideoMakerScreen() {
                                 when (info.optString("status")) {
                                     "completed" -> {
                                         currentJobId = jobId
+                                        // Cache the technical report on-device immediately while the
+                                        // Render instance and its temporary video file are still available.
+                                        runCatching {
+                                            val cachedReport = withContext(Dispatchers.IO) { getVideoReport(baseUrl, jobId) }
+                                            videoJobPreferences.edit().putString("report_" + jobId, cachedReport.toString()).apply()
+                                        }
                                         val shareAllowed = info.optBoolean("share_allowed", false)
                                         downloadPath = if (shareAllowed) info.optString("download_url", "") else ""
                                         status = if (shareAllowed) {
@@ -829,7 +835,14 @@ private fun VideoMakerScreen() {
                     status = "ভিডিওর প্রযুক্তিগত পরীক্ষা চলছে।"
                     scope.launch {
                         try {
-                            val report = withContext(Dispatchers.IO) { getVideoReport(baseUrl, currentJobId) }
+                            val cachedJson = videoJobPreferences.getString("report_" + currentJobId, null)
+                            val report = if (!cachedJson.isNullOrBlank()) {
+                                JSONObject(cachedJson)
+                            } else {
+                                withContext(Dispatchers.IO) { getVideoReport(baseUrl, currentJobId) }.also {
+                                    videoJobPreferences.edit().putString("report_" + currentJobId, it.toString()).apply()
+                                }
+                            }
                             reportText = buildString {
                                 append(report.optString("report_text", "পরীক্ষার প্রতিবেদন পাওয়া যায়নি।"))
                                 val scenes = report.optJSONArray("scene_audit")
