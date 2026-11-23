@@ -4250,6 +4250,31 @@ def _audio_token_diagnostics_report(audio_verification):
             report += "Whisper-এর শব্দ গণনা " + str(word_count) + "। "
     return report
 
+def _audio_preflight_failure_reason(audio_verification):
+    """Stop expensive rendering when narration is already known to fail publication QC."""
+    if not isinstance(audio_verification, dict):
+        return "কণ্ঠের প্রাথমিক যাচাইয়ের তথ্য পাওয়া যায়নি; ছবি ও ভিডিও তৈরির আগে আবার চেষ্টা করুন।"
+    status = audio_verification.get("status")
+    if status == "mismatch":
+        similarity = audio_verification.get("similarity")
+        percent = (
+            f"{float(similarity) * 100:.0f} শতাংশ"
+            if isinstance(similarity, (int, float)) and math.isfinite(float(similarity))
+            else "প্রয়োজনীয় মাত্রার নিচে"
+        )
+        missing = audio_verification.get("missing_tokens")
+        extra = audio_verification.get("extra_tokens")
+        counts = ""
+        if isinstance(missing, int) and isinstance(extra, int):
+            counts = f" মূল লেখার {missing}টি শব্দ অনুপস্থিত এবং {extra}টি অতিরিক্ত শব্দ শনাক্ত হয়েছে।"
+        return (
+            f"কণ্ঠের সঙ্গে মূল লেখার মিল মাত্র {percent}।{counts} "
+            "তাই অপ্রয়োজনীয়ভাবে ছবি ও ভিডিও তৈরি করে দীর্ঘ সময় নষ্ট করা হয়নি। "
+            "রেকর্ড করা নমুনা ও নির্বাচিত লেখা পরীক্ষা করে আবার চেষ্টা করুন।"
+        )
+    return None
+
+
 def _audio_verification_from_transcription(script: str, transcription):
     """Compare a single narration transcription with the approved script."""
     if not isinstance(transcription, dict):
@@ -4437,6 +4462,25 @@ def render(job_id: str, script: str, mode: str, audio_path: Optional[Path], capt
                     f"{str(transcription_error)[:180]}",
                     flush=True,
                 )
+        if audio_qc_enabled:
+            if isinstance(narration_transcription, dict):
+                preflight_audio_verification = _audio_verification_from_transcription(
+                    script, narration_transcription
+                )
+            else:
+                preflight_audio_verification = {
+                    "status": "unavailable",
+                    "similarity": None,
+                    "missing_tokens": None,
+                    "extra_tokens": None,
+                }
+            preflight_failure = _audio_preflight_failure_reason(preflight_audio_verification)
+            if preflight_failure:
+                with LOCK:
+                    JOBS[job_id]["audio_verification"] = preflight_audio_verification
+                    JOBS[job_id]["progress"] = 30
+                    JOBS[job_id]["message"] = preflight_failure
+                raise RuntimeError(preflight_failure)
         with LOCK:
             JOBS[job_id]["progress"] = 31
             JOBS[job_id]["message"] = "লেখার ভাষা, বিষয় ও ভিডিওর পরিকল্পনা বোঝা হচ্ছে"
