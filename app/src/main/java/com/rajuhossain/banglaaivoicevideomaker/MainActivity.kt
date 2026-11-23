@@ -227,6 +227,7 @@ private fun VideoMakerScreen() {
                     "completed" -> {
                         val shareAllowed = info.optBoolean("share_allowed", false)
                         downloadPath = if (shareAllowed) info.optString("download_url", "") else ""
+                        val autoDownloadQueued = shareAllowed && queueVideoDownloadIfNeeded(context, BuildConfig.API_BASE_URL, savedJobId, downloadPath)
                         status = if (shareAllowed) {
                             "ভিডিও তৈরি হয়েছে এবং সব নিরাপত্তা যাচাই পাস করেছে। চাইলে ভিডিও পরীক্ষা ও প্রতিবেদন শুনুন, অথবা ডাউনলোড করুন।"
                         } else {
@@ -771,6 +772,7 @@ private fun VideoMakerScreen() {
                                         }
                                         val shareAllowed = info.optBoolean("share_allowed", false)
                                         downloadPath = if (shareAllowed) info.optString("download_url", "") else ""
+                                        val autoDownloadQueued = shareAllowed && queueVideoDownloadIfNeeded(context, baseUrl, jobId, downloadPath)
                                         status = if (shareAllowed) {
                                             "ভিডিও তৈরি হয়েছে এবং সব নিরাপত্তা যাচাই পাস করেছে। চাইলে ভিডিও পরীক্ষা ও প্রতিবেদন শুনুন, অথবা ডাউনলোড করুন।"
                                         } else {
@@ -1299,6 +1301,26 @@ private fun getVideoReport(baseUrl: String, jobId: String): JSONObject {
         return JSONObject(body)
     } finally {
         connection.disconnect()
+    }
+}
+
+private fun queueVideoDownloadIfNeeded(context: Context, baseUrl: String, jobId: String, downloadPath: String): Boolean {
+    if (downloadPath.isBlank() || !downloadPath.startsWith("/")) return false
+    val preferences = context.getSharedPreferences("video_download_queue", Context.MODE_PRIVATE)
+    if (preferences.contains(jobId)) return true
+    val request = DownloadManager.Request(Uri.parse(baseUrl.trim().trimEnd('/') + downloadPath))
+        .setTitle("Bangla AI ভিডিও")
+        .setDescription("তৈরি হওয়া ভিডিও ফোনে সংরক্ষণ হচ্ছে")
+        .setMimeType("video/mp4")
+        .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+        .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "BanglaAI-" + jobId + ".mp4")
+    return try {
+        val manager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+        val downloadId = manager.enqueue(request)
+        preferences.edit().putLong(jobId, downloadId).apply()
+        true
+    } catch (_: Exception) {
+        false
     }
 }
 
