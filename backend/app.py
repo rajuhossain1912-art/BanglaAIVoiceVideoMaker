@@ -4302,6 +4302,21 @@ def _audio_verification_from_transcription(script: str, transcription):
     return result
 
 
+def _unresolved_final_scene_mismatches(scene_audit):
+    """Count only mismatches in the final selected images, not recovered first attempts."""
+    if not isinstance(scene_audit, list):
+        return 0
+    mismatch_statuses = {
+        "mismatched", "retry_mismatched", "topic_graphic_mismatched",
+    }
+    return sum(
+        1
+        for item in scene_audit
+        if isinstance(item, dict)
+        and str(item.get("final_visual_status") or item.get("semantic_status") or "") in mismatch_statuses
+    )
+
+
 def _publication_gate_decision(
     *,
     image_count,
@@ -5104,11 +5119,7 @@ def video_quality_report(job_id: str):
     # A technically valid MP4 is not automatically safe to publish. Until the
     # actual narration is independently transcribed and captions are checked,
     # keep the publication decision fail-closed and explain what remains unknown.
-    semantic_mismatches = (
-        semantic_review["mismatched"]
-        + semantic_review["retry_mismatched"]
-        + semantic_review["duplicate_retry_mismatched"]
-    )
+    semantic_mismatches = _unresolved_final_scene_mismatches(scene_audit)
     audio_verification = snapshot.get("audio_verification") or {"status": "unavailable", "similarity": None}
     audio_verification_status = audio_verification.get("status", "unavailable")
     publication_reasons = []
