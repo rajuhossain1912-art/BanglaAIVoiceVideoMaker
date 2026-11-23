@@ -231,6 +231,47 @@ class VoiceCloneUnitTests(unittest.TestCase):
             self.assertEqual(calls[1][0], ["english-space"])
             self.assertIs(calls[1][2], video_app._clone_with_chatterbox)
 
+    def test_provider_deadline_prevents_new_remote_attempts(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            folder = Path(temp_dir)
+            calls = []
+
+            def should_not_run(script, normalized, space):
+                calls.append(space)
+                raise AssertionError("expired deadline must prevent provider call")
+
+            with patch.object(video_app.time, "monotonic", return_value=100.0):
+                with self.assertRaisesRegex(RuntimeError, "最長|সর্বোচ্চ অপেক্ষার সময়"):
+                    video_app._clone_with_provider_fallback(
+                        "পরীক্ষা", folder / "reference.wav", ["slow-space"],
+                        should_not_run, "bn", folder, "deadline-test",
+                        deadline=99.0,
+                    )
+
+            self.assertEqual(calls, [])
+
+    def test_provider_receives_timeout_bounded_by_global_deadline(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            folder = Path(temp_dir)
+            good_audio = folder / "good.wav"
+            good_audio.write_bytes(b"valid audio" * 20)
+            received = []
+
+            def bounded_clone(script, normalized, space, timeout_seconds=120.0):
+                received.append(timeout_seconds)
+                return str(good_audio)
+
+            with patch.object(video_app.time, "monotonic", return_value=100.0):
+                result, selected = video_app._clone_with_provider_fallback(
+                    "পরীক্ষা", folder / "reference.wav", ["fast-space"],
+                    bounded_clone, "bn", folder, "bounded-timeout",
+                    deadline=112.0,
+                )
+
+            self.assertEqual(result, good_audio)
+            self.assertEqual(selected, "fast-space")
+            self.assertEqual(received, [12.0])
+
     def test_provider_fallback_tries_next_space_after_failure(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             folder = Path(temp_dir)

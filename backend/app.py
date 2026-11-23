@@ -7,6 +7,7 @@ import re
 import shutil
 import subprocess
 import difflib
+import inspect
 import unicodedata
 import threading
 import time
@@ -46,6 +47,10 @@ VOICE_CLONE_EN_SPACES = [x.strip() for x in os.getenv(
     f"{VOICE_CLONE_EN_SPACE},ResembleAI/Chatterbox-Multilingual-TTS",
 ).split(",") if x.strip()]
 VOICE_CLONE_ENABLED = os.getenv("VOICE_CLONE_ENABLED", "true").lower() in ("1", "true", "yes")
+# Bound the total time spent waiting on remote voice-clone providers per job.
+# Each individual provider request also receives the remaining time, capped at 45s.
+VOICE_CLONE_TOTAL_TIMEOUT_SECONDS = max(60, min(360, int(os.getenv("VOICE_CLONE_TOTAL_TIMEOUT_SECONDS", "240"))))
+VOICE_CLONE_PROVIDER_TIMEOUT_SECONDS = 45.0
 AI_IMAGE_GENERATION_ENABLED = os.getenv("AI_IMAGE_GENERATION_ENABLED", "true").lower() in ("1", "true", "yes")
 AI_IMAGE_PROVIDER_ORDER = [x.strip().lower() for x in os.getenv("AI_IMAGE_PROVIDER_ORDER", "pollinations,flux,zimage").split(",") if x.strip()]
 AI_IMAGE_PROVIDER_TIMEOUT = max(12, min(45, int(os.getenv("AI_IMAGE_PROVIDER_TIMEOUT", "28"))))
@@ -287,7 +292,7 @@ def synthesize_mixed_speech(script: str, folder: Path) -> Path:
     return combined
 
 
-def _write_gradio_audio_result(audio_result, folder: Path, stem: str, base_url: str = ""):
+def _write_gradio_audio_result(audio_result, folder: Path, stem: str, base_url: str = "", timeout_seconds: float = 45.0):
     """Normalize Gradio audio results, including FileData objects and relative URLs."""
     if audio_result is None:
         return None
@@ -382,7 +387,7 @@ def _write_gradio_audio_result(audio_result, folder: Path, stem: str, base_url: 
                     remote_url,
                     headers={"User-Agent": "BanglaAIVoiceVideoMaker/0.4"},
                 )
-                with urllib.request.urlopen(request, timeout=45) as response:
+                with urllib.request.urlopen(request, timeout=min(45.0, max(1.0, timeout_seconds))) as response:
                     data = response.read(50 * 1024 * 1024 + 1)
                     response_headers = getattr(response, "headers", None)
                     content_type = response_headers.get("Content-Type", "") if hasattr(response_headers, "get") else ""
@@ -410,9 +415,9 @@ def _make_voice_gradio_client(space: str, timeout: float):
     return Client(space, **kwargs)
 
 
-def _clone_with_cosyvoice(script: str, normalized: Path, space: str):
+def _clone_with_cosyvoice(script: str, normalized: Path, space: str, timeout_seconds: float = 120.0):
     from gradio_client import handle_file
-    client = _make_voice_gradio_client(space, 120.0)
+    client = _make_voice_gradio_client(space, min(120.0, max(1.0, timeout_seconds)))
     # CosyVoice limits the complete instruction-plus-script input to 500
     # characters. Keep this prompt short so a 250-character narration chunk
     # remains safely within that provider limit.
@@ -449,7 +454,7 @@ def _clone_with_cosyvoice(script: str, normalized: Path, space: str):
     return result, base_url
 
 
-def _clone_with_vakya(script: str, normalized: Path, space: str):
+def _clone_with_vakya(script: str, normalized: Path, space: str, timeout_seconds: float = 300.0):
     """Use the official IndicF5 Space; it requires the exact reference transcript."""
     from gradio_client import handle_file
     # Transcribe the user's own reference clip so IndicF5 receives its required
@@ -458,7 +463,7 @@ def _clone_with_vakya(script: str, normalized: Path, space: str):
     reference_text = transcribe_uploaded_audio(normalized, normalized.parent)
     if not reference_text.strip():
         raise RuntimeError("IndicF5 reference transcript is empty")
-    client = _make_voice_gradio_client(space, 300.0)
+    client = _make_voice_gradio_client(space, min(300.0, max(1.0, timeout_seconds)))
     return client.predict(
         script,
         handle_file(str(normalized)),
@@ -467,9 +472,9 @@ def _clone_with_vakya(script: str, normalized: Path, space: str):
     )
 
 
-def _clone_with_chatterbox(script: str, normalized: Path, space: str):
+def _clone_with_chatterbox(script: str, normalized: Path, space: str, timeout_seconds: float = 180.0):
     from gradio_client import handle_file
-    client = _make_voice_gradio_client(space, 180.0)
+    client = _make_voice_gradio_client(space, min(180.0, max(1.0, timeout_seconds)))
     if "Multilingual-TTS" in space:
         # Official multilingual Chatterbox Space uses named inputs and an
         # explicit language selector. This preserves the supplied speaker
@@ -501,8 +506,9 @@ def _clone_with_provider_fallback(
     script: str, normalized: Path, spaces, clone_function, language: str,
     folder: Path, stem: str, progress_callback=None, progress_base: int = 14,
     progress_span: int = 14,
+    deadline: Optional[float] = None,
 ):
-    """Try free Spaces in order, retrying transient queue/network failures once."""
+    """Try free Spaces in order, retrying transient failures within a shared deadline."""
     failures = []
     available_spaces = list(spaces)
     for index, space in enumerate(available_spaces):
@@ -513,6 +519,10 @@ def _clone_with_provider_fallback(
                 f"ফ্রি কণ্ঠসেবা {index + 1}/{len(available_spaces)} চেষ্টা করা হচ্ছে। উত্তর আসতে কিছুটা সময় লাগতে পারে।"
             )
         for attempt in range(2):
+            remaining = (deadline - time.monotonic()) if deadline is not None else VOICE_CLONE_PROVIDER_TIMEOUT_SECONDS
+            if remaining <= 0:
+                raise RuntimeError("নিজের কণ্ঠ তৈরির সর্বোচ্চ অপেক্ষার সময় শেষ হয়েছে। অনুগ্রহ করে কিছুক্ষণ পরে আবার চেষ্টা করুন।")
+            provider_timeout = min(VOICE_CLONE_PROVIDER_TIMEOUT_SECONDS, max(1.0, remaining))
             try:
                 if attempt:
                     if progress_callback:
@@ -525,11 +535,16 @@ def _clone_with_provider_fallback(
                     f"VOICE_CLONE_TRY language={language} space={space} attempt={attempt + 1}/2",
                     flush=True,
                 )
-                result = clone_function(script, normalized, space)
+                if "timeout_seconds" in inspect.signature(clone_function).parameters:
+                    result = clone_function(script, normalized, space, timeout_seconds=provider_timeout)
+                else:
+                    result = clone_function(script, normalized, space)
                 base_url = ""
                 if isinstance(result, tuple) and len(result) == 2 and isinstance(result[1], str):
                     result, base_url = result
-                candidate = _write_gradio_audio_result(result, folder, stem, base_url=base_url)
+                candidate = _write_gradio_audio_result(
+                    result, folder, stem, base_url=base_url, timeout_seconds=provider_timeout
+                )
                 if candidate is None or not candidate.exists() or candidate.stat().st_size < 100:
                     raise RuntimeError("Space returned no usable audio file")
                 print(f"VOICE_CLONE_OK language={language} space={space}", flush=True)
@@ -659,6 +674,8 @@ def synthesize_cloned_voice(script: str, reference_audio: Path, folder: Path, pr
         if progress_callback:
             progress_callback(13, "ফ্রি কণ্ঠসেবার সঙ্গে সংযোগ করা হচ্ছে।")
         output = folder / "cloned_voice.wav"
+        # The deadline covers all remote clone requests and chunk retries together.
+        voice_deadline = time.monotonic() + VOICE_CLONE_TOTAL_TIMEOUT_SECONDS
         # Keep chunks below the multilingual fallback Space 300-character hard limit.
         chunks = _split_voice_clone_text_by_language(script, max_chars=250)
         print(f"VOICE_CLONE_PLAN chunks={len(chunks)} languages={','.join(language for language, _ in chunks)} characters={len(script)}", flush=True)
@@ -682,6 +699,7 @@ def synthesize_cloned_voice(script: str, reference_audio: Path, folder: Path, pr
                     progress_callback=progress_callback,
                     progress_base=provider_progress_base,
                     progress_span=max(1, provider_progress_span),
+                    deadline=voice_deadline,
                 )
             else:
                 try:
@@ -691,6 +709,7 @@ def synthesize_cloned_voice(script: str, reference_audio: Path, folder: Path, pr
                         progress_callback=progress_callback,
                         progress_base=provider_progress_base,
                         progress_span=max(1, provider_progress_span // 2),
+                        deadline=voice_deadline,
                     )
                 except Exception as primary_error:
                     print(
@@ -712,6 +731,7 @@ def synthesize_cloned_voice(script: str, reference_audio: Path, folder: Path, pr
                         progress_callback=progress_callback,
                         progress_base=min(chunk_end_progress - 1, provider_progress_base + max(1, provider_progress_span // 2)),
                         progress_span=max(1, provider_progress_span // 2),
+                        deadline=voice_deadline,
                     )
             selected_providers.append(provider)
             print(f"VOICE_CLONE_CHUNK_OK part={index + 1}/{len(chunks)} language={chunk_language}", flush=True)
