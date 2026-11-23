@@ -4257,12 +4257,12 @@ def _audio_preflight_failure_reason(audio_verification):
     status = audio_verification.get("status")
     missing = audio_verification.get("missing_tokens")
     extra = audio_verification.get("extra_tokens")
+    # A provider outage is not evidence that narration is wrong. Continue
+    # rendering so the user can receive a diagnostic MP4, while the separate
+    # publication gate remains fail-closed because audio verification is absent.
+    if status == "unavailable":
+        return None
     if status != "matched" or missing != 0 or extra != 0:
-        if status == "unavailable":
-            return (
-                "কণ্ঠের শব্দ যাচাই করা যায়নি। তাই প্রকাশযোগ্য ভিডিও নিশ্চিত করা সম্ভব নয়। "
-                "ছবি ও ভিডিও তৈরির আগে যাচাই থামানো হয়েছে; কিছুক্ষণ পর আবার চেষ্টা করুন।"
-            )
         similarity = audio_verification.get("similarity")
         percent = (
             f"{float(similarity) * 100:.0f} শতাংশ"
