@@ -225,6 +225,12 @@ private fun VideoMakerScreen() {
                 }
                 when (info.optString("status")) {
                     "completed" -> {
+                        // The job may have completed while Android was backgrounded or the
+                        // Activity was recreated. Cache its report immediately on recovery too.
+                        runCatching {
+                            val cachedReport = withContext(Dispatchers.IO) { getVideoReport(BuildConfig.API_BASE_URL, savedJobId) }
+                            videoJobPreferences.edit().putString("report_" + savedJobId, cachedReport.toString()).apply()
+                        }
                         val shareAllowed = info.optBoolean("share_allowed", false)
                         downloadPath = if (shareAllowed) info.optString("download_url", "") else ""
                         status = if (shareAllowed) {
