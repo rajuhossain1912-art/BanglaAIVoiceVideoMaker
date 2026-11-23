@@ -34,6 +34,18 @@ class SceneImageSimilarityTests(unittest.TestCase):
             second = self._image(folder, "second.png", (180, 190, 200))
             self.assertFalse(video_app._scene_images_too_similar(first, second))
 
+    def test_rejects_satellite_view_for_abstract_motivational_narration(self):
+        self.assertTrue(video_app._is_unrelated_map_image(
+            "প্রতিদিন একটু একটু করে এগিয়ে যান এবং নিজের ওপর বিশ্বাস রাখুন",
+            "Satellite view of Barisal city",
+        ))
+
+    def test_allows_map_when_narration_explicitly_discusses_geography(self):
+        self.assertFalse(video_app._is_unrelated_map_image(
+            "বাংলাদেশের মানচিত্রে বিভিন্ন জেলার অবস্থান দেখানো হয়েছে",
+            "Satellite view of Barisal city",
+        ))
+
 
 if __name__ == "__main__":
     unittest.main()
