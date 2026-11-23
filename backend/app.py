@@ -1336,14 +1336,17 @@ def _extract_generated_image(result):
 
 
 def _is_unrelated_map_image(script: str, image_title: str) -> bool:
-    """Reject map/globe search results for technology scenes unless geography is actually discussed."""
+    """Reject map and satellite imagery unless the narration explicitly discusses geography."""
     text = re.sub(r"\s+", " ", (script or "").lower())
     title = re.sub(r"\s+", " ", (image_title or "").lower())
-    map_terms = ("মানচিত্র", "বিশ্ব মানচিত্র", "ভূগোল", "পৃথিবীর মানচিত্র", "world map", "map of the world", "globe", "atlas", "geographic map", "geography")
-    tech_terms = ("মোবাইল", "ফোন", "ইন্টারনেট", "প্রযুক্তি", "কম্পিউটার", "অ্যাপ", "স্ক্রিন রিডার", "টকব্যাক", "smartphone", "screen reader", "talkback", "accessibility", "digital technology", "mobile app")
+    map_terms = (
+        "মানচিত্র", "বিশ্ব মানচিত্র", "ভূগোল", "পৃথিবীর মানচিত্র",
+        "world map", "map of the world", "globe", "atlas", "geographic map",
+        "geography", "satellite view", "satellite image", "satellite imagery",
+        "aerial map", "aerial imagery",
+    )
     explicit_map_context = any(_contains_visual_term(text, term) for term in map_terms)
-    technology_context = any(_contains_visual_term(text, term) for term in tech_terms)
-    return technology_context and not explicit_map_context and any(_contains_visual_term(title, term) for term in map_terms)
+    return not explicit_map_context and any(_contains_visual_term(title, term) for term in map_terms)
 
 
 
