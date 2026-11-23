@@ -3335,6 +3335,17 @@ GitHub commit history অনুযায়ী প্রকল্পের প্�
   - Step 96. Post Checkout source: success
   - Step 97. Complete job: success
 
+
+### Source update — 2026-11-23T18:03:22.052Z
+- Branch: `main`
+- Push range: `b75479624662c03651231e19201f74812a3b3368` → `06cafada70b6464bad43d4e9d775a3621a8b0033`
+- Pushed by: rajuhossain1912-art
+- Commit: [06cafada70b6](https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/commit/06cafada70b6464bad43d4e9d775a3621a8b0033) — Allow diagnostic video rendering when audio QC is unavailable (#82)
+- Changed files:
+  - `backend/app.py`
+  - `backend/tests/test_audio_preflight.py`
+- Result: **push recorded**; this is not a test or deployment success claim.
+
 <!-- AUTO_LOG_END -->
 
 
