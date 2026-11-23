@@ -3206,6 +3206,65 @@ GitHub commit history অনুযায়ী প্রকল্পের প্�
   - `backend/tests/test_audio_preflight.py`
 - Result: **push recorded**; this is not a test or deployment success claim.
 
+
+### Workflow result — 2026-11-23T17:44:30.015Z
+- Workflow: **Backend end-to-end smoke test**
+- Final result: **ব্যর্থ (failure)**
+- Run: [#487](https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/actions/runs/45230372037)
+- Commit: [3fe2dc72967a](https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/commit/3fe2dc72967a14deaae33f45cc1b11ccd8b487d2)
+- Trigger: push; branch: main; actor: rajuhossain1912-art
+- Job **video-smoke-test**: failure
+  - Step 1. Set up job: success
+  - Step 2. Checkout source: success
+  - Step 3. Build backend container: success
+  - Step 4. Run backend unit tests: success
+  - Step 5. Start backend: success
+  - Step 6. Wait for health endpoint: success
+  - Step 7. Verify Bengali and English Tesseract language packs: success
+  - Step 8. Verify voice chat reuses the existing AI token: success
+  - Step 9. Verify Bangla and English audio transcript comparison: success
+  - Step 10. Verify subtitle timing diagnostics never claim word-level ASR alignment: success
+  - Step 11. Verify bounded licensed image search cache: success
+  - Step 12. Verify licensed photo searches include subject synonyms: success
+  - Step 13. Verify image-search keywords prioritize scene subjects over camera wording: success
+  - Step 14. Verify Openverse reuses successful cached provider results: success
+  - Step 15. Verify sampled scene timeline mapping: success
+  - Step 16. Verify duration-based visual scene count has no fixed ceiling: success
+  - Step 17. Verify forced topic graphic never calls image providers: success
+  - Step 18. Verify rejected AI photos can recover with licensed contextual photos: success
+  - Step 19. Verify scene-aware visual planning: success
+  - Step 20. Verify sentence-aware scene splitting: success
+  - Step 21. Verify Bengali visual keyword inflections: success
+  - Step 22. Verify storyboard prompts improve licensed image search terms: success
+  - Step 23. Verify licensed image search broadens zero-result queries: success
+  - Step 24. Verify Openverse continues after a failed photo download: success
+  - Step 25. Verify Wikimedia continues after a failed photo download: success
+  - Step 26. Verify licensed image search checks a broad candidate pool: success
+  - Step 27. Verify licensed photo candidates are ranked by storyboard relevance: success
+  - Step 28. Verify licensed photo relevance uses provider subject tags: success
+  - Step 29. Verify Wikimedia photo relevance uses category metadata: success
+  - Step 30. Verify voice cloning requires explicit consent: success
+  - Step 31. Generate Bangla and English videos end to end: failure
+  - Step 32. Verify image provider cooldown classification and Pollinations rate-limit handling: skipped
+  - Step 33. Verify Cloudflare image response decoding: skipped
+  - Step 34. Verify Cloudflare image models receive supported inputs: skipped
+  - Step 35. Verify blank image providers are rejected before selection: skipped
+  - Step 36. Verify every image provider rejects blank output: skipped
+  - Step 37. Verify vision review response parsing: skipped
+  - Step 38. Verify storyboard context crosses long-script batch boundaries: skipped
+  - Step 39. Verify visual planner parses global scene numbers in later batches: skipped
+  - Step 40. Verify independent reviewer parses global scene numbers: skipped
+  - Step 41. Verify storyboard reviewer preserves neighboring narration context: skipped
+  - Step 42. Verify repeated images request a distinct photo composition: skipped
+  - Step 43. Verify vision review skips local fallback graphics: skipped
+  - Step 44. Verify duplicate replacement photos receive sampled semantic review: skipped
+  - Step 45. Verify licensed recovery reports its verified semantic result: skipped
+  - Step 46. Verify final visual audit follows accepted duplicate replacement: skipped
+  - Step 47. Show backend logs on failure: success
+  - Step 48. Verify live Render production health endpoint: skipped
+  - Step 96. Post Checkout source: success
+  - Step 97. Complete job: success
+
 <!-- AUTO_LOG_END -->
 
 
