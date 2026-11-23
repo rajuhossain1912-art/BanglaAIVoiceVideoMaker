@@ -3346,6 +3346,17 @@ GitHub commit history অনুযায়ী প্রকল্পের প্�
   - `backend/tests/test_audio_preflight.py`
 - Result: **push recorded**; this is not a test or deployment success claim.
 
+
+### Source update — 2026-11-23T18:06:15.531Z
+- Branch: `main`
+- Push range: `06cafada70b6464bad43d4e9d775a3621a8b0033` → `a42e99d06fa2f2a43777e8adf76bb30622dbf4bf`
+- Pushed by: rajuhossain1912-art
+- Commit: [a42e99d06fa2](https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/commit/a42e99d06fa2f2a43777e8adf76bb30622dbf4bf) — Reject unrelated satellite imagery for non-geographic scenes (#83)
+- Changed files:
+  - `backend/app.py`
+  - `backend/tests/test_scene_image_similarity.py`
+- Result: **push recorded**; this is not a test or deployment success claim.
+
 <!-- AUTO_LOG_END -->
 
 
