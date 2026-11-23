@@ -20,7 +20,7 @@ class AudioPreflightTests(unittest.TestCase):
             "extra_tokens": 30,
         })
         self.assertIsInstance(reason, str)
-        self.assertIn("২৪ শতাংশ", reason)
+        self.assertIn("24 শতাংশ", reason)
         self.assertIn("69টি", reason)
         self.assertIn("30টি", reason)
 
