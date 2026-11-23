@@ -33,15 +33,36 @@ class AudioPreflightTests(unittest.TestCase):
         })
         self.assertIsInstance(reason, str)
 
-    def test_unavailable_transcription_stops_before_expensive_render(self):
+    def test_unavailable_transcription_allows_diagnostic_render(self):
         reason = video_app._audio_preflight_failure_reason({
             "status": "unavailable",
             "similarity": None,
             "missing_tokens": None,
             "extra_tokens": None,
         })
-        self.assertIsInstance(reason, str)
-        self.assertIn("যাচাই করা যায়নি", reason)
+        self.assertIsNone(reason)
+
+    def test_unavailable_transcription_still_blocks_publication(self):
+        decision = video_app._publication_gate_decision(
+            image_count=1,
+            semantic_review={"reviewed": 1, "unavailable": 0},
+            audio_verification={
+                "status": "unavailable",
+                "missing_tokens": None,
+                "extra_tokens": None,
+            },
+            caption_alignment={
+                "status": "asr_word_timestamps",
+                "matched_word_timestamps": 5,
+                "script_word_count": 5,
+                "timing_integrity_passed": True,
+            },
+            subtitle_ocr={"status": "passed"},
+            scene_audit=[{"final_visual_status": "matched"}],
+            technical_ok=True,
+        )
+        self.assertFalse(decision["share_allowed"])
+        self.assertEqual(decision["publication_status"], "blocked")
 
 
 if __name__ == "__main__":
