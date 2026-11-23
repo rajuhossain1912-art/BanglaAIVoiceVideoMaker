@@ -3195,6 +3195,17 @@ GitHub commit history অনুযায়ী প্রকল্পের প্�
   - Step 22. Post Checkout source: success
   - Step 23. Complete job: success
 
+
+### Source update — 2026-11-23T17:41:35.700Z
+- Branch: `main`
+- Push range: `dc0b5257c91c68615548ef19afbc35dd25bb5f84` → `3fe2dc72967a14deaae33f45cc1b11ccd8b487d2`
+- Pushed by: rajuhossain1912-art
+- Commit: [3fe2dc72967a](https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/commit/3fe2dc72967a14deaae33f45cc1b11ccd8b487d2) — Stop failed narration before expensive video rendering (#80)
+- Changed files:
+  - `backend/app.py`
+  - `backend/tests/test_audio_preflight.py`
+- Result: **push recorded**; this is not a test or deployment success claim.
+
 <!-- AUTO_LOG_END -->
 
 
