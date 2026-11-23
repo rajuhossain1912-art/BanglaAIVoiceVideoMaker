@@ -4255,15 +4255,20 @@ def _audio_preflight_failure_reason(audio_verification):
     if not isinstance(audio_verification, dict):
         return "কণ্ঠের প্রাথমিক যাচাইয়ের তথ্য পাওয়া যায়নি; ছবি ও ভিডিও তৈরির আগে আবার চেষ্টা করুন।"
     status = audio_verification.get("status")
-    if status == "mismatch":
+    missing = audio_verification.get("missing_tokens")
+    extra = audio_verification.get("extra_tokens")
+    if status != "matched" or missing != 0 or extra != 0:
+        if status == "unavailable":
+            return (
+                "কণ্ঠের শব্দ যাচাই করা যায়নি। তাই প্রকাশযোগ্য ভিডিও নিশ্চিত করা সম্ভব নয়। "
+                "ছবি ও ভিডিও তৈরির আগে যাচাই থামানো হয়েছে; কিছুক্ষণ পর আবার চেষ্টা করুন।"
+            )
         similarity = audio_verification.get("similarity")
         percent = (
             f"{float(similarity) * 100:.0f} শতাংশ"
             if isinstance(similarity, (int, float)) and math.isfinite(float(similarity))
             else "প্রয়োজনীয় মাত্রার নিচে"
         )
-        missing = audio_verification.get("missing_tokens")
-        extra = audio_verification.get("extra_tokens")
         counts = ""
         if isinstance(missing, int) and isinstance(extra, int):
             counts = f" মূল লেখার {missing}টি শব্দ অনুপস্থিত এবং {extra}টি অতিরিক্ত শব্দ শনাক্ত হয়েছে।"
