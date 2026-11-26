@@ -4340,6 +4340,27 @@ def _unresolved_final_scene_mismatches(scene_audit):
     )
 
 
+
+def _subtitle_publication_diagnostic_reason(caption_alignment, subtitle_ocr):
+    """Describe only subtitle checks that remain incomplete in the user report."""
+    caption_alignment = caption_alignment if isinstance(caption_alignment, dict) else {}
+    subtitle_ocr = subtitle_ocr if isinstance(subtitle_ocr, dict) else {}
+    reasons = []
+    if subtitle_ocr.get("status") != "passed":
+        reasons.append("সাবটাইটেলের প্রতিটি সক্রিয় শব্দ OCR দিয়ে নিশ্চিত করা যায়নি।")
+    if (
+        caption_alignment.get("status") != "asr_word_timestamps"
+        or caption_alignment.get("timing_integrity_passed") is not True
+    ):
+        reasons.append("সাবটাইটেলের প্রতিটি শব্দের সময় Whisper-এর স্পষ্ট শব্দ-সময় দিয়ে সম্পূর্ণ যাচাই হয়নি।")
+    if reasons:
+        return " ".join(reasons)
+    return (
+        "প্রতিটি সাবটাইটেল ফ্রেমের সক্রিয় শব্দ OCR-এ শনাক্ত হয়েছে এবং "
+        "Whisper-এর স্পষ্ট শব্দ-সময় স্ক্রিপ্টের সঙ্গে মিলেছে; এটি মানব পর্যালোচনা নয়।"
+    )
+
+
 def _publication_gate_decision(
     *,
     image_count,
@@ -5169,7 +5190,10 @@ def video_quality_report(job_id: str):
         publication_reasons.append("অডিও ও মূল লেখার মিল আংশিক; মানুষের পর্যালোচনা প্রয়োজন।")
     else:
         publication_reasons.append(str(audio_verification.get("reason") or "তৈরি অডিওর প্রতিলিপি যাচাই করা যায়নি।"))
-    publication_reasons.append("সাবটাইটেলের বানান ও সময় অডিওর সঙ্গে আলাদাভাবে মিলিয়ে দেখা হয়নি।")
+    publication_reasons.append(_subtitle_publication_diagnostic_reason(
+        snapshot.get("caption_alignment") or {},
+        snapshot.get("subtitle_ocr") or {},
+    ))
 
     release_gate = _publication_gate_decision(
         image_count=image_count,
