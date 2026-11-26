@@ -98,6 +98,23 @@ class PublicationGateTests(unittest.TestCase):
         )
         self.assertFalse(decision["share_allowed"])
 
+
+    def test_subtitle_report_does_not_claim_failure_after_all_checks_pass(self):
+        reason = video_app._subtitle_publication_diagnostic_reason(
+            {"status": "asr_word_timestamps", "timing_integrity_passed": True},
+            {"status": "passed"},
+        )
+        self.assertIn("সক্রিয় শব্দ OCR-এ শনাক্ত হয়েছে", reason)
+        self.assertNotIn("যাচাই হয়নি", reason)
+
+    def test_subtitle_report_names_missing_ocr_and_word_timing(self):
+        reason = video_app._subtitle_publication_diagnostic_reason(
+            {"status": "estimated", "timing_integrity_passed": False},
+            {"status": "unavailable"},
+        )
+        self.assertIn("OCR দিয়ে নিশ্চিত করা যায়নি", reason)
+        self.assertIn("স্পষ্ট শব্দ-সময়", reason)
+
     def test_technical_failure_blocks_publication(self):
         decision = self._decision(technical_ok=False)
         self.assertFalse(decision["share_allowed"])
