@@ -565,3 +565,37 @@ Section ৭-এর GitHub Actions সীমাবদ্ধতার বিবর
 - Render auto-deployed merge commit `1ba5c07855e0474044b3c3b801b4df4c7895decc`. Deployment `dep-dbub7gui0phs73aoni3g` reached **LIVE**; application startup completed and Render logs recorded `GET /health` HTTP 200.
 - Scope limitation: PR CI integration validates the production caption-frame renderer and OCR on a synthetic fixture. It does not establish that the user's previously generated MP4 is fixed, nor does it prove full-video E2E publication acceptance. The earlier user video had ASR mismatch, incomplete OCR and estimated rather than explicit ASR word timestamps; its publication gate must remain blocked until a fresh run passes every independent check.
 - Still outstanding: full multilingual Docker E2E with real free Cloudflare Whisper credentials/allocation and explicit per-word timestamps; semantic vision review with available free quota; re-run the user's exact 43-word script through the live service; review actual visual relevance/variety; signed Android release installation/update and TalkBack acceptance on the user's phone. No physical-device validation is claimed.
+
+
+## ৩৭. PR #82–#84 — narration fallback, image safety ও voice-clone timeout (2026-11-23)
+
+### PR #82 — ASR unavailable হলে diagnostic render
+- PR #82 merged as `06cafada70b6464bad43d4e9d775a3621a8b0033`।
+- Cloudflare Whisper/ASR unavailable হলে সেটিকে narration mismatch-এর প্রমাণ হিসেবে ধরে expensive diagnostic render বন্ধ করা হয় না; diagnostic video তৈরি করে report পাওয়ার সুযোগ থাকে।
+- গুরুত্বপূর্ণ: ASR unavailable থাকলে publication gate এখনও fail-closed। Share/download অনুমোদন দেওয়া হয়নি; কোনো transcript accuracy threshold বা word-timestamp requirement শিথিল করা হয়নি।
+
+### PR #83 — অপ্রাসঙ্গিক satellite/map image প্রত্যাখ্যান
+- PR #83: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/pull/83 — merge commit `a42e99d06fa2f2a43777e8adf76bb30622dbf4bf`।
+- Motivational/non-geographic narration-এর জন্য satellite view, aerial imagery, map/globe-ধরনের image title reject করা হয়; narration স্পষ্টভাবে geography/map নিয়ে হলে তা গ্রহণযোগ্য থাকে।
+- Regression tests motivational script-এ “Satellite view of Barisal city” reject এবং Bangladesh geography script-এ map allow করে।
+- Render deployment `dep-dc2814navr4c73f6i4ig` LIVE হয়েছে। Main end-to-end run [45234757597](https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/actions/runs/45234757597) SUCCESS; audit register run [45234757629](https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/actions/runs/45234757629) SUCCESS।
+
+### PR #84 — remote voice-clone wait bounded
+- PR #84: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/pull/84 — merge commit `46aaa92ff7b623615b167c99ebc36210eaaed0ff`।
+- Voice-clone remote provider work-এর shared deadline default ২৪০ সেকেন্ড; প্রতিটি provider call ও generated-audio download-এ অবশিষ্ট সময় অনুযায়ী সর্বোচ্চ ৪৫ সেকেন্ড timeout পাঠানো হয়। Provider busy/unavailable হলে আগের মতো অনির্দিষ্টকাল অপেক্ষা করার বদলে দ্রুত failure report পাওয়ার উদ্দেশ্য।
+- এটি সর্বপ্রকার ancillary operation-এর জন্য গাণিতিকভাবে কঠোর ৪ মিনিট wall-clock guarantee নয়। Provider service unavailable হলে cloning সফল হবে—এমন নিশ্চয়তাও নয়।
+- PR validation run `45236547722` SUCCESS। Render deployment `dep-dc2880p5efls73drpcrg` commit `46aaa92ff7b623615b167c99ebc36210eaaed0ff`-এ LIVE।
+- Main backend end-to-end smoke test [45237406497](https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/actions/runs/45237406497) ২০২৬-১১-২৩-এ SUCCESS; Docker build, backend tests, বাংলা/ইংরেজি render flow, voice-clone consent, image/storyboard checks এবং live Render health ধাপ সফল। Automatic audit register run [45238091831](https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/actions/runs/45238091831) SUCCESS।
+- CI/E2E success বাস্তব ফোনের voice quality, ASR accuracy, final MP4 visual quality বা TalkBack acceptance test নয়।
+
+### Android release status
+- Android release workflow run `45143384833` সফলভাবে signed APK build, app identity/version check, signature verification, artifact upload ও GitHub Release publication করেছে।
+- Latest verified release: [v0.3.234](https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/releases/tag/v0.3.234); APK SHA-256: `95c68d456548588d0af74e740fa70f74144b93d659e7173b6cfc7cf169597a14`।
+- v0.3.234 Android-side changes #78/#79 অন্তর্ভুক্ত করে। PR #82–#84 backend-only; নতুন APK তৈরি করেনি।
+- User's phone-এ v0.3.234 install/update, automatic Downloads, screen-reader usability ও real video acceptance এখনো ব্যবহারকারীর নিশ্চিত পরীক্ষার অপেক্ষায়।
+
+### এখনও অমীমাংসিত
+- আগের বাস্তব বাংলা ভিডিওতে ASR transcript similarity প্রায় ২৪%, missing/extra words, explicit provider word timestamps-এর ঘাটতি এবং image relevance/variety সমস্যা ছিল। PR #82–#84 এগুলোর পূর্ণ সমাধান নয়; নতুন বাস্তব video report না পাওয়া পর্যন্ত publication gate অপরিবর্তিত fail-closed থাকবে।
+- Real Cloudflare Whisper free allocation/credentials এবং semantic vision provider availability দিয়ে পূর্ণ production-quality validation এখনও আলাদা করে দরকার।
+- R2 job-storage implementation আছে, কিন্তু Render production environment-এ private R2 credentials সক্রিয় আছে কি না এই audit-এ নিশ্চিত করা হয়নি। Environment values/secret পড়া বা প্রকাশ করা হয়নি; R2 enable করতে হলে ব্যবহারকারীর অনুমোদন ও private bucket configuration প্রয়োজন।
+- কোনো paid provider/Render plan সক্রিয় করা হয়নি; কোনো user voice sample এই audit-এ upload করা হয়নি।
