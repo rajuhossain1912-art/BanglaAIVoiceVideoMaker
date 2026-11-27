@@ -52,6 +52,10 @@ VOICE_CLONE_EN_SPACES = [x.strip() for x in os.getenv(
     "VOICE_CLONE_EN_SPACES",
     f"{VOICE_CLONE_EN_SPACE},ResembleAI/Chatterbox-Multilingual-TTS",
 ).split(",") if x.strip()]
+# Independent English-capable Qwen3-TTS voice-cloning fallback (0.6B model).
+VOICE_CLONE_EN_QWEN_SPACES = [
+    x.strip() for x in os.getenv("VOICE_CLONE_EN_QWEN_SPACES", "Qwen/Qwen3-TTS").split(",") if x.strip()
+]
 VOICE_CLONE_ENABLED = os.getenv("VOICE_CLONE_ENABLED", "true").lower() in ("1", "true", "yes")
 # Bound the total time spent waiting on remote voice-clone providers per job.
 # Each individual provider request also receives the remaining time, capped at 45s.
@@ -501,6 +505,27 @@ def _clone_with_vakya(script: str, normalized: Path, space: str, timeout_seconds
     )
 
 
+def _clone_with_qwen_english(script: str, normalized: Path, space: str, timeout_seconds: float = 55.0):
+    """Use Qwen3-TTS Base for English cloning with an explicit reference transcript."""
+    from gradio_client import handle_file
+    reference_text = transcribe_uploaded_audio(normalized, normalized.parent)
+    if not reference_text.strip():
+        raise RuntimeError("Qwen3-TTS reference transcript is empty")
+    client = _make_voice_gradio_client(space, min(60.0, max(1.0, timeout_seconds)))
+    result = _gradio_predict_with_timeout(
+        client,
+        handle_file(str(normalized)),
+        reference_text,
+        script,
+        "English",
+        False,
+        "0.6B",
+        timeout_seconds=timeout_seconds,
+        api_name="/generate_voice_clone",
+    )
+    return result, getattr(client, "src", "") or ""
+
+
 def _clone_with_xtts_bengali(script: str, normalized: Path, space: str, timeout_seconds: float = 120.0):
     """Use a Bengali XTTS-v2 Gradio Space with the caller-consented reference clip."""
     from gradio_client import handle_file
@@ -745,14 +770,28 @@ def synthesize_cloned_voice(script: str, reference_audio: Path, folder: Path, pr
                 # Never send English narration to a Bengali-only fallback. A
                 # technically successful response with the wrong language
                 # model can silently produce badly pronounced words.
-                candidate, provider = _clone_with_provider_fallback(
-                    text_chunk, normalized, VOICE_CLONE_EN_SPACES, _clone_with_chatterbox,
-                    "en", folder, f"clone-part-{index:03d}",
-                    progress_callback=progress_callback,
-                    progress_base=provider_progress_base,
-                    progress_span=max(1, provider_progress_span),
-                    deadline=voice_deadline,
-                )
+                try:
+                    candidate, provider = _clone_with_provider_fallback(
+                        text_chunk, normalized, VOICE_CLONE_EN_SPACES, _clone_with_chatterbox,
+                        "en", folder, f"clone-part-{index:03d}",
+                        progress_callback=progress_callback,
+                        progress_base=provider_progress_base,
+                        progress_span=max(1, provider_progress_span // 2),
+                        deadline=voice_deadline,
+                    )
+                except Exception as primary_error:
+                    if "zerogpu quota exhausted" in str(primary_error).lower():
+                        raise
+                    print(f"VOICE_CLONE_EN_PRIMARY_POOL_FAILED error={type(primary_error).__name__}", flush=True)
+                    candidate, provider = _clone_with_provider_fallback(
+                        text_chunk, normalized, VOICE_CLONE_EN_QWEN_SPACES, _clone_with_qwen_english,
+                        "en_qwen_fallback", folder, f"clone-part-{index:03d}",
+                        progress_callback=progress_callback,
+                        progress_base=min(chunk_end_progress - 1, provider_progress_base + max(1, provider_progress_span // 2)),
+                        progress_span=max(1, provider_progress_span // 2),
+                        deadline=voice_deadline,
+                        provider_timeout_seconds=55.0,
+                    )
             else:
                 try:
                     candidate, provider = _clone_with_provider_fallback(
