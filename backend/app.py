@@ -415,6 +415,25 @@ def _make_voice_gradio_client(space: str, timeout: float):
     return Client(space, **kwargs)
 
 
+
+def _gradio_predict_with_timeout(client, *args, timeout_seconds: float, **kwargs):
+    """Bound Gradio queue waiting; Client.predict() hides Job.result(timeout)."""
+    api_name = kwargs.pop("api_name", None)
+    wait_limit = max(1.0, float(timeout_seconds))
+    # Lightweight test doubles and older compatible clients may expose only
+    # predict(); production Gradio Client exposes submit() and gets a hard
+    # queue-result deadline below.
+    if not callable(getattr(client, "submit", None)):
+        return client.predict(*args, api_name=api_name, **kwargs)
+    job = client.submit(*args, api_name=api_name, **kwargs)
+    try:
+        return job.result(timeout=wait_limit)
+    except TimeoutError as exc:
+        raise TimeoutError(
+            f"Gradio voice job exceeded its {wait_limit:.1f}s wait limit"
+        ) from exc
+
+
 def _clone_with_cosyvoice(script: str, normalized: Path, space: str, timeout_seconds: float = 120.0):
     from gradio_client import handle_file
     client = _make_voice_gradio_client(space, min(120.0, max(1.0, timeout_seconds)))
@@ -425,11 +444,13 @@ def _clone_with_cosyvoice(script: str, normalized: Path, space: str, timeout_sec
         "Speak clearly and naturally in Bengali and English, at a steady pace."
         "<|endofprompt|>" + script
     )
-    result = client.predict(
+    result = _gradio_predict_with_timeout(
+        client,
         instructed_script,
         handle_file(str(normalized)),
         0,
         0.95,
+        timeout_seconds=timeout_seconds,
         api_name="/generate_cross_lingual_audio",
     )
     # Resolve relative FileData URLs against the actual Space host. Gradio
@@ -464,10 +485,12 @@ def _clone_with_vakya(script: str, normalized: Path, space: str, timeout_seconds
     if not reference_text.strip():
         raise RuntimeError("IndicF5 reference transcript is empty")
     client = _make_voice_gradio_client(space, min(300.0, max(1.0, timeout_seconds)))
-    return client.predict(
+    return _gradio_predict_with_timeout(
+        client,
         script,
         handle_file(str(normalized)),
         reference_text,
+        timeout_seconds=timeout_seconds,
         api_name="/synthesize_speech",
     )
 
@@ -479,7 +502,9 @@ def _clone_with_chatterbox(script: str, normalized: Path, space: str, timeout_se
         # Official multilingual Chatterbox Space uses named inputs and an
         # explicit language selector. This preserves the supplied speaker
         # reference while providing a separate English-capable fallback.
-        result = client.predict(
+        result = _gradio_predict_with_timeout(
+            client,
+            timeout_seconds=timeout_seconds,
             text_input=script,
             language_id="en",
             audio_prompt_path_input=handle_file(str(normalized)),
@@ -490,13 +515,15 @@ def _clone_with_chatterbox(script: str, normalized: Path, space: str, timeout_se
             api_name="/generate_tts_audio",
         )
     else:
-        result = client.predict(
+        result = _gradio_predict_with_timeout(
+            client,
             script,
             handle_file(str(normalized)),
             0.5,
             0.8,
             0,
             0.4,
+            timeout_seconds=timeout_seconds,
             api_name="/generate_tts_audio",
         )
     return result
