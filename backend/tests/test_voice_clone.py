@@ -1207,3 +1207,34 @@ class IsolatedBengaliWordOCRTests(unittest.TestCase):
             self.assertEqual(result["status"], "passed")
             self.assertEqual(result["words_detected"], 1)
 
+
+
+class GradioVoiceJobTimeoutTests(unittest.TestCase):
+    def test_gradio_job_result_receives_remaining_timeout(self):
+        job = Mock()
+        job.result.return_value = {"path": "/tmp/audio.wav"}
+        client = Mock()
+        client.submit.return_value = job
+
+        result = video_app._gradio_predict_with_timeout(
+            client, "বাংলা পরীক্ষা", timeout_seconds=17.5, api_name="/generate"
+        )
+
+        self.assertEqual(result, {"path": "/tmp/audio.wav"})
+        client.submit.assert_called_once_with(
+            "বাংলা পরীক্ষা", api_name="/generate"
+        )
+        job.result.assert_called_once_with(timeout=17.5)
+
+    def test_gradio_job_timeout_is_reported_as_provider_timeout(self):
+        job = Mock()
+        job.result.side_effect = TimeoutError("wait expired")
+        client = Mock()
+        client.submit.return_value = job
+
+        with self.assertRaisesRegex(TimeoutError, "17.5s wait limit"):
+            video_app._gradio_predict_with_timeout(
+                client, "বাংলা পরীক্ষা", timeout_seconds=17.5, api_name="/generate"
+            )
+
+        job.result.assert_called_once_with(timeout=17.5)
