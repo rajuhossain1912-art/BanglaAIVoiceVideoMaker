@@ -3708,6 +3708,17 @@ GitHub commit history অনুযায়ী প্রকল্পের প্�
   - `docs/PROJECT_AUDIT.md`
 - Result: **push recorded**; this is not a test or deployment success claim.
 
+
+### Source update — 2026-11-27T19:21:54.677Z
+- Branch: `main`
+- Push range: `fa5fc1fc0e2e10581e1b38f09716ab4b822734b6` → `efab990cf986be9a4bda95e0b9a2280badfc880f`
+- Pushed by: rajuhossain1912-art
+- Commit: [efab990cf986](https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/commit/efab990cf986be9a4bda95e0b9a2280badfc880f) — fix: enforce timeout while waiting for Gradio voice jobs (#90)
+- Changed files:
+  - `backend/app.py`
+  - `backend/tests/test_voice_clone.py`
+- Result: **push recorded**; this is not a test or deployment success claim.
+
 <!-- AUTO_LOG_END -->
 
 
