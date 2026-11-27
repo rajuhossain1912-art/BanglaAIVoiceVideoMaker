@@ -7,9 +7,9 @@ This document records the free/best-effort voice-cloning providers wired into th
 | Order | Provider | Space | Status in app | Notes |
 |---|---|---|---|---|
 | 1 | Bengali CosyVoice3 | `kawshikbuet17/bengali-cosyvoice3-tts-demo` | Primary | Bengali cross-lingual cloning; the public model card identifies Bengali support and Apache-2.0 for the fine-tuned model. |
-| 2 | Bengali XTTS-v2 | `EMTIAZZ/bangla-xtts-tts` | Fallback | Independent Gradio Space. Its underlying fine-tune is Coqui XTTS-derived; treat it as non-commercial only unless the model author grants broader rights in writing. |
+| 2 | Bengali XTTS-v2 | `EMTIAZZ/bangla-xtts-tts` | Optional fallback (disabled by default) | Enable only after confirming the intended use is non-commercial or obtaining broader written rights; the fine-tune is Coqui XTTS-derived. Set `VOICE_CLONE_BN_XTTS_SPACES=EMTIAZZ/bangla-xtts-tts` to opt in. |
 
-An optional Vakya/IndicF5 provider pool remains disabled unless `VOICE_CLONE_BN_VAKYA_SPACES` is explicitly configured with a verified Gradio Space matching the backend adapter contract.
+The XTTS provider remains disabled by default because of its non-commercial license restrictions. An optional Vakya/IndicF5 provider pool remains disabled unless `VOICE_CLONE_BN_VAKYA_SPACES` is explicitly configured with a verified Gradio Space matching the backend adapter contract.
 
 ## English voice cloning
 
