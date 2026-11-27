@@ -43,7 +43,7 @@ VOICE_CLONE_BN_VAKYA_SPACES = [
 # Its upstream XTTS checkpoint has separate model-license restrictions; keep
 # this adapter configurable so operators can disable it with an empty value.
 VOICE_CLONE_BN_XTTS_SPACES = [
-    x.strip() for x in os.getenv("VOICE_CLONE_BN_XTTS_SPACES", "EMTIAZZ/bangla-xtts-tts").split(",") if x.strip()
+    x.strip() for x in os.getenv("VOICE_CLONE_BN_XTTS_SPACES", "").split(",") if x.strip()
 ]
 VOICE_CLONE_EN_SPACE = os.getenv("VOICE_CLONE_EN_SPACE", "ResembleAI/Chatterbox")
 # The original English-only Space can exhaust its ZeroGPU allowance. Keep the
