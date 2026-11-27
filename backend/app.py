@@ -783,6 +783,10 @@ def synthesize_cloned_voice(script: str, reference_audio: Path, folder: Path, pr
                     if "zerogpu quota exhausted" in str(primary_error).lower():
                         raise
                     print(f"VOICE_CLONE_EN_PRIMARY_POOL_FAILED error={type(primary_error).__name__}", flush=True)
+                    if not VOICE_CLONE_EN_QWEN_SPACES:
+                        raise RuntimeError(
+                            f"All English voice providers failed: {type(primary_error).__name__}"
+                        ) from primary_error
                     candidate, provider = _clone_with_provider_fallback(
                         text_chunk, normalized, VOICE_CLONE_EN_QWEN_SPACES, _clone_with_qwen_english,
                         "en_qwen_fallback", folder, f"clone-part-{index:03d}",
