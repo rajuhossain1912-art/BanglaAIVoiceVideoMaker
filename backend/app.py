@@ -441,11 +441,11 @@ def _clone_with_cosyvoice(script: str, normalized: Path, space: str, timeout_sec
     )
     result = _gradio_predict_with_timeout(
         client,
-        timeout_seconds=timeout_seconds,
         instructed_script,
         handle_file(str(normalized)),
         0,
         0.95,
+        timeout_seconds=timeout_seconds,
         api_name="/generate_cross_lingual_audio",
     )
     # Resolve relative FileData URLs against the actual Space host. Gradio
@@ -482,10 +482,10 @@ def _clone_with_vakya(script: str, normalized: Path, space: str, timeout_seconds
     client = _make_voice_gradio_client(space, min(300.0, max(1.0, timeout_seconds)))
     return _gradio_predict_with_timeout(
         client,
-        timeout_seconds=timeout_seconds,
         script,
         handle_file(str(normalized)),
         reference_text,
+        timeout_seconds=timeout_seconds,
         api_name="/synthesize_speech",
     )
 
@@ -512,13 +512,13 @@ def _clone_with_chatterbox(script: str, normalized: Path, space: str, timeout_se
     else:
         result = _gradio_predict_with_timeout(
             client,
-            timeout_seconds=timeout_seconds,
             script,
             handle_file(str(normalized)),
             0.5,
             0.8,
             0,
             0.4,
+            timeout_seconds=timeout_seconds,
             api_name="/generate_tts_audio",
         )
     return result
