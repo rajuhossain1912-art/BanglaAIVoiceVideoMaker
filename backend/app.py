@@ -4341,6 +4341,27 @@ def _unresolved_final_scene_mismatches(scene_audit):
 
 
 
+def _audio_publication_diagnostic_reason(audio_verification):
+    """Explain transcript similarity without implying exact words when token counts differ."""
+    if not isinstance(audio_verification, dict):
+        return "তৈরি অডিওর প্রতিলিপি যাচাই করা যায়নি।"
+    status = audio_verification.get("status")
+    missing = audio_verification.get("missing_tokens")
+    extra = audio_verification.get("extra_tokens")
+    if status == "matched" and missing == 0 and extra == 0:
+        return "Whisper প্রতিলিপিতে মূল লেখার সব শব্দ মিলে গেছে; এটি স্বয়ংক্রিয় পরীক্ষা, মানব নিশ্চয়তা নয়।"
+    if status == "matched":
+        counts = ""
+        if isinstance(missing, int) and isinstance(extra, int):
+            counts = f" মূল লেখার {missing}টি শব্দ অনুপস্থিত এবং {extra}টি অতিরিক্ত শব্দ শনাক্ত হয়েছে।"
+        return "Whisper-এর সামগ্রিক মিল গ্রহণযোগ্য সীমায়, কিন্তু প্রতিটি শব্দ হুবহু মেলেনি." .replace(".", "।") + counts + " তাই প্রকাশের অনুমতি দেওয়া হয়নি।"
+    if status == "review_required":
+        return "অডিও ও মূল লেখার মিল আংশিক; মানুষের পর্যালোচনা প্রয়োজন।"
+    if status == "mismatch":
+        return "তৈরি অডিওর কথা অনুমোদিত লেখার সঙ্গে যথেষ্ট মেলেনি।"
+    return str(audio_verification.get("reason") or "তৈরি অডিওর প্রতিলিপি যাচাই করা যায়নি।")
+
+
 def _subtitle_publication_diagnostic_reason(caption_alignment, subtitle_ocr):
     """Describe only subtitle checks that remain incomplete in the user report."""
     caption_alignment = caption_alignment if isinstance(caption_alignment, dict) else {}
@@ -5184,12 +5205,7 @@ def video_quality_report(job_id: str):
         publication_status = "review_required"
     if semantic_review["reviewed"] < (image_count or 0) or semantic_review["unavailable"]:
         publication_reasons.append("সব পটভূমির ছবির অর্থগত মিল যাচাই করা হয়নি।")
-    if audio_verification_status == "matched":
-        publication_reasons.append("Whisper প্রতিলিপির সঙ্গে মূল লেখার মিল ভালো পাওয়া গেছে; এটি শতভাগ শব্দ-পর্যায়ের নিশ্চয়তা নয়।")
-    elif audio_verification_status == "review_required":
-        publication_reasons.append("অডিও ও মূল লেখার মিল আংশিক; মানুষের পর্যালোচনা প্রয়োজন।")
-    else:
-        publication_reasons.append(str(audio_verification.get("reason") or "তৈরি অডিওর প্রতিলিপি যাচাই করা যায়নি।"))
+    publication_reasons.append(_audio_publication_diagnostic_reason(audio_verification))
     publication_reasons.append(_subtitle_publication_diagnostic_reason(
         snapshot.get("caption_alignment") or {},
         snapshot.get("subtitle_ocr") or {},
