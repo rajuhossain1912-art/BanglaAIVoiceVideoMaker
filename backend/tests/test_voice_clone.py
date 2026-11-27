@@ -1272,3 +1272,35 @@ class BengaliXTTSFallbackTests(unittest.TestCase):
                 ).split(",") if item.strip()
             ]
         self.assertEqual(spaces, ["EMTIAZZ/bangla-xtts-tts"])
+
+
+class EnglishQwenFallbackTests(unittest.TestCase):
+    def test_qwen_adapter_uses_english_and_the_consented_reference_clip(self):
+        from types import SimpleNamespace
+        fake_client = Mock()
+        fake_client.src = "https://qwen3-tts.hf.space"
+        fake_client.submit.return_value.result.return_value = (24000, [0.0, 0.1, -0.1])
+        fake_module = SimpleNamespace(
+            Client=Mock(return_value=fake_client),
+            handle_file=Mock(side_effect=lambda value: ("file", value)),
+        )
+        with (
+            patch.dict("sys.modules", {"gradio_client": fake_module}),
+            patch.object(video_app, "transcribe_uploaded_audio", return_value="Hello there."),
+        ):
+            result, base_url = video_app._clone_with_qwen_english(
+                "This is a test.", Path("/tmp/reference.wav"),
+                "Qwen/Qwen3-TTS", timeout_seconds=50.0,
+            )
+        self.assertEqual(result, (24000, [0.0, 0.1, -0.1]))
+        self.assertEqual(base_url, fake_client.src)
+        fake_client.submit.assert_called_once_with(
+            ("file", "/tmp/reference.wav"),
+            "Hello there.",
+            "This is a test.",
+            "English",
+            False,
+            "0.6B",
+            api_name="/generate_voice_clone",
+        )
+        fake_client.submit.return_value.result.assert_called_once_with(timeout=50.0)
