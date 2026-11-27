@@ -39,6 +39,12 @@ VOICE_CLONE_BN_SPACES = [x.strip() for x in os.getenv("VOICE_CLONE_BN_SPACES", V
 VOICE_CLONE_BN_VAKYA_SPACES = [
     x.strip() for x in os.getenv("VOICE_CLONE_BN_VAKYA_SPACES", "").split(",") if x.strip()
 ]
+# Independent Bengali voice-cloning fallback hosted as a public Gradio Space.
+# Its upstream XTTS checkpoint has separate model-license restrictions; keep
+# this adapter configurable so operators can disable it with an empty value.
+VOICE_CLONE_BN_XTTS_SPACES = [
+    x.strip() for x in os.getenv("VOICE_CLONE_BN_XTTS_SPACES", "").split(",") if x.strip()
+]
 VOICE_CLONE_EN_SPACE = os.getenv("VOICE_CLONE_EN_SPACE", "ResembleAI/Chatterbox")
 # The original English-only Space can exhaust its ZeroGPU allowance. Keep the
 # official multilingual Space as an independent free fallback for English.
@@ -46,6 +52,10 @@ VOICE_CLONE_EN_SPACES = [x.strip() for x in os.getenv(
     "VOICE_CLONE_EN_SPACES",
     f"{VOICE_CLONE_EN_SPACE},ResembleAI/Chatterbox-Multilingual-TTS",
 ).split(",") if x.strip()]
+# Independent English-capable Qwen3-TTS voice-cloning fallback (0.6B model).
+VOICE_CLONE_EN_QWEN_SPACES = [
+    x.strip() for x in os.getenv("VOICE_CLONE_EN_QWEN_SPACES", "Qwen/Qwen3-TTS").split(",") if x.strip()
+]
 VOICE_CLONE_ENABLED = os.getenv("VOICE_CLONE_ENABLED", "true").lower() in ("1", "true", "yes")
 # Bound the total time spent waiting on remote voice-clone providers per job.
 # Each individual provider request also receives the remaining time, capped at 45s.
@@ -495,6 +505,41 @@ def _clone_with_vakya(script: str, normalized: Path, space: str, timeout_seconds
     )
 
 
+def _clone_with_qwen_english(script: str, normalized: Path, space: str, timeout_seconds: float = 55.0):
+    """Use Qwen3-TTS Base for English cloning with an explicit reference transcript."""
+    from gradio_client import handle_file
+    reference_text = transcribe_uploaded_audio(normalized, normalized.parent)
+    if not reference_text.strip():
+        raise RuntimeError("Qwen3-TTS reference transcript is empty")
+    client = _make_voice_gradio_client(space, min(60.0, max(1.0, timeout_seconds)))
+    result = _gradio_predict_with_timeout(
+        client,
+        handle_file(str(normalized)),
+        reference_text,
+        script,
+        "English",
+        False,
+        "0.6B",
+        timeout_seconds=timeout_seconds,
+        api_name="/generate_voice_clone",
+    )
+    return result, getattr(client, "src", "") or ""
+
+
+def _clone_with_xtts_bengali(script: str, normalized: Path, space: str, timeout_seconds: float = 120.0):
+    """Use a Bengali XTTS-v2 Gradio Space with the caller-consented reference clip."""
+    from gradio_client import handle_file
+    client = _make_voice_gradio_client(space, min(150.0, max(1.0, timeout_seconds)))
+    result = _gradio_predict_with_timeout(
+        client,
+        script,
+        handle_file(str(normalized)),
+        timeout_seconds=timeout_seconds,
+        api_name="/generate_speech",
+    )
+    return result, getattr(client, "src", "") or ""
+
+
 def _clone_with_chatterbox(script: str, normalized: Path, space: str, timeout_seconds: float = 180.0):
     from gradio_client import handle_file
     client = _make_voice_gradio_client(space, min(180.0, max(1.0, timeout_seconds)))
@@ -534,6 +579,7 @@ def _clone_with_provider_fallback(
     folder: Path, stem: str, progress_callback=None, progress_base: int = 14,
     progress_span: int = 14,
     deadline: Optional[float] = None,
+    provider_timeout_seconds: Optional[float] = None,
 ):
     """Try free Spaces in order, retrying transient failures within a shared deadline."""
     failures = []
@@ -549,7 +595,11 @@ def _clone_with_provider_fallback(
             remaining = (deadline - time.monotonic()) if deadline is not None else VOICE_CLONE_PROVIDER_TIMEOUT_SECONDS
             if remaining <= 0:
                 raise RuntimeError("নিজের কণ্ঠ তৈরির সর্বোচ্চ অপেক্ষার সময় শেষ হয়েছে। অনুগ্রহ করে কিছুক্ষণ পরে আবার চেষ্টা করুন।")
-            provider_timeout = min(VOICE_CLONE_PROVIDER_TIMEOUT_SECONDS, max(1.0, remaining))
+            configured_timeout = (
+                VOICE_CLONE_PROVIDER_TIMEOUT_SECONDS
+                if provider_timeout_seconds is None else max(1.0, float(provider_timeout_seconds))
+            )
+            provider_timeout = min(configured_timeout, max(1.0, remaining))
             try:
                 if attempt:
                     if progress_callback:
@@ -720,14 +770,32 @@ def synthesize_cloned_voice(script: str, reference_audio: Path, folder: Path, pr
                 # Never send English narration to a Bengali-only fallback. A
                 # technically successful response with the wrong language
                 # model can silently produce badly pronounced words.
-                candidate, provider = _clone_with_provider_fallback(
-                    text_chunk, normalized, VOICE_CLONE_EN_SPACES, _clone_with_chatterbox,
-                    "en", folder, f"clone-part-{index:03d}",
-                    progress_callback=progress_callback,
-                    progress_base=provider_progress_base,
-                    progress_span=max(1, provider_progress_span),
-                    deadline=voice_deadline,
-                )
+                try:
+                    candidate, provider = _clone_with_provider_fallback(
+                        text_chunk, normalized, VOICE_CLONE_EN_SPACES, _clone_with_chatterbox,
+                        "en", folder, f"clone-part-{index:03d}",
+                        progress_callback=progress_callback,
+                        progress_base=provider_progress_base,
+                        progress_span=max(1, provider_progress_span // 2),
+                        deadline=voice_deadline,
+                    )
+                except Exception as primary_error:
+                    if "zerogpu quota exhausted" in str(primary_error).lower():
+                        raise
+                    print(f"VOICE_CLONE_EN_PRIMARY_POOL_FAILED error={type(primary_error).__name__}", flush=True)
+                    if not VOICE_CLONE_EN_QWEN_SPACES:
+                        raise RuntimeError(
+                            f"All English voice providers failed: {type(primary_error).__name__}"
+                        ) from primary_error
+                    candidate, provider = _clone_with_provider_fallback(
+                        text_chunk, normalized, VOICE_CLONE_EN_QWEN_SPACES, _clone_with_qwen_english,
+                        "en_qwen_fallback", folder, f"clone-part-{index:03d}",
+                        progress_callback=progress_callback,
+                        progress_base=min(chunk_end_progress - 1, provider_progress_base + max(1, provider_progress_span // 2)),
+                        progress_span=max(1, provider_progress_span // 2),
+                        deadline=voice_deadline,
+                        provider_timeout_seconds=55.0,
+                    )
             else:
                 try:
                     candidate, provider = _clone_with_provider_fallback(
@@ -748,18 +816,40 @@ def synthesize_cloned_voice(script: str, reference_audio: Path, folder: Path, pr
                     # call against the same exhausted Hugging Face allowance.
                     if "zerogpu quota exhausted" in str(primary_error).lower():
                         raise
-                    if not VOICE_CLONE_BN_VAKYA_SPACES:
-                        # Avoid making a guaranteed-invalid Gradio request to a
-                        # model repository that is not an independently hosted Space.
-                        raise
-                    candidate, provider = _clone_with_provider_fallback(
-                        text_chunk, normalized, VOICE_CLONE_BN_VAKYA_SPACES, _clone_with_vakya,
-                        "bn_vakya_fallback", folder, f"clone-part-{index:03d}",
-                        progress_callback=progress_callback,
-                        progress_base=min(chunk_end_progress - 1, provider_progress_base + max(1, provider_progress_span // 2)),
-                        progress_span=max(1, provider_progress_span // 2),
-                        deadline=voice_deadline,
-                    )
+                    fallback_errors = [f"CosyVoice: {type(primary_error).__name__}"]
+                    candidate = None
+                    provider = None
+                    if VOICE_CLONE_BN_VAKYA_SPACES:
+                        try:
+                            candidate, provider = _clone_with_provider_fallback(
+                                text_chunk, normalized, VOICE_CLONE_BN_VAKYA_SPACES, _clone_with_vakya,
+                                "bn_vakya_fallback", folder, f"clone-part-{index:03d}",
+                                progress_callback=progress_callback,
+                                progress_base=min(chunk_end_progress - 1, provider_progress_base + max(1, provider_progress_span // 3)),
+                                progress_span=max(1, provider_progress_span // 3),
+                                deadline=voice_deadline,
+                            )
+                        except Exception as fallback_error:
+                            if "zerogpu quota exhausted" in str(fallback_error).lower():
+                                raise
+                            fallback_errors.append(f"Vakya: {type(fallback_error).__name__}")
+                    if candidate is None and VOICE_CLONE_BN_XTTS_SPACES:
+                        try:
+                            candidate, provider = _clone_with_provider_fallback(
+                                text_chunk, normalized, VOICE_CLONE_BN_XTTS_SPACES, _clone_with_xtts_bengali,
+                                "bn_xtts_fallback", folder, f"clone-part-{index:03d}",
+                                progress_callback=progress_callback,
+                                progress_base=min(chunk_end_progress - 1, provider_progress_base + max(1, (provider_progress_span * 2) // 3)),
+                                progress_span=max(1, provider_progress_span // 3),
+                                deadline=voice_deadline,
+                                provider_timeout_seconds=120.0,
+                            )
+                        except Exception as fallback_error:
+                            if "zerogpu quota exhausted" in str(fallback_error).lower():
+                                raise
+                            fallback_errors.append(f"XTTS: {type(fallback_error).__name__}")
+                    if candidate is None:
+                        raise RuntimeError("All Bengali voice providers failed: " + ", ".join(fallback_errors)) from primary_error
             selected_providers.append(provider)
             print(f"VOICE_CLONE_CHUNK_OK part={index + 1}/{len(chunks)} language={chunk_language}", flush=True)
             if progress_callback:
