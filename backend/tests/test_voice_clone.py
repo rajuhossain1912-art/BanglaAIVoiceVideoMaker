@@ -218,6 +218,7 @@ class VoiceCloneUnitTests(unittest.TestCase):
             with (
                 patch.object(video_app, "VOICE_CLONE_ENABLED", True),
                 patch.object(video_app, "VOICE_CLONE_EN_SPACES", ["english-space"]),
+                patch.object(video_app, "VOICE_CLONE_EN_QWEN_SPACES", []),
                 patch.object(video_app, "VOICE_CLONE_BN_SPACES", ["bengali-space"]),
                 patch.object(video_app, "VOICE_CLONE_BN_VAKYA_SPACES", ["vakya-space"]),
                 patch.object(video_app, "run", side_effect=fake_run),
