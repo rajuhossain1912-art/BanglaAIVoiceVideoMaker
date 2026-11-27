@@ -4353,8 +4353,11 @@ def _audio_publication_diagnostic_reason(audio_verification):
     if status == "matched":
         counts = ""
         if isinstance(missing, int) and isinstance(extra, int):
-            counts = f" মূল লেখার {missing}টি শব্দ অনুপস্থিত এবং {extra}টি অতিরিক্ত শব্দ শনাক্ত হয়েছে।"
-        return "Whisper-এর সামগ্রিক মিল গ্রহণযোগ্য সীমায়, কিন্তু প্রতিটি শব্দ হুবহু মেলেনি." .replace(".", "।") + counts + " তাই প্রকাশের অনুমতি দেওয়া হয়নি।"
+            bengali_digits = str.maketrans("0123456789", "০১২৩৪৫৬৭৮৯")
+            missing_text = str(missing).translate(bengali_digits)
+            extra_text = str(extra).translate(bengali_digits)
+            counts = f" মূল লেখার {missing_text}টি শব্দ অনুপস্থিত এবং {extra_text}টি অতিরিক্ত শব্দ শনাক্ত হয়েছে।"
+        return "Whisper-এর সামগ্রিক মিল গ্রহণযোগ্য সীমায়, কিন্তু প্রতিটি শব্দ হুবহু মেলেনি।" + counts + " তাই প্রকাশের অনুমতি দেওয়া হয়নি।"
     if status == "review_required":
         return "অডিও ও মূল লেখার মিল আংশিক; মানুষের পর্যালোচনা প্রয়োজন।"
     if status == "mismatch":
