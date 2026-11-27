@@ -1238,3 +1238,37 @@ class GradioVoiceJobTimeoutTests(unittest.TestCase):
             )
 
         job.result.assert_called_once_with(timeout=17.5)
+
+
+class BengaliXTTSFallbackTests(unittest.TestCase):
+    def test_xtts_adapter_submits_text_and_reference_to_generate_speech(self):
+        from types import SimpleNamespace
+        fake_client = Mock()
+        fake_client.src = "https://emtiazz-bangla-xtts-tts.hf.space"
+        fake_client.submit.return_value.result.return_value = {"path": "/tmp/output.wav"}
+        fake_module = SimpleNamespace(
+            Client=Mock(return_value=fake_client),
+            handle_file=Mock(side_effect=lambda value: ("file", value)),
+        )
+        with patch.dict("sys.modules", {"gradio_client": fake_module}):
+            result, base_url = video_app._clone_with_xtts_bengali(
+                "বাংলা পরীক্ষা", Path("/tmp/reference.wav"),
+                "EMTIAZZ/bangla-xtts-tts", timeout_seconds=75.0,
+            )
+        self.assertEqual(result, {"path": "/tmp/output.wav"})
+        self.assertEqual(base_url, fake_client.src)
+        fake_client.submit.assert_called_once_with(
+            "বাংলা পরীক্ষা", ("file", "/tmp/reference.wav"),
+            api_name="/generate_speech",
+        )
+        fake_client.submit.return_value.result.assert_called_once_with(timeout=75.0)
+
+    def test_bengali_xtts_space_is_configurable_and_defaulted(self):
+        with patch.dict("os.environ", {}, clear=True):
+            spaces = [
+                item.strip()
+                for item in video_app.os.getenv(
+                    "VOICE_CLONE_BN_XTTS_SPACES", "EMTIAZZ/bangla-xtts-tts"
+                ).split(",") if item.strip()
+            ]
+        self.assertEqual(spaces, ["EMTIAZZ/bangla-xtts-tts"])
