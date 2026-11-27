@@ -599,3 +599,30 @@ Section ৭-এর GitHub Actions সীমাবদ্ধতার বিবর
 - Real Cloudflare Whisper free allocation/credentials এবং semantic vision provider availability দিয়ে পূর্ণ production-quality validation এখনও আলাদা করে দরকার।
 - R2 job-storage implementation আছে, কিন্তু Render production environment-এ private R2 credentials সক্রিয় আছে কি না এই audit-এ নিশ্চিত করা হয়নি। Environment values/secret পড়া বা প্রকাশ করা হয়নি; R2 enable করতে হলে ব্যবহারকারীর অনুমোদন ও private bucket configuration প্রয়োজন।
 - কোনো paid provider/Render plan সক্রিয় করা হয়নি; কোনো user voice sample এই audit-এ upload করা হয়নি।
+
+
+
+## ৩৮. PR #86–#87 — অডিও/সাবটাইটেল প্রতিবেদনের নির্ভুলতা ও পূর্ণ E2E যাচাই (2026-11-27)
+
+### PR #86 — subtitle diagnostic report accuracy
+- PR #86: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/pull/86 — merge commit `72b38f7f8919186181d4665c955d4bec442e2a53`।
+- Subtitle report এখন OCR status এবং caption alignment-এর প্রকৃত status পরীক্ষা করে। OCR ও explicit ASR word timestamp উভয়টি পাস করলে ভুলভাবে “যাচাই হয়নি” বলে না; আর কোনো একটি অসম্পূর্ণ হলে সেটি স্পষ্টভাবে জানায়।
+- Regression tests নিশ্চিত করে যে সব check পাস হলে report false failure জানায় না, এবং OCR/timing অনুপস্থিত থাকলে তা আলাদা করে উল্লেখ করে।
+- PR Backend Check run `45780910933` SUCCESS (Python syntax, production Docker build এবং backend tests)। Render deployment `dep-dc4sc4gjo6nc73c4bej0` Live হিসেবে নিশ্চিত। এটি backend-only; APK প্রয়োজন হয়নি।
+
+### PR #87 এবং #88 — audio mismatch-এর সংখ্যা-সহ সঠিক বাংলা প্রতিবেদন
+- PR #87: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/pull/87 — final squash merge commit `d33e04854f4db8b7cf4a236ffa7ba48975818642`।
+- PR #88: https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/pull/88 — PR #87-এর stacked fix; বাংলা অঙ্কে missing/extra token সংখ্যা দেখায়।
+- Whisper transcript-এর overall similarity acceptable range-এ থাকলেও missing বা extra শব্দ থাকলে report এখন পরিষ্কারভাবে বলে যে প্রতিটি শব্দ মেলেনি, কতটি অনুপস্থিত এবং কতটি অতিরিক্ত। সংখ্যা বাংলা অঙ্কে দেখায়। শূন্য missing/extra হলেই কেবল সব শব্দ মেলার বক্তব্য দেয়।
+- PR #87-এর প্রথম CI attempt-এ বাংলা অঙ্কের প্রত্যাশা বনাম ASCII digit-এর test mismatch ধরা পড়ে। PR #88-এ তা সংশোধন করা হয়; combined PR #87 validation run `46047750937` SUCCESS (Docker build, Python syntax এবং backend tests)। PR #87 merge-এর আগে CI পাস নিশ্চিত করা হয়।
+- Render deployment `dep-dc4shvdbedkc73e2hpb0`, commit `d33e04854f4db8b7cf4a236ffa7ba48975818642`, **Live** হিসেবে যাচাই করা হয়েছে। Deployment-এর পরে Render app logs-এ ধারাবাহিক `GET /health` HTTP 200 দেখা গেছে।
+- Main Docker E2E run [46048216516](https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/actions/runs/46048216516) **SUCCESS**। Docker build, backend unit tests, Bengali/English audio transcript comparison, subtitle timing diagnostics, licensed image search/relevance, storyboard planning, repeated-image handling, vision-review parsing, Bengali/English end-to-end video generation এবং live Render production health—সব বাধ্যতামূলক step পাস করেছে।
+- এই E2E run-এ বাংলা/ইংরেজি ভিডিও তৈরির automated pipeline এবং সংশ্লিষ্ট regression checks সফল। তবে এটি ব্যবহারকারীর নিজের ফোনের real audio, Whisper provider-এর live quota/quality, প্রতিটি generated image-এর বাস্তব semantic quality, অথবা final MP4 publication approval-এর বিকল্প নয়। CI smoke test-এ বাস্তব ব্যবহারকারীর 43-word narration পুনরায় চালানো হয়েছে—এমন দাবি করা হচ্ছে না।
+- কোনো audio similarity threshold, word timestamp requirement, OCR requirement বা fail-closed publication gate শিথিল করা হয়নি। এটি backend-only পরিবর্তন; নতুন APK তৈরি হয়নি।
+
+### অডিটের সংশোধন ও পরবর্তী acceptance
+- আগের অডিট নথিতে local fallback/topic graphic-এর আলাদা semantic verification নেই বলে যে সাধারণ বক্তব্য ছিল, তা অতিরিক্ত বিস্তৃত ছিল। বর্তমান code path-এ final selected graphic-ও vision review পায়; review unavailable বা mismatch হলে publication block থাকে। এই code review নথির ব্যাখ্যা সংশোধন করেছে, runtime safety behavior পরিবর্তন করেনি।
+- Latest Android release এখনও v0.3.234; PR #86–#87 backend-only, নতুন APK দরকার হয়নি।
+- আগের বাস্তব ব্যবহারকারীর ভিডিওতে ASR similarity প্রায় 24%, missing/extra words এবং visual relevance/variety সমস্যা ছিল। নতুন CI success-কে ওই বাস্তব সমস্যাগুলোর সমাধান বা share/download অনুমোদন হিসেবে ধরা যাবে না।
+- পরবর্তী ধাপ: v0.3.234 ফোনে ইনস্টল/আপডেট ও TalkBack-সহ বাস্তব ভিডিও পরীক্ষা; নতুন job-এর transcript, explicit word timestamps, OCR, image semantic review এবং publication report দেখা; automatic MP4 download ও Render ephemeral storage/R2 persistence আলাদাভাবে যাচাই করা।
+- ব্যবহারকারীর স্পষ্ট সম্মতি ছাড়া voice sample external provider-এ পাঠানো হবে না; কোনো paid service/plan চালু করা হবে না। সব publication checks pass না করলে share/download block থাকবে।
