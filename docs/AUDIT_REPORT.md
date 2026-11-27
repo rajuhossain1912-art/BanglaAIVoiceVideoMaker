@@ -3557,6 +3557,17 @@ GitHub commit history অনুযায়ী প্রকল্পের প্�
   - `docs/PROJECT_AUDIT.md`
 - Result: **push recorded**; this is not a test or deployment success claim.
 
+
+### Source update — 2026-11-27T18:04:07.656Z
+- Branch: `main`
+- Push range: `cfe333824a8701c2cb98e31d93dee08879526435` → `72b38f7f8919186181d4665c955d4bec442e2a53`
+- Pushed by: rajuhossain1912-art
+- Commit: [72b38f7f8919](https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/commit/72b38f7f8919186181d4665c955d4bec442e2a53) — Fix subtitle audit report accuracy
+- Changed files:
+  - `backend/app.py`
+  - `backend/tests/test_publication_gate.py`
+- Result: **push recorded**; this is not a test or deployment success claim.
+
 <!-- AUTO_LOG_END -->
 
 
