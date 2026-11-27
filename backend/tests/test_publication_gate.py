@@ -79,6 +79,21 @@ class PublicationGateTests(unittest.TestCase):
         )
         self.assertFalse(decision["share_allowed"])
 
+    def test_audio_report_does_not_claim_exact_match_when_token_counts_differ(self):
+        reason = video_app._audio_publication_diagnostic_reason({
+            "status": "matched", "missing_tokens": 2, "extra_tokens": 1,
+        })
+        self.assertIn("প্রতিটি শব্দ হুবহু মেলেনি", reason)
+        self.assertIn("২টি শব্দ অনুপস্থিত", reason)
+        self.assertIn("১টি অতিরিক্ত শব্দ", reason)
+
+    def test_audio_report_confirms_zero_token_differences_only(self):
+        reason = video_app._audio_publication_diagnostic_reason({
+            "status": "matched", "missing_tokens": 0, "extra_tokens": 0,
+        })
+        self.assertIn("সব শব্দ মিলে গেছে", reason)
+        self.assertNotIn("অনুপস্থিত", reason)
+
     def test_incomplete_word_timestamps_block_publication(self):
         alignment = self._valid_inputs()["caption_alignment"]
         alignment["matched_word_timestamps"] = 4
