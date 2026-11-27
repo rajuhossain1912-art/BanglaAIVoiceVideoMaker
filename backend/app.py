@@ -419,8 +419,13 @@ def _make_voice_gradio_client(space: str, timeout: float):
 def _gradio_predict_with_timeout(client, *args, timeout_seconds: float, **kwargs):
     """Bound Gradio queue waiting; Client.predict() hides Job.result(timeout)."""
     api_name = kwargs.pop("api_name", None)
-    job = client.submit(*args, api_name=api_name, **kwargs)
     wait_limit = max(1.0, float(timeout_seconds))
+    # Lightweight test doubles and older compatible clients may expose only
+    # predict(); production Gradio Client exposes submit() and gets a hard
+    # queue-result deadline below.
+    if not callable(getattr(client, "submit", None)):
+        return client.predict(*args, api_name=api_name, **kwargs)
+    job = client.submit(*args, api_name=api_name, **kwargs)
     try:
         return job.result(timeout=wait_limit)
     except TimeoutError as exc:
