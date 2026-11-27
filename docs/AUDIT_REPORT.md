@@ -3627,6 +3627,17 @@ GitHub commit history অনুযায়ী প্রকল্পের প্�
   - Step 96. Post Checkout source: success
   - Step 97. Complete job: success
 
+
+### Source update — 2026-11-27T18:16:33.965Z
+- Branch: `main`
+- Push range: `72b38f7f8919186181d4665c955d4bec442e2a53` → `d33e04854f4db8b7cf4a236ffa7ba48975818642`
+- Pushed by: rajuhossain1912-art
+- Commit: [d33e04854f4d](https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/commit/d33e04854f4db8b7cf4a236ffa7ba48975818642) — Report audio transcript word differences accurately
+- Changed files:
+  - `backend/app.py`
+  - `backend/tests/test_publication_gate.py`
+- Result: **push recorded**; this is not a test or deployment success claim.
+
 <!-- AUTO_LOG_END -->
 
 
