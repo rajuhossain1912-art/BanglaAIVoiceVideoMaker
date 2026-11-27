@@ -236,22 +236,22 @@ No paid provider, new secret, expected-script Whisper prompt, weakened quality t
 - This milestone validates caption-frame rendering/OCR on CI fixtures only. It does not prove the user's existing MP4 or a full production video is publication-ready. Full multilingual E2E, live free Whisper transcription and explicit word timestamps, semantic vision review, and physical Android/TalkBack acceptance remain outstanding. Preserve fail-closed publication behavior.
 
 
-### Current engineering status — 2026-11-26 (supersedes older status notes above)
+### Current engineering status — 2026-11-28 (supersedes older status notes above)
 
-- PR #82 merged: ASR unavailable হলে diagnostic render সম্ভব, কিন্তু publication gate এখনও block করে।
-- PR #83 merged and deployed: unrelated satellite/map imagery is rejected for non-geographic narration; no visual safety gate was weakened.
-- PR #84 merged and deployed: remote voice-clone calls share a bounded deadline (default 240 seconds, provider call/download timeout bounded by remaining time). This reduces indefinite waiting but does not guarantee provider success or a strict wall-clock limit for every ancillary operation.
-- Main backend E2E run [45237406497](https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/actions/runs/45237406497) succeeded, including Docker build, backend tests, multilingual render smoke, consent checks, image/storyboard regressions and live Render health. This is automated validation, not physical-device acceptance or proof that a user MP4 is publication-ready.
-- Latest verified Android release is [v0.3.234](https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/releases/tag/v0.3.234). Backend-only PRs #82–#84 do not require an APK update. User installation and TalkBack/automatic-download testing remain unconfirmed.
-- R2 persistent-job storage code exists and is optional. It requires a private bucket and Render environment variables; production activation was not confirmed during this audit. Do not claim persistence unless runtime storage logs confirm `storage_backend=cloudflare_r2` and `video_stored=true`.
-- The user's previous real video still had major ASR/script mismatch, incomplete word timing, and visual relevance/variety concerns. These are not established as fixed by the recent PRs. Keep sharing/download blocked until a fresh real job independently passes every check.
+- PR #86 merged: subtitle audit report now reflects actual OCR and explicit word-timestamp states rather than always claiming checks were incomplete.
+- PR #87/#88 merged: audio report distinguishes acceptable overall similarity from exact token equality and reports missing/extra words in Bengali numerals. A clean all-words-match statement is reserved for zero missing and zero extra tokens.
+- Render deployment for commit `d33e04854f4db8b7cf4a236ffa7ba48975818642` is verified **Live**; post-deploy `/health` requests returned HTTP 200.
+- Main E2E run [46048216516](https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/actions/runs/46048216516) completed **successfully**. Required Docker build, backend tests, Bengali/English generation, transcript comparison, subtitle diagnostics, licensed image relevance, storyboard/repeated-image checks, vision-review parsing and live Render health steps passed. This validates the automated pipeline, not a user-phone recording or publication-ready MP4.
+- Current Android release remains [v0.3.234](https://github.com/rajuhossain1912-art/BanglaAIVoiceVideoMaker/releases/tag/v0.3.234); PRs #86–#87 are backend-only and do not require a new APK.
+- Current code review confirms selected local fallback/topic graphics are subject to vision review; if review is unavailable or mismatched, publication remains blocked. This corrects the wording in older audit notes; it is not a gate relaxation.
+- User's previous real video still had roughly 24% transcript similarity, missing/extra words and image relevance/variety concerns. The new E2E run does not establish those real-world issues are fixed. Fresh real-device video acceptance remains outstanding.
+- R2 production activation remains unconfirmed. Do not claim durable MP4 storage without runtime evidence of `storage_backend=cloudflare_r2` and `video_stored=true`.
+- No paid provider/plan was activated and no user voice sample was uploaded as part of these changes.
 
 #### Next acceptance priorities
 
-1. Re-run the same Bengali narration through the live service when free Whisper allocation is available; inspect the actual transcript preview, missing/extra tokens, detected language, duration and provider-supplied word timestamps.
-2. Confirm the actual generated images match each scene's narration and avoid repeated compositions; verify semantic vision review is available in production.
-3. Confirm every subtitle frame and active word passes OCR on a real video, not only synthetic CI fixtures.
-4. Test voice-clone with the bounded timeout and report the actual elapsed time/provider error. Do not send voice samples to external providers without the user's explicit in-app consent.
-5. Confirm whether R2 is intentionally enabled; if not, retain the honest warning that Render Free ephemeral files can disappear on restart. No paid storage or plan changes without explicit approval.
-6. Verify v0.3.234 installation/update, automatic MP4 download and TalkBack accessibility on the user's Android phone. No physical-device result is assumed.
-7. Preserve the fail-closed publication gate. Never turn ASR unavailable, missing timestamps, unreviewed images or incomplete OCR into a successful share/download status.
+1. Confirm v0.3.234 is installed/updated on the user's Android phone; test TalkBack navigation, recording preview/save and automatic MP4 download.
+2. Re-run a real Bengali narration and inspect the actual transcript, missing/extra tokens, provider word timestamps, subtitle OCR and per-image semantic review.
+3. Confirm generated images are relevant and varied in the actual MP4; keep publication blocked for any mismatch or unavailable required review.
+4. Verify whether R2 is intentionally configured; otherwise keep the warning that Render Free ephemeral files may disappear on restart.
+5. Keep the fail-closed publication gate unchanged. No ASR-unavailable, missing-timestamp, incomplete-OCR or unreviewed-image state may be treated as share/download approval.
