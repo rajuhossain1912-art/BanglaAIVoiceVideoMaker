@@ -171,6 +171,7 @@ class VoiceCloneUnitTests(unittest.TestCase):
                 patch.object(video_app, "VOICE_CLONE_EN_SPACES", ["english-space"]),
                 patch.object(video_app, "VOICE_CLONE_BN_SPACES", ["bengali-space"]),
                 patch.object(video_app, "VOICE_CLONE_BN_VAKYA_SPACES", ["vakya-space"]),
+                patch.object(video_app, "VOICE_CLONE_EN_QWEN_SPACES", []),
                 patch.object(video_app, "run", side_effect=fake_run),
                 patch.object(video_app, "_clone_with_provider_fallback", side_effect=fake_provider),
             ):
@@ -341,6 +342,7 @@ class VoiceCloneUnitTests(unittest.TestCase):
                 patch.object(video_app, "VOICE_CLONE_ENABLED", True),
                 patch.object(video_app, "VOICE_CLONE_BN_SPACES", ["cosyvoice-space"]),
                 patch.object(video_app, "VOICE_CLONE_BN_VAKYA_SPACES", []),
+                patch.object(video_app, "VOICE_CLONE_BN_XTTS_SPACES", []),
                 patch.object(video_app, "run", side_effect=fake_run),
                 patch.object(video_app, "_clone_with_provider_fallback", side_effect=primary_failure) as provider,
             ):
