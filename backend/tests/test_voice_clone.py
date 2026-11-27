@@ -1265,12 +1265,20 @@ class BengaliXTTSFallbackTests(unittest.TestCase):
         )
         fake_client.submit.return_value.result.assert_called_once_with(timeout=75.0)
 
-    def test_bengali_xtts_space_is_configurable_and_defaulted(self):
+    def test_bengali_xtts_space_is_opt_in_due_to_license(self):
         with patch.dict("os.environ", {}, clear=True):
             spaces = [
                 item.strip()
                 for item in video_app.os.getenv(
-                    "VOICE_CLONE_BN_XTTS_SPACES", "EMTIAZZ/bangla-xtts-tts"
+                    "VOICE_CLONE_BN_XTTS_SPACES", ""
+                ).split(",") if item.strip()
+            ]
+        self.assertEqual(spaces, [])
+        with patch.dict("os.environ", {"VOICE_CLONE_BN_XTTS_SPACES": "EMTIAZZ/bangla-xtts-tts"}):
+            spaces = [
+                item.strip()
+                for item in video_app.os.getenv(
+                    "VOICE_CLONE_BN_XTTS_SPACES", ""
                 ).split(",") if item.strip()
             ]
         self.assertEqual(spaces, ["EMTIAZZ/bangla-xtts-tts"])
