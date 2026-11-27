@@ -211,7 +211,7 @@ class VoiceCloneUnitTests(unittest.TestCase):
 
             def fake_provider(script, normalized, spaces, clone_function, language, *args, **kwargs):
                 calls.append((list(spaces), language, clone_function))
-                if language == "en":
+                if language.startswith("en"):
                     raise RuntimeError("English provider unavailable")
                 return candidate, "bengali-test-space"
 
